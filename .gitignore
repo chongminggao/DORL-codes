@@ -1,0 +1,20 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+.idea/
+
+*.csv
+environments/KuaiRec/data/*
+#!environments/KuaiRec/data/.gitkeep
+environments/VirtualTaobao
+
+saved_models/
+visualization/figures
+visualization/results
+
+*.zip
+
+*.egg*
+events.*
