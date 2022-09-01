@@ -82,18 +82,18 @@ def get_args():
 
 def load_dataset_kuaishou(user_features, item_features, reward_features, tau, entity_dim, feature_dim, MODEL_SAVE_PATH):
     filename = os.path.join(DATAPATH, "big_matrix.csv")
-    df_big = pd.read_csv(filename, usecols=['user_id', 'video_id', 'timestamp', 'watch_ratio_normed', 'video_duration'])
+    df_big = pd.read_csv(filename, usecols=['user_id', 'video_id', 'timestamp', 'watch_ratio', 'video_duration'])
     df_big['video_duration'] /= 1000
 
     # load feature info
     list_feat, df_feat = KuaiEnv.load_category()
 
     df_big = df_big.join(df_feat, on=['video_id'], how="left")
-    df_big.loc[df_big['watch_ratio_normed'] > 5, 'watch_ratio_normed'] = 5
+    df_big.loc[df_big['watch_ratio'] > 5, 'watch_ratio'] = 5
 
     # user_features = ["user_id"]
     # item_features = ["video_id"] + ["feat" + str(i) for i in range(4)] + ["video_duration"]
-    # reward_features = ["watch_ratio_normed"]
+    # reward_features = ["watch_ratio"]
 
     df_x, df_y = df_big[user_features + item_features], df_big[reward_features]
 
@@ -181,7 +181,7 @@ def main(args):
 
     user_features = ["user_id"]
     item_features = ["video_id"] + ["feat" + str(i) for i in range(4)] + ["video_duration"]
-    reward_features = ["watch_ratio_normed"]
+    reward_features = ["watch_ratio"]
     static_dataset, x_columns, y_columns, ab_columns = load_dataset_kuaishou(user_features, item_features,
                                                                              reward_features,
                                                                              args.tau, args.entity_dim,

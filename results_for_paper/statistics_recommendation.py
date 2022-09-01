@@ -54,14 +54,14 @@ def load_big():
     CODEPATH = os.path.dirname(__file__)
     DATAPATH = os.path.join(CODEPATH, "..", "environments", "KuaiRec", "data")
     filename = os.path.join(DATAPATH, "big_matrix.csv")
-    df_big = pd.read_csv(filename, usecols=['user_id', 'video_id', 'timestamp', 'watch_ratio_normed', 'video_duration'])
+    df_big = pd.read_csv(filename, usecols=['user_id', 'video_id', 'timestamp', 'watch_ratio', 'video_duration'])
     df_big['video_duration'] /= 1000
 
     # load feature info
     list_feat, df_feat = KuaiEnv.load_category()
 
     df_big = df_big.join(df_feat, on=['video_id'], how="left")
-    df_big.loc[df_big['watch_ratio_normed'] > 5, 'watch_ratio_normed'] = 5
+    df_big.loc[df_big['watch_ratio'] > 5, 'watch_ratio'] = 5
 
     df_pop = df_big[["user_id", "video_id"]].groupby("video_id").agg(len)
     df_pop.rename(columns={"user_id": "count"}, inplace=True)
@@ -89,7 +89,7 @@ def get_recommended_items(user_model):
     DATAPATH = os.path.join(CODEPATH, "..", "environments", "KuaiRec", "data")
     user_features = ["user_id"]
     item_features = ["video_id"] + ["feat" + str(i) for i in range(4)] + ["video_duration"]
-    reward_features = ["watch_ratio_normed"]
+    reward_features = ["watch_ratio"]
     args_um = run_worldModel.get_args()
     dataset_val = load_static_validate_data_kuaishou(user_features, item_features, reward_features,
                                                      args_um.entity_dim, args_um.feature_dim, DATAPATH)
@@ -114,12 +114,12 @@ def visual(mat, df_small_pop, count, tau):
     ind = ind[::-1]
     sorted_ratio = mean_ratio[ind]
 
-    df = pd.DataFrame(sorted_ratio, columns=["watch_ratio_normed"])
+    df = pd.DataFrame(sorted_ratio, columns=["watch_ratio"])
     df["item_id"] = ind
     df["item_id_sorted"] = range(len(df))
     df = df.set_index("item_id")
 
-    df_visual = df_small_pop.join(df[['watch_ratio_normed']], on=['item_id'], how="left")
+    df_visual = df_small_pop.join(df[['watch_ratio']], on=['item_id'], how="left")
 
     df_hit = pd.DataFrame(count.items(), columns=["item_id", "hit"])
     df_hit = df_hit.set_index("item_id")
@@ -129,16 +129,16 @@ def visual(mat, df_small_pop, count, tau):
     # sep = [500, 1000, 15 2000, 5000, 10000, max(df_visual["count"]) + 1]
     sep = list(range(0, 9000, 500)) + [df_visual['count'].max() + 1]
 
-    group_info = {"group": [], "count": [], "watch_ratio_normed": [], "hit": []}
+    group_info = {"group": [], "count": [], "watch_ratio": [], "hit": []}
     for left, right in zip(sep[:-1], sep[1:]):
         df_group = df_visual[df_visual['count'].map(lambda x: x >= left and x < right)]
         res = df_group[["count", "hit"]].sum()
-        res2 = (df_group["watch_ratio_normed"] * df_group["count"]).sum() / res["count"]
+        res2 = (df_group["watch_ratio"] * df_group["count"]).sum() / res["count"]
 
         group_info["group"].append(f"[{left},{right})")
         group_info["count"].append(res["count"])
         group_info["hit"].append(res["hit"])
-        group_info["watch_ratio_normed"].append(res2)
+        group_info["watch_ratio"].append(res2)
 
     df_groups = pd.DataFrame(group_info)
 
@@ -167,24 +167,24 @@ def visual(mat, df_small_pop, count, tau):
     # ax1 = plt.gca()
     #
     # ax2 = ax1.twinx()
-    # sns.lineplot(data=df_visual.iloc[1:], x="item_id_sorted", y="watch_ratio_normed", ax=ax2)
+    # sns.lineplot(data=df_visual.iloc[1:], x="item_id_sorted", y="watch_ratio", ax=ax2)
     # ax2.set_ylim(-4, 6)
     #
     # fig.savefig("small_mat.pdf", format='pdf', bbox_inches='tight')
     # plt.show()
 
     # sorted_mat = mat[:, ind]
-    # mydict = {"user_id":[], "item_id":[], "item_id_sorted":[], "watch_ratio_normed":[]}
+    # mydict = {"user_id":[], "item_id":[], "item_id_sorted":[], "watch_ratio":[]}
     # for i in range(len(sorted_mat)):
     #     for j in range(len(sorted_mat[0])):
     #         mydict["user_id"].append(i)
     #         mydict["item_id"].append(ind[j])
     #         mydict["item_id_sorted"].append(j)
-    #         mydict["watch_ratio_normed"].append(sorted_mat[i,j])
+    #         mydict["watch_ratio"].append(sorted_mat[i,j])
     #
     # df_mat = pd.DataFrame(mydict)
     #
-    # sns.lineplot(data=df_mat, x="item_id_sorted", y="watch_ratio_normed")
+    # sns.lineplot(data=df_mat, x="item_id_sorted", y="watch_ratio")
 
     # sns.lineplot(data=df_mat)
 
