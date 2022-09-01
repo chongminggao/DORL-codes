@@ -9,6 +9,7 @@ import functools
 import json
 import os
 import pickle
+import pprint
 import time
 
 import gym
@@ -16,12 +17,13 @@ import torch
 import argparse
 import numpy as np
 
-from core.inputs import get_dataset_columns
-
 from tensorflow.python.keras.callbacks import History
 
 from torch.utils.tensorboard import SummaryWriter
 
+import sys
+sys.path.extend(["./src", "./src/DeepCTR-Torch", "./src/tianshou"])
+from core.inputs import get_dataset_columns
 from core.collector import Collector
 # from tianshou.data import Collector
 from core.state_tracker import StateTrackerTransformer
@@ -44,6 +46,7 @@ from logzero import logger
 
 # from util.upload import my_upload
 from util.utils import create_dir, LoggerCallback_RL, save_model_fn, LoggerCallback_Policy
+
 
 
 def get_args():
@@ -140,12 +143,12 @@ def main(args):
     # %% 2. prepare user model
 
     UM_SAVE_PATH = os.path.join(".", "saved_models", args.env, args.user_model_name)
-    MODEL_MAT_PATH = os.path.join(UM_SAVE_PATH, "mats", f"mat_{args.read_message}.pickle")
-    MODEL_PARAMS_PATH = os.path.join(UM_SAVE_PATH, "params", f"params_{args.read_message}.pickle")
-    MODEL_PATH = os.path.join(UM_SAVE_PATH, "models", f"model_{args.read_message}.pt")
-    MODEL_EMBEDDING_PATH = os.path.join(UM_SAVE_PATH, "embeddings", f"emb_{args.read_message}.pt")
-    USER_EMBEDDING_PATH = os.path.join(UM_SAVE_PATH, "embeddings", f"emb_user_{args.read_message}.pt")
-    ITEM_EMBEDDING_PATH = os.path.join(UM_SAVE_PATH, "embeddings", f"emb_item_{args.read_message}.pt")
+    MODEL_MAT_PATH = os.path.join(UM_SAVE_PATH, "mats", f"[{args.read_message}]_mat.pickle")
+    MODEL_PARAMS_PATH = os.path.join(UM_SAVE_PATH, "params", f"[{args.read_message}]_params.pickle")
+    MODEL_PATH = os.path.join(UM_SAVE_PATH, "models", f"[{args.read_message}]_model.pt")
+    MODEL_EMBEDDING_PATH = os.path.join(UM_SAVE_PATH, "embeddings", f"[{args.read_message}]_emb.pt")
+    USER_EMBEDDING_PATH = os.path.join(UM_SAVE_PATH, "embeddings", f"[{args.read_message}]_emb_user.pt")
+    ITEM_EMBEDDING_PATH = os.path.join(UM_SAVE_PATH, "embeddings", f"[{args.read_message}]_emb_item.pt")
 
     # USERMODEL_Path = os.path.join(".", "saved_models", args.env, args.user_model_name)
     # model_parameter_path = os.path.join(USERMODEL_Path,
@@ -386,6 +389,9 @@ def main(args):
                                                               is_save=args.is_save)
                               )
 
+    print(__file__)
+    pprint.pprint(result)
+
     # %% 7. save info
 
     # model_save_path = os.path.join(MODEL_SAVE_PATH, "{}_{}.pt".format(args.model_name, args.message))
@@ -402,9 +408,6 @@ def main(args):
     REMOTE_PATH = os.path.join(REMOTE_ROOT, os.path.dirname(LOCAL_PATH))
 
     # my_upload(LOCAL_PATH, REMOTE_PATH, REMOTE_ROOT)
-
-
-
 
 
 if __name__ == '__main__':

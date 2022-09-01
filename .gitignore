@@ -15,6 +15,7 @@ visualization/figures
 visualization/results
 
 *.zip
+results_for_paper/*.pdf
 
 *.egg*
 events.*

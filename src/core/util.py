@@ -82,18 +82,18 @@ def compute_exposure_each_user(start_index: int,
 
 def load_static_validate_data_kuaishou(user_features, item_features, reward_features, entity_dim, feature_dim, DATAPATH):
     filename = os.path.join(DATAPATH, "small_matrix.csv")
-    df_small = pd.read_csv(filename, usecols=['user_id', 'video_id', 'watch_ratio', 'video_duration'])
+    df_small = pd.read_csv(filename, usecols=['user_id', 'video_id', 'watch_ratio_normed', 'video_duration'])
     df_small['video_duration'] /= 1000
 
 
     list_feat, df_feat = KuaiEnv.load_category()
 
     df_small = df_small.join(df_feat, on=['video_id'], how="left")
-    df_small.loc[df_small['watch_ratio'] > 5, 'watch_ratio'] = 5
+    df_small.loc[df_small['watch_ratio_normed'] > 5, 'watch_ratio_normed'] = 5
 
     # user_features = ["user_id"]
     # item_features = ["video_id"] + ["feat" + str(i) for i in range(4)] + ["video_duration"]
-    # reward_features = ["watch_ratio"]
+    # reward_features = ["watch_ratio_normed"]
 
     col_names = user_features + item_features + reward_features
 
@@ -247,6 +247,6 @@ def negative_sampling(df_big, df_feat, DATAPATH):
     # df_negative['video_duration'] = df_negative['video_id'].map(lambda x: video_mean_duration[x])
     df_negative = df_negative.merge(video_mean_duration, on=['video_id'], how='left')
 
-    df_negative['watch_ratio'] = 0.0
+    df_negative['watch_ratio_normed'] = 0.0
 
     return df_negative

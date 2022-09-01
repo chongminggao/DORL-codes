@@ -328,7 +328,9 @@ class UserModel(nn.Module):
             #     value = -min(value) + value
             #     value = value / sum(value)
             # Todo:
-            index = u_value_ucb.argmax() # 预测分数的max
+            # index = u_value_ucb.argmax() # 预测分数的max
+            value = u_value_ucb/sum(u_value_ucb)
+            index = torch.multinomial(value, k, replacement=False)
 
         if epsilon > 0 and np.random.random() < epsilon:
             # # epsilon-greedy activated!!

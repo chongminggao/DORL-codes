@@ -147,9 +147,9 @@ class KuaiEnv(gym.Env):
     @staticmethod
     def load_mat():
         small_path = os.path.join(DATAPATH, "small_matrix.csv")
-        df_small = pd.read_csv(small_path, header=0, usecols=['user_id', 'video_id', 'watch_ratio'])
-        # df_small['watch_ratio'][df_small['watch_ratio'] > 5] = 5
-        df_small.loc[df_small['watch_ratio'] > 5, 'watch_ratio'] = 5
+        df_small = pd.read_csv(small_path, header=0, usecols=['user_id', 'video_id', 'watch_ratio_normed'])
+        # df_small['watch_ratio_normed'][df_small['watch_ratio_normed'] > 5] = 5
+        df_small.loc[df_small['watch_ratio_normed'] > 5, 'watch_ratio_normed'] = 5
 
         lbe_video = LabelEncoder()
         lbe_video.fit(df_small['video_id'].unique())
@@ -158,12 +158,12 @@ class KuaiEnv(gym.Env):
         lbe_user.fit(df_small['user_id'].unique())
 
         mat = csr_matrix(
-            (df_small['watch_ratio'],
+            (df_small['watch_ratio_normed'],
              (lbe_user.transform(df_small['user_id']), lbe_video.transform(df_small['video_id']))),
             shape=(df_small['user_id'].nunique(), df_small['video_id'].nunique())).toarray()
 
-        mat[np.isnan(mat)] = df_small['watch_ratio'].mean()
-        mat[np.isinf(mat)] = df_small['watch_ratio'].mean()
+        mat[np.isnan(mat)] = df_small['watch_ratio_normed'].mean()
+        mat[np.isinf(mat)] = df_small['watch_ratio_normed'].mean()
 
         # load feature info
         list_feat, df_feat = KuaiEnv.load_category()

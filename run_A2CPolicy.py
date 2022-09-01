@@ -13,6 +13,8 @@ import numpy as np
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
+import sys
+sys.path.extend(["./src", "./src/DeepCTR-Torch", "./src/tianshou"])
 from core.collector import Collector
 from core.inputs import get_dataset_columns
 from core.policy.a2c import A2CPolicy
@@ -30,8 +32,6 @@ from tianshou.utils.net.common import ActorCritic, Net
 from tianshou.utils.net.discrete import Actor, Critic
 
 
-
-
 # from util.upload import my_upload
 from util.utils import create_dir, LoggerCallback_RL, LoggerCallback_Policy, save_model_fn
 import logzero
@@ -41,6 +41,7 @@ try:
     import envpool
 except ImportError:
     envpool = None
+
 
 
 def get_args():
@@ -143,12 +144,12 @@ def prepare_um(args=get_args()):
     # %% 2. prepare user model
 
     UM_SAVE_PATH = os.path.join(".", "saved_models", args.env, args.user_model_name)
-    MODEL_MAT_PATH = os.path.join(MODEL_SAVE_PATH, "mats", f"[{args.read_message}]_mat.pickle")
-    MODEL_PARAMS_PATH = os.path.join(MODEL_SAVE_PATH, "params", f"[{args.read_message}]_params.pickle")
-    MODEL_PATH = os.path.join(MODEL_SAVE_PATH, "models", f"[{args.read_message}]_model.pt")
-    MODEL_EMBEDDING_PATH = os.path.join(MODEL_SAVE_PATH, "embeddings", f"[{args.read_message}]_emb.pt")
-    USER_EMBEDDING_PATH = os.path.join(MODEL_SAVE_PATH, "embeddings", f"[{args.read_message}]_emb_user.pt")
-    ITEM_EMBEDDING_PATH = os.path.join(MODEL_SAVE_PATH, "embeddings", f"[{args.read_message}]_emb_item.pt")
+    MODEL_MAT_PATH = os.path.join(UM_SAVE_PATH, "mats", f"[{args.read_message}]_mat.pickle")
+    MODEL_PARAMS_PATH = os.path.join(UM_SAVE_PATH, "params", f"[{args.read_message}]_params.pickle")
+    MODEL_PATH = os.path.join(UM_SAVE_PATH, "models", f"[{args.read_message}]_model.pt")
+    MODEL_EMBEDDING_PATH = os.path.join(UM_SAVE_PATH, "embeddings", f"[{args.read_message}]_emb.pt")
+    USER_EMBEDDING_PATH = os.path.join(UM_SAVE_PATH, "embeddings", f"[{args.read_message}]_emb_user.pt")
+    ITEM_EMBEDDING_PATH = os.path.join(UM_SAVE_PATH, "embeddings", f"[{args.read_message}]_emb_item.pt")
 
     with open(MODEL_PARAMS_PATH, "rb") as file:
         model_params = pickle.load(file)
@@ -319,15 +320,17 @@ def prepare_um(args=get_args()):
     )
     # assert stop_fn(result['best_reward'])
 
-    if __name__ == '__main__':
-        pprint.pprint(result)
-        # Let's watch its performance!
-        env = gym.make(args.task)
-        policy.eval()
-        collector = Collector(policy, env)
-        result = collector.collect(n_episode=1, render=args.render)
-        rews, lens = result["rews"], result["lens"]
-        print(f"Final reward: {rews.mean()}, length: {lens.mean()}")
+    print(__file__)
+    pprint.pprint(result)
+    # if __name__ == '__main__':
+    #     pprint.pprint(result)
+    #     # Let's watch its performance!
+    #     env = gym.make(args.task)
+    #     policy.eval()
+    #     collector = Collector(policy, env)
+    #     result = collector.collect(n_episode=1, render=args.render)
+    #     rews, lens = result["rews"], result["lens"]
+    #     print(f"Final reward: {rews.mean()}, length: {lens.mean()}")
 
 
 if __name__ == '__main__':

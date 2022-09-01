@@ -23,13 +23,16 @@ all_video = set(df["video_id"])
 max_y = df[["video_id", "watch_ratio"]].groupby("video_id").agg(max)
 min_y = df[["video_id", "watch_ratio"]].groupby("video_id").agg(min)
 
-df_big["watch_ratio_normed"] = 0
-df_small["watch_ratio_normed"] = 0
+df_big["watch_ratio_normed"] = 0.0
+df_small["watch_ratio_normed"] = 0.0
 for v in tqdm(all_video):
-    df_big[df_big["video_id"] == v]["watch_ratio_normed"] = \
+    df_big["watch_ratio_normed"][df_big["video_id"] == v] = \
         (df_big[df_big["video_id"] == v]["watch_ratio"] - min_y.loc[v][0]) / (max_y.loc[v][0] - min_y.loc[v][0])
-    df_small[df_small["video_id"] == v]["watch_ratio_normed"] = \
+    df_small["watch_ratio_normed"][df_small["video_id"] == v] = \
         (df_small[df_small["video_id"] == v]["watch_ratio"] - min_y.loc[v][0]) / (max_y.loc[v][0] - min_y.loc[v][0])
+
+df_big["watch_ratio_normed"][df_big["watch_ratio_normed"].isna()] = 0
+df_small["watch_ratio_normed"][df_small["watch_ratio_normed"].isna()] = 0
 
 df_big.to_csv(filename_big, index=False)
 df_small.to_csv(filename_small, index=False)
