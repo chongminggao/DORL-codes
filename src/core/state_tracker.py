@@ -60,7 +60,7 @@ class StateTrackerBase(nn.Module):
 
         if use_pretrained_embedding:
             assert saved_embedding is not None
-            self.embedding_dict = saved_embedding
+            self.embedding_dict = saved_embedding.to(device)
         else:
             self.embedding_dict = create_embedding_matrix(all_columns, init_std, sparse=False, device=device)
 
@@ -121,11 +121,11 @@ class StateTrackerAvg(nn.Module):
 
         self.dim_model = dim_model
         assert saved_embedding is not None
-        self.embedding_dict = saved_embedding
+        self.embedding_dict = saved_embedding.to(device)
+
+        self.dim_item = self.embedding_dict.feat_item.weight.shape[1]
 
         self.window = window
-
-
 
         self.device = device
         self.MAX_TURN = MAX_TURN
@@ -169,12 +169,21 @@ class StateTrackerAvg(nn.Module):
         res = {}
 
         if obs is not None:  # 1. initialize the state vectors
+            # if self.use_userEmbedding:
+            #     e_u = self.get_embedding(obs, "user")
+            #     s0 = self.ffn_user(e_u)
+            # else:
+            #     s0 = torch.ones(obs.shape[0], self.dim_model, device=self.device)
+            #     s0 = nn.init.normal_(s0, mean=0, std=0.0001)
+
+            e_i = torch.ones(obs.shape[0], self.dim_item, device=self.device)
+
             if self.use_userEmbedding:
-                e_u = self.get_embedding(obs, "user")
-                s0 = self.ffn_user(e_u)
+                self.e_u = self.get_embedding(obs, "user")
+                # s0 = self.ffn_user(e_u)
+                s0 = torch.cat([self.e_u, e_i], dim=-1)
             else:
-                s0 = torch.ones(obs.shape[0], self.dim_model)
-                s0 = nn.init.normal_(s0, mean=0, std=0.0001)
+                s0 = e_i
 
             self.data[0, env_id, :] = s0
             self.len_data[env_id] = 1
@@ -191,13 +200,17 @@ class StateTrackerAvg(nn.Module):
             rew_matrix = rew.reshape((-1, 1))
             r_t = self.get_embedding(rew_matrix, "feedback")
 
-            self.data[length - 1, env_id, :] = a_t * r_t
+            if self.use_userEmbedding:
+                e_s = torch.cat([self.e_u[env_id], a_t], dim=-1)
+            else:
+                e_s = a_t
+            self.data[length - 1, env_id, :] = e_s * r_t
             if length <= self.window:
                 s_t = self.data[:length, env_id].mean(dim=0)
             else:
-                if self.use_userEmbedding:
-                    self.data[length - self.window, env_id] = self.data[0, env_id] # Copy operation!
-                s_t = self.data[length-self.window:length, env_id].mean(dim=0)
+                # if self.use_userEmbedding:
+                #     self.data[length - self.window, env_id] = self.data[0, env_id]  # Copy operation!
+                s_t = self.data[length - self.window:length, env_id].mean(dim=0)
 
             res = {"obs_next": s_t}
 

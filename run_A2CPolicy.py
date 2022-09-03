@@ -64,6 +64,15 @@ def get_args():
     parser.add_argument('--no_save', dest='is_save', action='store_false')
     parser.set_defaults(is_save=False)
 
+    parser.add_argument('--is_use_userEmbedding', dest='use_userEmbedding', action='store_true')
+    parser.add_argument('--no_use_userEmbedding', dest='use_userEmbedding', action='store_false')
+    parser.set_defaults(use_userEmbedding=False)
+
+    parser.add_argument('--is_exploration_noise', dest='exploration_noise', action='store_true')
+    parser.add_argument('--no_exploration_noise', dest='exploration_noise', action='store_false')
+    parser.set_defaults(exploration_noise=True)
+    parser.add_argument('--eps', default=0.1, type=float)
+
     # Env
     parser.add_argument("--version", type=str, default="v1")
     parser.add_argument('--tau', default=100, type=float)
@@ -78,12 +87,12 @@ def get_args():
     parser.add_argument('--dim_model', default=64, type=int)
     parser.add_argument('--nhead', default=4, type=int)
     # parser.add_argument('--max_len', default=100, type=int)
-    parser.add_argument('--window', default=10, type=int)
+    parser.add_argument('--window', default=2, type=int)
 
     # tianshou
     parser.add_argument('--buffer-size', type=int, default=11000)
     parser.add_argument('--lr', type=float, default=1e-3)
-    parser.add_argument('--epoch', type=int, default=50)
+    parser.add_argument('--epoch', type=int, default=500)
     # parser.add_argument('--step-per-epoch', type=int, default=15000)
     # parser.add_argument('--repeat-per-collect', type=int, default=2)
     parser.add_argument('--batch-size', type=int, default=1024)
@@ -231,12 +240,15 @@ def prepare_um(args=get_args()):
         [lambda: KuaiEnv(**kwargs_um) for _ in range(args.test_num)])
 
     # args.state_shape = args.dim_state # no use?
-    args.state_shape = action_columns[0].embedding_dim
     args.action_shape = env.mat.shape[1]
+    if args.use_userEmbedding:
+        args.state_shape = action_columns[0].embedding_dim + saved_embedding.feat_user.weight.shape[1]
+    else:
+        args.state_shape = action_columns[0].embedding_dim
 
     state_tracker = StateTrackerAvg(user_columns, action_columns, feedback_columns, args.state_shape,
                                     saved_embedding, device=device, window=args.window,
-                                    use_userEmbedding=True, MAX_TURN=args.max_turn + 1).to(device)
+                                    use_userEmbedding=args.use_userEmbedding, MAX_TURN=args.max_turn + 1).to(device)
 
     # seed
     np.random.seed(args.seed)
@@ -273,16 +285,19 @@ def prepare_um(args=get_args()):
         action_bound_method="" if args.env == "KuaiEnv-v0" else "clip",
         action_scaling=False if args.env == "KuaiEnv-v0" else True
     )
+    policy.set_eps(args.eps)
 
     # %% 5. Prepare the collectors and logs
     train_collector = Collector(
         policy, train_envs,
         VectorReplayBuffer(args.buffer_size, len(train_envs)),
-        preprocess_fn=state_tracker.build_state
+        preprocess_fn=state_tracker.build_state,
+        exploration_noise=args.exploration_noise
     )
     test_collector = Collector(
         policy, test_envs,
-        preprocess_fn=state_tracker.build_state
+        preprocess_fn=state_tracker.build_state,
+        exploration_noise=args.exploration_noise
     )
     # log
     log_path = os.path.join(args.logdir, args.task, 'a2c')
@@ -322,6 +337,8 @@ def prepare_um(args=get_args()):
 
     print(__file__)
     pprint.pprint(result)
+    logzero.logfile(result)
+
     # if __name__ == '__main__':
     #     pprint.pprint(result)
     #     # Let's watch its performance!

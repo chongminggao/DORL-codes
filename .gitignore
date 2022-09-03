@@ -16,6 +16,7 @@ visualization/results
 
 *.zip
 results_for_paper/*.pdf
+*.pth
 
 *.egg*
 events.*

@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional, Type
+from typing import Any, Dict, List, Optional, Type, Union
 
 import numpy as np
 import torch
@@ -158,3 +158,23 @@ class A2CPolicy(PGPolicy):
             "loss/vf": vf_losses,
             "loss/ent": ent_losses,
         }
+
+
+    def set_eps(self, eps: float) -> None:
+        """Set the eps for epsilon-greedy exploration."""
+        self.eps = eps
+
+    def exploration_noise(
+        self,
+        act: Union[np.ndarray, Batch],
+        batch: Batch,
+    ) -> Union[np.ndarray, Batch]:
+        if isinstance(act, np.ndarray) and not np.isclose(self.eps, 0.0):
+            bsz = len(act)
+            rand_mask = np.random.rand(bsz) < self.eps
+            q = np.random.rand(bsz, self.actor.output_dim)  # [0, 1]
+            if hasattr(batch.obs, "mask"):
+                q += batch.obs.mask
+            rand_act = q.argmax(axis=1)
+            act[rand_mask] = rand_act[rand_mask]
+        return act
