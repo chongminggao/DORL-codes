@@ -5,6 +5,7 @@ import json
 import os
 import pickle
 import pprint
+import random
 import time
 
 import gym
@@ -215,6 +216,7 @@ def prepare_um(args=get_args()):
     test_envs = DummyVectorEnv(
         [lambda: KuaiEnv(**kwargs_um) for _ in range(args.test_num)])
 
+    random.seed(args.seed)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     train_envs.seed(args.seed)
@@ -337,7 +339,7 @@ def prepare_um(args=get_args()):
 
     print(__file__)
     pprint.pprint(result)
-    logzero.logfile(result)
+    logger.info(result)
 
     # if __name__ == '__main__':
     #     pprint.pprint(result)

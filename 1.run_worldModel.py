@@ -10,6 +10,7 @@ import datetime
 import json
 import os
 import pickle
+import random
 import time
 
 import torch
@@ -58,6 +59,10 @@ def get_args():
     parser.add_argument('--no_ucb', dest='is_ucb', action='store_false')
     parser.set_defaults(is_ucb=False)
 
+    parser.add_argument('--use_pairwise', dest='use_pairwise', action='store_true')
+    parser.add_argument('--no_use_pairwise', dest='use_pairwise', action='store_false')
+    parser.set_defaults(use_pairwise=True)
+
     parser.add_argument("--feature_dim", type=int, default=16)
     parser.add_argument("--entity_dim", type=int, default=16)
     parser.add_argument("--user_model_name", type=str, default="DeepFM")
@@ -82,18 +87,18 @@ def get_args():
 
 def load_dataset_kuaishou(user_features, item_features, reward_features, tau, entity_dim, feature_dim, MODEL_SAVE_PATH):
     filename = os.path.join(DATAPATH, "big_matrix.csv")
-    df_big = pd.read_csv(filename, usecols=['user_id', 'video_id', 'timestamp', 'watch_ratio', 'video_duration'])
+    df_big = pd.read_csv(filename, usecols=['user_id', 'video_id', 'timestamp', 'watch_ratio_normed', 'video_duration'])
     df_big['video_duration'] /= 1000
 
     # load feature info
     list_feat, df_feat = KuaiEnv.load_category()
 
     df_big = df_big.join(df_feat, on=['video_id'], how="left")
-    df_big.loc[df_big['watch_ratio'] > 5, 'watch_ratio'] = 5
+    df_big.loc[df_big['watch_ratio_normed'] > 5, 'watch_ratio_normed'] = 5
 
     # user_features = ["user_id"]
     # item_features = ["video_id"] + ["feat" + str(i) for i in range(4)] + ["video_duration"]
-    # reward_features = ["watch_ratio"]
+    # reward_features = ["watch_ratio_normed"]
 
     df_x, df_y = df_big[user_features + item_features], df_big[reward_features]
 
@@ -178,10 +183,9 @@ def main(args):
     env = KuaiEnv(**kwargs)
 
     # %% 3. Prepare dataset
-
     user_features = ["user_id"]
     item_features = ["video_id"] + ["feat" + str(i) for i in range(4)] + ["video_duration"]
-    reward_features = ["watch_ratio"]
+    reward_features = ["watch_ratio_normed"]
     static_dataset, x_columns, y_columns, ab_columns = load_dataset_kuaishou(user_features, item_features,
                                                                              reward_features,
                                                                              args.tau, args.entity_dim,
@@ -197,6 +201,9 @@ def main(args):
     device = torch.device("cuda:{}".format(args.cuda) if torch.cuda.is_available() else "cpu")
 
     SEED = 2022
+    np.random.seed(SEED)
+    random.seed(SEED)
+
     task = "regression"
     task_logit_dim = 1
     model = UserModel_Pairwise(x_columns, y_columns, task, task_logit_dim,
@@ -205,7 +212,7 @@ def main(args):
 
     model.compile(optimizer="adam",
                   # loss_dict=task_loss_dict,
-                  loss_func=loss_kuaishou_pairwise,
+                  loss_func=loss_kuaishou_pairwise if args.use_pairwise else loss_kuaishou_pointwise,
                   metric_fun={"mae": lambda y, y_predict: nn.functional.l1_loss(torch.from_numpy(y),
                                                                                 torch.from_numpy(y_predict)).numpy(),
                               "mse": lambda y, y_predict: nn.functional.mse_loss(torch.from_numpy(y),
@@ -309,6 +316,22 @@ def main(args):
 
 sigmoid = nn.Sigmoid()
 
+def loss_kuaishou_pointwise(y, y_deepfm_pos, y_deepfm_neg, exposure, alpha_u=None, beta_i=None):
+    if alpha_u is not None:
+        exposure_new = exposure * alpha_u * beta_i
+        loss_ab = ((alpha_u - 1) ** 2).mean() + ((beta_i - 1) ** 2).mean()
+    else:
+        exposure_new = exposure
+        loss_ab = 0
+
+    y_exposure = 1 / (1 + exposure_new) * y_deepfm_pos
+    loss_y = ((y_exposure - y) ** 2).mean()
+
+    bpr_click = 0
+
+    loss = loss_y + args.lambda_ab * loss_ab
+
+    return loss
 
 def loss_kuaishou_pairwise(y, y_deepfm_pos, y_deepfm_neg, exposure, alpha_u=None, beta_i=None):
     if alpha_u is not None:

@@ -329,8 +329,11 @@ class UserModel(nn.Module):
             #     value = value / sum(value)
             # Todo:
             # index = u_value_ucb.argmax() # 预测分数的max
-            value = u_value_ucb/sum(u_value_ucb)
-            index = torch.multinomial(value, k, replacement=False)
+
+            # value = u_value_ucb/sum(u_value_ucb)
+            # index = torch.multinomial(value, k, replacement=False)
+
+            _, index = torch.topk(u_value_ucb, k)
 
         if epsilon > 0 and np.random.random() < epsilon:
             # # epsilon-greedy activated!!
@@ -497,7 +500,7 @@ class UserModel(nn.Module):
                     metrics_[metric] = roc_auc_score
                 if metric == "mse":
                     metrics_[metric] = mean_squared_error
-                if metric == "accuracy" or metric == "acc":
+                if metric == "accurac y" or metric == "acc":
                     metrics_[metric] = lambda y_true, y_pred: accuracy_score(
                         y_true, np.where(y_pred > 0.5, 1, 0))
                 self.metrics_names.append(metric)

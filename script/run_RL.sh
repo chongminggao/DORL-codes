@@ -94,19 +94,19 @@
 #python3 run_A2CPolicy.py --eps .075 --read_message "UM tau1000" --tau 10 --window 1 --message "eps4" --cuda 1 --leave_threshold 2 --num_leave_compute 5 &
 #python3 run_A2CPolicy.py --eps .1 --read_message   "UM tau1000" --tau 10 --window 1 --message "eps5" --cuda 2 --leave_threshold 2 --num_leave_compute 5 &
 #
-#python3 run_A2CPolicy.py --eps  0 --read_message   "UM tau1000" --tau 10 --window 2 --message "eps6" --cuda 3 --leave_threshold 2 --num_leave_compute 5 &
-#python3 run_A2CPolicy.py --eps .025 --read_message "UM tau1000" --tau 10 --window 2 --message "eps7" --cuda 1 --leave_threshold 2 --num_leave_compute 5 &
-#python3 run_A2CPolicy.py --eps .05 --read_message  "UM tau1000" --tau 10 --window 2 --message "eps8" --cuda 2 --leave_threshold 2 --num_leave_compute 5 &
-#python3 run_A2CPolicy.py --eps .075 --read_message "UM tau1000" --tau 10 --window 2 --message "eps9" --cuda 3 --leave_threshold 2 --num_leave_compute 5 &
-#python3 run_A2CPolicy.py --eps .1 --read_message   "UM tau1000" --tau 10 --window 2 --message "eps10" --cuda 4 --leave_threshold 2 --num_leave_compute 5 &
-#
-#
-#python3 run_A2CPolicy.py --eps  0 --read_message   "UM tau1000" --tau 10 --window 3 --message "eps11" --cuda 5 --leave_threshold 2 --num_leave_compute 5 &
-#python3 run_A2CPolicy.py --eps .025 --read_message "UM tau1000" --tau 10 --window 3 --message "eps12" --cuda 6 --leave_threshold 2 --num_leave_compute 5 &
-#python3 run_A2CPolicy.py --eps .05 --read_message  "UM tau1000" --tau 10 --window 3 --message "eps13" --cuda 7 --leave_threshold 2 --num_leave_compute 5 &
-#python3 run_A2CPolicy.py --eps .075 --read_message "UM tau1000" --tau 10 --window 3 --message "eps14" --cuda 3 --leave_threshold 2 --num_leave_compute 5 &
+python3 run_A2CPolicy.py --eps  0 --read_message   "UM tau1000" --tau 10 --window 2 --message "eps6" --cuda 0 --leave_threshold 2 --num_leave_compute 5 &
+python3 run_A2CPolicy.py --eps .025 --read_message "UM tau1000" --tau 10 --window 2 --message "eps7" --cuda 1 --leave_threshold 2 --num_leave_compute 5 &
+python3 run_A2CPolicy.py --eps .05 --read_message  "UM tau1000" --tau 10 --window 2 --message "eps8" --cuda 2 --leave_threshold 2 --num_leave_compute 5 &
+python3 run_A2CPolicy.py --eps .075 --read_message "UM tau1000" --tau 10 --window 2 --message "eps9" --cuda 3 --leave_threshold 2 --num_leave_compute 5 &
+python3 run_A2CPolicy.py --eps .1 --read_message   "UM tau1000" --tau 10 --window 2 --message "eps10" --cuda 0 --leave_threshold 2 --num_leave_compute 5 &
 
-#python3 run_A2CPolicy.py --eps .1 --read_message   "UM tau1000" --tau 10 --window 3 --message "eps15" --cuda 3 --leave_threshold 2 --num_leave_compute 5 &
+
+python3 run_A2CPolicy.py --eps  0 --read_message   "UM tau1000" --tau 10 --window 3 --message "eps11" --cuda 1 --leave_threshold 2 --num_leave_compute 5 &
+python3 run_A2CPolicy.py --eps .025 --read_message "UM tau1000" --tau 10 --window 3 --message "eps12" --cuda 2 --leave_threshold 2 --num_leave_compute 5 &
+python3 run_A2CPolicy.py --eps .05 --read_message  "UM tau1000" --tau 10 --window 3 --message "eps13" --cuda 3 --leave_threshold 2 --num_leave_compute 5 &
+python3 run_A2CPolicy.py --eps .075 --read_message "UM tau1000" --tau 10 --window 3 --message "eps14" --cuda 0 --leave_threshold 2 --num_leave_compute 5 &
+
+python3 run_A2CPolicy.py --eps .1 --read_message   "UM tau1000" --tau 10 --window 3 --message "eps15" --cuda 1 --leave_threshold 2 --num_leave_compute 5 &
 #
 #
 #python3 run_A2CPolicy.py --eps  0 --read_message   "UM tau1000" --tau 10 --window 5 --message "eps16" --cuda 2 --leave_threshold 2 --num_leave_compute 5 &
@@ -115,17 +115,28 @@
 #python3 run_A2CPolicy.py --eps .075 --read_message "UM tau1000" --tau 10 --window 5 --message "eps19" --cuda 3 --leave_threshold 2 --num_leave_compute 5 &
 #python3 run_A2CPolicy.py --eps .1 --read_message   "UM tau1000" --tau 10 --window 5 --message "eps20" --cuda 2 --leave_threshold 2 --num_leave_compute 5 &
 
-python3 run_A2CPolicy.py --eps  0 --read_message   "UM tau1000" --tau 10 --window 10 --message "eps21" --cuda 2 --leave_threshold 2 --num_leave_compute 5 &
-python3 run_A2CPolicy.py --eps .025 --read_message "UM tau1000" --tau 10 --window 10 --message "eps22" --cuda 3 --leave_threshold 2 --num_leave_compute 5 &
-python3 run_A2CPolicy.py --eps .05 --read_message  "UM tau1000" --tau 10 --window 10 --message "eps23" --cuda 2 --leave_threshold 2 --num_leave_compute 5 &
-python3 run_A2CPolicy.py --eps .075 --read_message "UM tau1000" --tau 10 --window 10 --message "eps24" --cuda 3 --leave_threshold 2 --num_leave_compute 5 &
-python3 run_A2CPolicy.py --eps .1 --read_message   "UM tau1000" --tau 10 --window 10 --message "eps25" --cuda 2 --leave_threshold 2 --num_leave_compute 5 &
+#python3 run_A2CPolicy.py --eps  0 --read_message   "UM tau1000" --tau 10 --window 10 --message "eps21" --cuda 1 --leave_threshold 2 --num_leave_compute 5 &
+#python3 run_A2CPolicy.py --eps .025 --read_message "UM tau1000" --tau 10 --window 10 --message "eps22" --cuda 2 --leave_threshold 2 --num_leave_compute 5 &
+#python3 run_A2CPolicy.py --eps .05 --read_message  "UM tau1000" --tau 10 --window 10 --message "eps23" --cuda 3 --leave_threshold 2 --num_leave_compute 5 &
+#python3 run_A2CPolicy.py --eps .075 --read_message "UM tau1000" --tau 10 --window 10 --message "eps24" --cuda 1 --leave_threshold 2 --num_leave_compute 5 &
+#python3 run_A2CPolicy.py --eps .1 --read_message   "UM tau1000" --tau 10 --window 10 --message "eps25" --cuda 2 --leave_threshold 2 --num_leave_compute 5 &
+#
+#python3 run_A2CPolicy.py --eps  0 --read_message   "UM tau1000" --tau 10 --window 15 --message "eps26" --cuda 3 --leave_threshold 2 --num_leave_compute 5 &
+#python3 run_A2CPolicy.py --eps .025 --read_message "UM tau1000" --tau 10 --window 15 --message "eps27" --cuda 1 --leave_threshold 2 --num_leave_compute 5 &
+#python3 run_A2CPolicy.py --eps .05 --read_message  "UM tau1000" --tau 10 --window 15 --message "eps28" --cuda 2 --leave_threshold 2 --num_leave_compute 5 &
+#python3 run_A2CPolicy.py --eps .075 --read_message "UM tau1000" --tau 10 --window 15 --message "eps29" --cuda 3 --leave_threshold 2 --num_leave_compute 5 &
+#python3 run_A2CPolicy.py --eps .1 --read_message   "UM tau1000" --tau 10 --window 15 --message "eps30" --cuda 1 --leave_threshold 2 --num_leave_compute 5 &
 
-python3 run_A2CPolicy.py --eps  0 --read_message   "UM tau1000" --tau 10 --window 15 --message "eps26" --cuda 3 --leave_threshold 2 --num_leave_compute 5 &
-python3 run_A2CPolicy.py --eps .025 --read_message "UM tau1000" --tau 10 --window 15 --message "eps27" --cuda 2 --leave_threshold 2 --num_leave_compute 5 &
-python3 run_A2CPolicy.py --eps .05 --read_message  "UM tau1000" --tau 10 --window 15 --message "eps28" --cuda 3 --leave_threshold 2 --num_leave_compute 5 &
-python3 run_A2CPolicy.py --eps .075 --read_message "UM tau1000" --tau 10 --window 15 --message "eps29" --cuda 2 --leave_threshold 2 --num_leave_compute 5 &
-python3 run_A2CPolicy.py --eps .1 --read_message   "UM tau1000" --tau 10 --window 15 --message "eps30" --cuda 3 --leave_threshold 2 --num_leave_compute 5 &
+#python3 run_A2CPolicy.py --eps  0.1 --read_message "UM tau1000" --tau 10 --window 3 --message "eps31" --cuda 1 --leave_threshold 2 --num_leave_compute 5 &
+#python3 run_A2CPolicy.py --eps  0.2 --read_message "UM tau1000" --tau 10 --window 3 --message "eps32" --cuda 1 --leave_threshold 2 --num_leave_compute 5 &
+#python3 run_A2CPolicy.py --eps  0.3 --read_message "UM tau1000" --tau 10 --window 3 --message "eps33" --cuda 1 --leave_threshold 2 --num_leave_compute 5 &
+#python3 run_A2CPolicy.py --eps  0.4 --read_message "UM tau1000" --tau 10 --window 3 --message "eps34" --cuda 2 --leave_threshold 2 --num_leave_compute 5 &
+#python3 run_A2CPolicy.py --eps  0.5 --read_message "UM tau1000" --tau 10 --window 3 --message "eps35" --cuda 2 --leave_threshold 2 --num_leave_compute 5 &
+#python3 run_A2CPolicy.py --eps  0.6 --read_message "UM tau1000" --tau 10 --window 3 --message "eps36" --cuda 2 --leave_threshold 2 --num_leave_compute 5 &
+#python3 run_A2CPolicy.py --eps  0.7 --read_message "UM tau1000" --tau 10 --window 3 --message "eps37" --cuda 2 --leave_threshold 2 --num_leave_compute 5 &
+#python3 run_A2CPolicy.py --eps  0.8 --read_message "UM tau1000" --tau 10 --window 3 --message "eps38" --cuda 3 --leave_threshold 2 --num_leave_compute 5 &
+#python3 run_A2CPolicy.py --eps  0.9 --read_message "UM tau1000" --tau 10 --window 3 --message "eps39" --cuda 3 --leave_threshold 2 --num_leave_compute 5 &
+#python3 run_A2CPolicy.py --eps  1   --read_message "UM tau1000" --tau 10 --window 3 --message "eps40" --cuda 3 --leave_threshold 2 --num_leave_compute 5 &
 
 
 
