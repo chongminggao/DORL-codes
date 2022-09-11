@@ -84,7 +84,7 @@ class UserModel(nn.Module):
     def __init__(self, feature_columns, y_columns,
                  l2_reg_embedding=1e-5, l2_reg_linear=1e-5,
                  l2_reg_dnn=0, init_std=0.0001, task_dnn_units=None, seed=2022, dnn_dropout=0,
-                 dnn_activation='relu', dnn_use_bn=False, device='cpu', padding_idx=None):
+                 dnn_activation='relu', dnn_use_bn=False, device='cpu'):
 
         super(UserModel, self).__init__()
 
@@ -174,11 +174,15 @@ class UserModel(nn.Module):
 
 
         epoch_logs = {}
+        if dataset_val:
+            eval_result = self.evaluate_data(dataset_val, batch_size)
+            for name, result in eval_result.items():
+                epoch_logs["val_" + name] = result
         if self.RL_eval_fun:
             eval_result_RL = self.RL_eval_fun(self.eval())
             for name, result in eval_result_RL.items():
                 epoch_logs["RL_val_" + name] = result
-            callbacks.on_epoch_end(-1, epoch_logs)
+        callbacks.on_epoch_end(-1, epoch_logs)
 
         # Train
         print("Train on {0} samples, validate on {1} samples, {2} steps per epoch".format(
@@ -290,16 +294,24 @@ class UserModel(nn.Module):
         self.n_rec = n_arm
         self.n_each = np.ones(n_arm)
 
-    def recommend_k_item(self, user, dataset_val, k=1, is_softmax=True, epsilon=0, is_ucb=False):  # for kuaishou data
+    def recommend_k_item(self, user, dataset_val, k=1, is_softmax=True, epsilon=0, is_ucb=False, df_user=None):  # for kuaishou data
 
         df_item_env = dataset_val.df_item_env # 小数据集的feature
         item_index = df_item_env.index.to_numpy()
         # 用户的所有评分
-        u_all_item = torch.tensor(
-            np.concatenate((np.ones([len(df_item_env), 1]) * user,
-                            np.expand_dims(item_index, axis=-1),
-                            df_item_env.values), 1),
-            dtype=torch.float, device=self.device, requires_grad=False)
+        if df_user is None:
+            u_all_item = torch.tensor(
+                np.concatenate((np.ones([len(df_item_env), 1]) * user,
+                                np.expand_dims(item_index, axis=-1),
+                                df_item_env.values), 1),
+                dtype=torch.float, device=self.device, requires_grad=False)
+        else:
+            u_all_item = torch.tensor(
+                np.concatenate((np.ones([len(df_item_env), 1]) * user,
+                                df_user.loc[user].to_numpy() * np.array([[1]] * len(df_item_env)),
+                                np.expand_dims(item_index, axis=-1),
+                                df_item_env.values), 1),
+                dtype=torch.float, device=self.device, requires_grad=False)
 
         u_value = self.forward(u_all_item).detach().squeeze() # predicted value
 

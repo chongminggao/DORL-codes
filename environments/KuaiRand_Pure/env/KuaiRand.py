@@ -21,14 +21,14 @@ import random
 
 from tqdm import tqdm
 
-from core.util import get_similarity_mat, get_distance_mat
+from core.util import get_distance_mat
 
 CODEPATH = os.path.dirname(__file__)
 ROOTPATH = os.path.dirname(CODEPATH)
 DATAPATH = os.path.join(ROOTPATH, "data")
 
 
-class KuaiEnv(gym.Env):
+class KuaiRandEnv(gym.Env):
     metadata = {'render.modes': ['human']}
 
     def __init__(self, mat=None, lbe_user=None, lbe_video=None, list_feat=None, df_video_env=None, df_dist_small=None,
@@ -46,7 +46,6 @@ class KuaiEnv(gym.Env):
         else:
             self.mat, self.lbe_user, self.lbe_video, self.list_feat, self.df_video_env, self.df_dist_small = self.load_mat()
 
-
         self.list_feat_small = list(map(lambda x: self.list_feat[x], self.lbe_video.classes_))
 
         # smallmat shape: (1411, 3327)
@@ -60,15 +59,53 @@ class KuaiEnv(gym.Env):
         self.reset()
 
     @staticmethod
-    def load_category():
-        # load categories:
-        print("load item feature")
-        filepath = os.path.join(DATAPATH, 'item_categories.csv')
-        df_feat0 = pd.read_csv(filepath, header=0)
-        df_feat0.feat = df_feat0.feat.map(eval)
+    def load_user_info():
+        print("load user features")
+        filepath = os.path.join(DATAPATH, 'user_features_pure.csv')
+        df_user = pd.read_csv(filepath, usecols=['user_id', 'user_active_degree',
+                                                 'is_live_streamer', 'is_video_author', 'follow_user_num_range',
+                                                 'fans_user_num_range', 'friend_user_num_range',
+                                                 'register_days_range'] + [f'onehot_feat{x}' for x in range(18)]
+                              )
+        for col in ['user_active_degree',
+                    'is_live_streamer', 'is_video_author', 'follow_user_num_range',
+                    'fans_user_num_range', 'friend_user_num_range', 'register_days_range']:
 
-        list_feat = df_feat0.feat.to_list()
-        df_feat = pd.DataFrame(list_feat, columns=['feat0', 'feat1', 'feat2', 'feat3'], dtype=int)
+            df_user[col] = df_user[col].map(lambda x: chr(0) if x == 'UNKNOWN' else x)
+            lbe = LabelEncoder()
+            df_user[col] = lbe.fit_transform(df_user[col])
+            # print(lbe.classes_)
+            if chr(0) in lbe.classes_.tolist() or -124 in lbe.classes_.tolist():
+                assert lbe.classes_[0] in {-124, chr(0)}
+                # do not add one
+            else:
+                df_user[col] += 1
+        for col in [f'onehot_feat{x}' for x in range(18)]:
+            df_user.loc[df_user[col].isna(), col] = -124
+            lbe = LabelEncoder()
+            df_user[col] = lbe.fit_transform(df_user[col])
+            # print(lbe.classes_)
+            if chr(0) in lbe.classes_.tolist() or -124 in lbe.classes_.tolist():
+                assert lbe.classes_[0] in {-124, chr(0)}
+                # do not add one
+            else:
+                df_user[col] += 1
+
+        df_user = df_user.set_index("user_id")
+        return df_user
+
+    @staticmethod
+    def load_category():
+        print("load item feature")
+        filepath = os.path.join(DATAPATH, 'video_features_basic_pure.csv')
+        df_item = pd.read_csv(filepath, usecols=["tag"], dtype=str)
+        ind = df_item['tag'].isna()
+        df_item['tag'].loc[~ind] = df_item['tag'].loc[~ind].map(lambda x: eval(f"[{x}]"))
+        df_item['tag'].loc[ind] = [[-1]] * ind.sum()
+
+        list_feat = df_item['tag'].to_list()
+
+        df_feat = pd.DataFrame(list_feat, columns=['feat0', 'feat1', 'feat2'], dtype=int)
         df_feat.index.name = "video_id"
         df_feat[df_feat.isna()] = -1
         df_feat = df_feat + 1
@@ -91,15 +128,60 @@ class KuaiEnv(gym.Env):
                 "video_duration"]
             video_mean_duration.to_csv(duration_path, index=False)
 
-        video_mean_duration.index.name="video_id"
+        video_mean_duration.index.name = "video_id"
         return video_mean_duration
 
+    @staticmethod
+    def get_similarity_mat(list_feat):
+        similarity_mat_path = os.path.join(DATAPATH, "similarity_mat_video.csv")
+        if os.path.isfile(similarity_mat_path):
+            # with open(similarity_mat_path, 'rb') as f:
+            #     similarity_mat = np.load(f, allow_pickle=True, fix_imports=True)
+            print("loading similarity matrix...")
+            df_sim = pd.read_csv(similarity_mat_path, index_col=0)
+            df_sim.columns = df_sim.columns.astype(int)
+            print("loading completed.")
+            similarity_mat = df_sim.to_numpy()
+        else:
+            series_feat_list = pd.Series(list_feat)
+            df_feat_list = series_feat_list.to_frame("categories")
+            df_feat_list.index.name = "video_id"
 
+            similarity_mat = np.zeros([len(df_feat_list), len(df_feat_list)])
+            print("Compute the similarity matrix (for the first time and will be saved for later usage)")
+            for i in tqdm(range(len(df_feat_list)), desc="Computing..."):
+                for j in range(i):
+                    similarity_mat[i, j] = similarity_mat[j, i]
+                for j in range(i, len(df_feat_list)):
+                    similarity_mat[i, j] = len(set(series_feat_list[i]).intersection(set(series_feat_list[j]))) / len(
+                        set(series_feat_list[i]).union(set(series_feat_list[j])))
 
+            df_sim = pd.DataFrame(similarity_mat)
+            df_sim.to_csv(similarity_mat_path)
 
+        return similarity_mat
 
+    @staticmethod
+    def get_distance_mat(list_feat, sub_index_list):
+        if sub_index_list is not None:
+            distance_mat_small_path = os.path.join(DATAPATH, "distance_mat_video_small.csv")
+            if os.path.isfile(distance_mat_small_path):
+                print("loading small distance matrix...")
+                df_dist_small = pd.read_csv(distance_mat_small_path, index_col=0)
+                df_dist_small.columns = df_dist_small.columns.astype(int)
+                print("loading completed.")
+            else:
+                similarity_mat = KuaiEnv.get_similarity_mat(list_feat)
+                df_sim = pd.DataFrame(similarity_mat)
+                df_sim_small = df_sim.loc[sub_index_list, sub_index_list]
 
+                df_dist_small = 1.0 / df_sim_small
 
+                df_dist_small.to_csv(distance_mat_small_path)
+
+            return df_dist_small
+
+        return None
 
     @staticmethod
     def load_mat():
@@ -167,7 +249,6 @@ class KuaiEnv(gym.Env):
         minn = predict_mat.min()
         maxx = predict_mat.max()
 
-
         normed_mat = (predict_mat - minn) / (maxx - minn)
 
         return normed_mat
@@ -193,7 +274,7 @@ class KuaiEnv(gym.Env):
         self.action = action
         t = self.total_turn
         done = self._determine_whether_to_leave(t, action)
-        if t >= (self.max_turn-1):
+        if t >= (self.max_turn - 1):
             done = True
         self._add_action_to_history(t, action)
 
@@ -219,7 +300,7 @@ class KuaiEnv(gym.Env):
 
     def render(self, mode='human', close=False):
         history_action = self.history_action
-        category = {k:self.list_feat_small[v] for k,v in history_action.items()}
+        category = {k: self.list_feat_small[v] for k, v in history_action.items()}
         # category_debug = {k:self.list_feat[v] for k,v in history_action.items()}
         # return history_action, category, category_debug
         return self.cur_user, history_action, category
@@ -259,18 +340,18 @@ class KuaiEnv(gym.Env):
         self.max_history += 1
 
 
-
-# For loading KuaishouRec Data
 @njit
-def find_negative(user_ids, video_ids, mat_small, mat_big, df_negative, max_item):
+def find_negative(user_ids, item_ids, mat_train, df_negative):
     for i in range(len(user_ids)):
-        user, item = user_ids[i], video_ids[i]
+        user, item = user_ids[i], item_ids[i]
+        value = mat_train[user, item]
 
         neg = item + 1
-        while neg <= max_item:
-            # if neg == 1225:  # 1225 is an absent video_id
-            #     neg = 1226
-            if mat_small[user, neg] or mat_big[user, neg]:
+        # neg_v = mat_train[user, neg]
+
+        while neg < mat_train.shape[1]:
+            neg_v = mat_train[user, neg]
+            if neg_v >= value:
                 neg += 1
             else:
                 df_negative[i, 0] = user
@@ -279,45 +360,29 @@ def find_negative(user_ids, video_ids, mat_small, mat_big, df_negative, max_item
         else:
             neg = item - 1
             while neg >= 0:
-                # if neg == 1225:  # 1225 is an absent video_id
-                #     neg = 1224
-                if mat_small[user, neg] or mat_big[user, neg]:
+                neg_v = mat_train[user, neg]
+                if neg_v >= value:
                     neg -= 1
                 else:
                     df_negative[i, 0] = user
                     df_negative[i, 1] = neg
                     break
 
-# For loading KuaiRec Data
-def negative_sampling(df_big, df_feat, DATAPATH):
-    small_path = os.path.join(DATAPATH, "small_matrix.csv")
-    df_small = pd.read_csv(small_path, header=0, usecols=['user_id', 'video_id'])
+def negative_sampling(df_train, df_feat, df_user):
+    print("negative sampling...")
+    mat_train = csr_matrix((df_train["watch_ratio"], (df_train["user_id"], df_train["video_id"])),
+                           shape=(df_train['user_id'].max() + 1, df_train['video_id'].max() + 1)).toarray()
+    df_negative = np.zeros([len(df_train), 2])
 
-    mat_small = csr_matrix((np.ones(len(df_small)), (df_small['user_id'], df_small['video_id'])),
-                           shape=(df_big['user_id'].max() + 1, df_big['video_id'].max() + 1), dtype=np.bool).toarray()
-    # df_negative = df_big.copy()
-    mat_big = csr_matrix((np.ones(len(df_big)), (df_big['user_id'], df_big['video_id'])),
-                         shape=(df_big['user_id'].max() + 1, df_big['video_id'].max() + 1), dtype=np.bool).toarray()
+    user_ids = df_train["user_id"].to_numpy()
+    item_ids = df_train["video_id"].to_numpy()
 
-    # mat_negative = lil_matrix((df_big['user_id'].max() + 1, df_big['video_id'].max() + 1), dtype=np.bool).toarray()
-    # find_negative(df_big['user_id'].to_numpy(), df_big['video_id'].to_numpy(), mat_small, mat_big, mat_negative,
-    #               df_big['video_id'].max())
-    # negative_pairs = np.array(list(zip(*mat_negative.nonzero())))
-    # df_negative = pd.DataFrame(negative_pairs, columns=["user_id", "video_id"])
-    # df_negative = df_negative[df_negative['video_id'] != 1225]  # 1225 is an absent video_id
-
-    df_negative = np.zeros([len(df_big), 2])
-    find_negative(df_big['user_id'].to_numpy(), df_big['video_id'].to_numpy(), mat_small, mat_big, df_negative,
-                  df_big['video_id'].max())
-
+    find_negative(user_ids, item_ids, mat_train, df_negative)
     df_negative = pd.DataFrame(df_negative, columns=["user_id", "video_id"], dtype=int)
-    df_negative = df_negative.merge(df_feat, on=['video_id'], how='left')
 
-    video_mean_duration = KuaiEnv.load_video_duration()
-
-    # df_negative['video_duration'] = df_negative['video_id'].map(lambda x: video_mean_duration[x])
-    df_negative = df_negative.merge(video_mean_duration, on=['video_id'], how='left')
-
-    df_negative['watch_ratio_normed'] = 0.0
-
+    df_negative = df_negative.join(df_feat, on=['video_id'], how="left")
+    df_negative = df_negative.join(df_user, on=['user_id'], how="left")
+    df_duration = df_train[["video_id", "duration_ms"]].groupby("video_id").agg(np.mean)
+    df_negative = df_negative.join(df_duration, on=['video_id'], how="left")
+    df_negative.loc[df_negative["duration_ms"].isna(), "duration_ms"] = 0
     return df_negative

@@ -37,12 +37,11 @@ class UserModel_Pairwise(UserModel):
     def __init__(self, feature_columns, y_columns, task, task_logit_dim,
                  dnn_hidden_units=(128, 128),
                  l2_reg_embedding=1e-5, l2_reg_dnn=1e-1, init_std=0.0001, task_dnn_units=None, seed=2022, dnn_dropout=0,
-                 dnn_activation='relu', dnn_use_bn=False, device='cpu', padding_idx=None, ab_columns=None):
+                 dnn_activation='relu', dnn_use_bn=False, device='cpu', ab_columns=None):
 
         super(UserModel_Pairwise, self).__init__(feature_columns, y_columns,
                                              l2_reg_embedding=l2_reg_embedding,
-                                             init_std=init_std, seed=seed, device=device,
-                                             padding_idx=padding_idx)
+                                             init_std=init_std, seed=seed, device=device)
 
         self.feature_columns = feature_columns
         self.feature_index = self.feature_index

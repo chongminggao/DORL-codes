@@ -18,7 +18,7 @@ from torch import Tensor
 
 
 class Linear(nn.Module):
-    def __init__(self, feature_columns, feature_index, init_std=0.0001, device='cpu', padding_idx=None):
+    def __init__(self, feature_columns, feature_index, init_std=0.0001, device='cpu'):
         super(Linear, self).__init__()
         self.feature_index = feature_index
         self.device = device
@@ -31,7 +31,7 @@ class Linear(nn.Module):
             filter(lambda x: isinstance(x, VarLenSparseFeat), feature_columns)) if len(feature_columns) else []
 
         self.embedding_dict = create_embedding_matrix(feature_columns, init_std, linear=True, sparse=False,
-                                                      device=device, padding_idx=padding_idx)
+                                                      device=device)
 
         for tensor in self.embedding_dict.values():
             nn.init.normal_(tensor.weight, mean=0, std=init_std)

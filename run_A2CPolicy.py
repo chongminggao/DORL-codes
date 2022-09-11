@@ -48,6 +48,7 @@ except ImportError:
 def get_args():
     parser = argparse.ArgumentParser()
 
+    # parser.add_argument("--env", type=str, default="KuaiRand-v0")
     parser.add_argument("--env", type=str, default="KuaiEnv-v0")
     parser.add_argument("--user_model_name", type=str, default="DeepFM")
     parser.add_argument("--model_name", type=str, default="A2C_with_emb")
