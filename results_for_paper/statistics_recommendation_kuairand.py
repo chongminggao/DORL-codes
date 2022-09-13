@@ -57,6 +57,8 @@ def load_model(args):
 def load_big():
     df_train, _, _, _ = get_df_train()
 
+    # df_train = df_train[df_train["is_click"] > 0]
+
     df_pop = df_train[["user_id", "video_id"]].groupby("video_id").agg(len)
     df_pop.rename(columns={"user_id": "count"}, inplace=True)
 
@@ -81,6 +83,9 @@ def load_big():
     df_pop.index = df_pop["item_id"]
     df_pop = df_pop[["count", "item_id_sorted"]]
 
+    df_train_y = df_train[["video_id", "is_like", "is_click", "long_view", "watch_ratio"]].groupby("video_id").agg(np.mean)
+    df_pop = df_pop.join(df_train_y, on=['item_id'], how="left")
+
     return df_pop
 
 
@@ -90,7 +95,7 @@ def get_recommended_items(args_um, user_model):
                     + [f'onehot_feat{x}' for x in range(18)]
     item_features = ["video_id"] + ["feat" + str(i) for i in range(3)] + ["duration_ms"]
 
-    reward_features = ["watch_ratio"]
+    reward_features = ["is_click"]
     dataset_val = load_static_validate_data_kuairand(user_features, item_features, reward_features,
                                                      args_um.entity_dim, args_um.feature_dim, DATAPATH)
 
@@ -98,16 +103,18 @@ def get_recommended_items(args_um, user_model):
     df_y_mean = df_y.groupby("item_id").agg(np.mean)
 
     K = 10
-    is_softmax = True
+    is_softmax = False
     epsilon = 0
     is_ucb = False
 
     # load user info
     df_user = KuaiRandEnv.load_user_info()
+    # df_user = None # Todo!!!!!!!!!!!
+
     count = {i: 0 for i in range(len(dataset_val.df_item_env))}
     # for uesr_big_id in tqdm(range(dataset_val.x_columns[0].vocabulary_size)):
-    for uesr_big_id in tqdm(range(1000)):
-        recommendation, reward_pred = user_model.recommend_k_item(uesr_big_id, dataset_val, k=K, is_softmax=is_softmax,
+    for user in tqdm(range(100)):
+        recommendation, reward_pred = user_model.recommend_k_item(user, dataset_val, k=K, is_softmax=is_softmax,
                                                                   epsilon=epsilon, is_ucb=is_ucb, df_user=df_user)
         for i in recommendation:
             count[i] += 1
@@ -123,30 +130,64 @@ def visual(df_small_pop, count, df_y_mean, tau):
     df_visual = df_visual.join(df_hit, on=['item_id'], how="left")
     df_visual = df_visual.join(df_y_mean, on=['item_id'], how="left")
 
-    # sep = [500, 1000, 15 2000, 5000, 10000, max(df_visual["count"]) + 1]
-    sep = list(range(0, 9000, 500)) + [df_visual['count'].max() + 1]
+    # sep = [500, 1000, 1500, 2000, 5000, 10000, max(df_visual["count"]) + 1]
+    sep = list(range(0, 1000, 100)) + [df_visual['count'].max() + 1]
 
-    group_info = {"group": [], "count": [], "y": [], "hit": []}
+    group_info = {"group": [], "count": [], "y": [], "hit": [], "train_like":[], "train_view":[], "train_click":[], "watch_ratio":[]}
     for left, right in zip(sep[:-1], sep[1:]):
         df_group = df_visual[df_visual['count'].map(lambda x: x >= left and x < right)]
-        res = df_group[["count", "hit"]].sum()
-        res2 = (df_group["y"] * df_group["count"]).sum() / res["count"]
+        res = df_group["hit"].sum()
+        # res2 = (df_group["y"] * df_group["count"]).sum() / df_group["count"].sum()
+        res2 = df_group["y"].mean()
+
 
         group_info["group"].append(f"[{left},{right})")
-        group_info["count"].append(res["count"])
-        group_info["hit"].append(res["hit"])
+        group_info["count"].append(len(df_group))
+        group_info["hit"].append(res)
         group_info["y"].append(res2)
+        group_info["train_like"].append(df_group["is_like"].mean())
+        group_info["train_view"].append(df_group["long_view"].mean())
+        group_info["train_click"].append(df_group["is_click"].mean())
+        group_info["watch_ratio"].append(df_group["watch_ratio"].mean())
 
     df_groups = pd.DataFrame(group_info)
 
     fig = plt.figure(figsize=(7, 3.5))
+    sns.barplot(data=df_groups, x="group", y="count")
+    ax1 = plt.gca()
+    ax2 = ax1.twinx()
+    sns.lineplot(data=df_groups, x="group", y="watch_ratio", ax=ax2)
+    fig.savefig(f"label_watch.pdf", format='pdf', bbox_inches='tight')
 
+    fig = plt.figure(figsize=(7, 3.5))
+    sns.barplot(data=df_groups, x="group", y="count")
+    ax1 = plt.gca()
+    ax2 = ax1.twinx()
+    sns.lineplot(data=df_groups, x="group", y="train_like", ax=ax2)
+    fig.savefig(f"label_like.pdf", format='pdf', bbox_inches='tight')
+
+    fig = plt.figure(figsize=(7, 3.5))
+    sns.barplot(data=df_groups, x="group", y="count")
+    ax1 = plt.gca()
+    ax2 = ax1.twinx()
+    sns.lineplot(data=df_groups, x="group", y="train_click", ax=ax2)
+    fig.savefig(f"label_click.pdf", format='pdf', bbox_inches='tight')
+
+    fig = plt.figure(figsize=(7, 3.5))
+    sns.barplot(data=df_groups, x="group", y="count")
+    ax1 = plt.gca()
+    ax2 = ax1.twinx()
+    sns.lineplot(data=df_groups, x="group", y="train_view", ax=ax2)
+    fig.savefig(f"label_longview.pdf", format='pdf', bbox_inches='tight')
+
+    fig = plt.figure(figsize=(7, 3.5))
     sns.barplot(data=df_groups, x="group", y="count")
     ax1 = plt.gca()
     ax2 = ax1.twinx()
     sns.lineplot(data=df_groups, x="group", y="hit", ax=ax2)
-    fig.savefig(f"visual{tau}.pdf", format='pdf', bbox_inches='tight')
+    fig.savefig(f"visual_{tau}.pdf", format='pdf', bbox_inches='tight')
     plt.show()
+    a = 1
 
     # sns.displot(df_visual.iloc[1:], x="count", bins=100)
     # plt.show()
@@ -192,7 +233,7 @@ args = get_args()
 
 for tau in [0]:
     args.tau = tau
-    args.read_message = f"{2}"
+    args.read_message = f"sgd 0.1 long_view"
     print(args.read_message)
 
     user_model = load_model(args)

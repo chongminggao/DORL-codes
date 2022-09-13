@@ -10,6 +10,7 @@ import numpy as np
 import torch
 from matplotlib import pyplot as plt
 import seaborn as sns
+from tqdm import tqdm
 
 plt.rcParams['pdf.fonttype'] = 42
 plt.rcParams['ps.fonttype'] = 42
@@ -18,6 +19,7 @@ import sys
 CODEPATH = os.path.dirname(__file__)
 sys.path.extend([f"{CODEPATH}/..", f"{CODEPATH}/../src", f"{CODEPATH}/../src/DeepCTR-Torch", f"{CODEPATH}/../src/tianshou"])
 
+from run_worldModel import load_static_validate_data_kuairec, get_args
 import pandas as pd
 from scipy.sparse import csr_matrix
 
@@ -55,7 +57,7 @@ def load_big():
     CODEPATH = os.path.dirname(__file__)
     DATAPATH = os.path.join(CODEPATH, "..", "environments", "KuaiRec", "data")
     filename = os.path.join(DATAPATH, "big_matrix.csv")
-    df_big = pd.read_csv(filename, usecols=['user_id', 'video_id', 'timestamp', 'watch_ratio_normed', 'video_duration'])
+    df_big = pd.read_csv(filename, usecols=['user_id', 'video_id', 'timestamp', 'watch_ratio_normed', 'watch_ratio', 'video_duration'])
     df_big['video_duration'] /= 1000
 
     # load feature info
@@ -63,6 +65,7 @@ def load_big():
 
     df_big = df_big.join(df_feat, on=['video_id'], how="left")
     df_big.loc[df_big['watch_ratio_normed'] > 5, 'watch_ratio_normed'] = 5
+    df_big.loc[df_big['watch_ratio'] > 5, 'watch_ratio'] = 5
 
     df_pop = df_big[["user_id", "video_id"]].groupby("video_id").agg(len)
     df_pop.rename(columns={"user_id": "count"}, inplace=True)
@@ -82,17 +85,19 @@ def load_big():
     df_small_pop.index = df_small_pop["item_id"]
     df_small_pop = df_small_pop[["count", "item_id_sorted", "item_id_raw"]]
 
+    df_train_y = df_big[["video_id", "watch_ratio", "watch_ratio_normed"]].groupby("video_id").agg(np.mean)
+    df_small_pop = df_small_pop.join(df_train_y, on=['item_id'], how="left")
+
     return df_small_pop
 
 
-def get_recommended_items(user_model):
+def get_recommended_items(args_um, user_model):
     CODEPATH = os.path.dirname(__file__)
     DATAPATH = os.path.join(CODEPATH, "..", "environments", "KuaiRec", "data")
     user_features = ["user_id"]
     item_features = ["video_id"] + ["feat" + str(i) for i in range(4)] + ["video_duration"]
     reward_features = ["watch_ratio_normed"]
-    args_um = get_args()
-    dataset_val = load_static_validate_data_kuaishou(user_features, item_features, reward_features,
+    dataset_val = load_static_validate_data_kuairec(user_features, item_features, reward_features,
                                                      args_um.entity_dim, args_um.feature_dim, DATAPATH)
 
     K = 10
@@ -101,7 +106,7 @@ def get_recommended_items(user_model):
     is_ucb = False
 
     count = {i: 0 for i in range(len(lbe_video.classes_))}
-    for uesr_big_id in lbe_user.classes_:
+    for uesr_big_id in tqdm(lbe_user.classes_):
         recommendation, reward_pred = user_model.recommend_k_item(uesr_big_id, dataset_val, k=K, is_softmax=is_softmax,
                                                                   epsilon=epsilon, is_ucb=is_ucb)
         for i in lbe_video.transform(recommendation):
@@ -115,12 +120,12 @@ def visual(mat, df_small_pop, count, tau):
     ind = ind[::-1]
     sorted_ratio = mean_ratio[ind]
 
-    df = pd.DataFrame(sorted_ratio, columns=["watch_ratio_normed"])
+    df = pd.DataFrame(sorted_ratio, columns=["y"])
     df["item_id"] = ind
     df["item_id_sorted"] = range(len(df))
     df = df.set_index("item_id")
 
-    df_visual = df_small_pop.join(df[['watch_ratio_normed']], on=['item_id'], how="left")
+    df_visual = df_small_pop.join(df[['y']], on=['item_id'], how="left")
 
     df_hit = pd.DataFrame(count.items(), columns=["item_id", "hit"])
     df_hit = df_hit.set_index("item_id")
@@ -128,27 +133,29 @@ def visual(mat, df_small_pop, count, tau):
     df_visual = df_visual.join(df_hit, on=['item_id'], how="left")
 
     # sep = [500, 1000, 15 2000, 5000, 10000, max(df_visual["count"]) + 1]
-    sep = list(range(0, 9000, 500)) + [df_visual['count'].max() + 1]
+    sep = list(range(0, 5000, 500)) + [df_visual['count'].max() + 1]
 
-    group_info = {"group": [], "count": [], "watch_ratio_normed": [], "hit": []}
+    group_info = {"group": [], "count": [], "watch_ratio_normed": [], "hit": [], "y":[], "watch_ratio":[]}
     for left, right in zip(sep[:-1], sep[1:]):
         df_group = df_visual[df_visual['count'].map(lambda x: x >= left and x < right)]
         res = df_group[["count", "hit"]].sum()
-        res2 = (df_group["watch_ratio_normed"] * df_group["count"]).sum() / res["count"]
+        # res2 = (df_group["watch_ratio_normed"] * df_group["count"]).sum() / res["count"]
+        # res2 = df_group["watch_ratio_normed"].mean()
 
         group_info["group"].append(f"[{left},{right})")
-        group_info["count"].append(res["count"])
+        group_info["count"].append(len(df_group["count"]))
         group_info["hit"].append(res["hit"])
-        group_info["watch_ratio_normed"].append(res2)
+        group_info["y"].append(df_group["y"].mean())
+        group_info["watch_ratio_normed"].append(df_group["watch_ratio_normed"].mean())
+        group_info["watch_ratio"].append(df_group["watch_ratio"].mean())
 
     df_groups = pd.DataFrame(group_info)
 
     fig = plt.figure(figsize=(7, 3.5))
-
     sns.barplot(data=df_groups, x="group", y="count")
     ax1 = plt.gca()
     ax2 = ax1.twinx()
-    sns.lineplot(data=df_groups, x="group", y="hit", ax=ax2)
+    sns.lineplot(data=df_groups, x="group", y="watch_ratio", ax=ax2)
     fig.savefig(f"small_mat_tau{tau}.pdf", format='pdf', bbox_inches='tight')
     plt.show()
 
@@ -200,6 +207,6 @@ for tau in [1000, 0, 100, 10000]:
     print(args.read_message)
 
     user_model = load_model(args)
-    count = get_recommended_items(user_model)
+    count = get_recommended_items(args, user_model)
     df_small_pop = load_big()
     visual(mat, df_small_pop, count, args.tau)

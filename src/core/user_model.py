@@ -212,6 +212,8 @@ class UserModel(nn.Module):
 
                         total_loss = loss + reg_loss + self.aux_loss
 
+                        t.set_postfix(loss=f"{float(loss):.3f}", reg_loss=f"{float(reg_loss):.3f}")
+
                         loss_epoch += loss.item()
                         total_loss_epoch += total_loss.item()
                         total_loss.backward()

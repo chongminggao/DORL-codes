@@ -127,9 +127,10 @@ class UserModel_Pairwise(UserModel):
         linear_logit = logit
 
         # DNN
-        dnn_logit = out(last(dnn(dnn_input)))
+        dnn_logit = last(dnn(dnn_input))
 
-        y_pred = linear_logit + dnn_logit
+        all_logit = linear_logit + dnn_logit
+        y_pred = out(all_logit)
 
         return y_pred
 
