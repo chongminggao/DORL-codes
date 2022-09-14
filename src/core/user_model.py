@@ -55,6 +55,8 @@ class StaticDataset(Dataset):
     def set_item_col(self, ind):
         self.item_col = ind
         
+    def set_dataset_complete(self, dataset):
+        self.dataset_complete = dataset
 
     def compile_dataset(self, df_x, df_y, score=None):
         self.x_numpy = df_x.to_numpy()
@@ -377,24 +379,26 @@ class UserModel(nn.Module):
 
     def evaluate_data(self, dataset_val, batch_size=256):
 
-        y_predict = self.predict_data(dataset_val, batch_size)
+        y_predict = self.predict_data(dataset_val, batch_size*10)
         y = dataset_val.get_y()
 
         eval_result = {}
         for name, metric_fun in self.metric_fun.items():
             eval_result[name] = metric_fun(y, y_predict)
 
-        if dataset_val.ground_truth is not None:
+        if self.metric_fun_ranking is not None:
+            y_complete_predict = self.predict_data(dataset_val.dataset_complete, batch_size*10)
+
             ground_truth = dataset_val.ground_truth
 
-            user_id = dataset_val.x_numpy[:,dataset_val.user_col]
-            item_id = dataset_val.x_numpy[:,dataset_val.item_col]
+            user_id = dataset_val.dataset_complete.x_numpy[:,dataset_val.user_col]
+            item_id = dataset_val.dataset_complete.x_numpy[:,dataset_val.item_col]
 
             # xy_predict = pd.DataFrame([user_id, item_id, y_predict.squeeze()], columns={"user_id", "item_id", "y_pred"})
-            xy_predict = pd.DataFrame({"user_id":user_id, "item_id":item_id, "y_pred":y_predict.squeeze()})
+            xy_predict = pd.DataFrame({"user_id":user_id, "item_id":item_id, "y_pred":y_complete_predict.squeeze()})
             xy_predict = xy_predict.astype(dtype={"user_id": "int64", "item_id": "int64", "y_pred": "float64"})
             df_score = xy_predict.groupby("user_id").agg(list)
-            self.metric_fun_ranking(df_score, ground_truth)
+            eval_result.update(self.metric_fun_ranking(df_score, ground_truth))
 
         return eval_result
 

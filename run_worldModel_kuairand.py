@@ -94,7 +94,8 @@ def get_args():
 def get_df_train():
     filename = os.path.join(DATAPATH, "log_standard_4_08_to_4_21_pure.csv")
     df_train = pd.read_csv(filename,
-                           usecols=['user_id', 'video_id', 'time_ms', 'is_like', 'is_click', 'long_view', 'play_time_ms', 'duration_ms'])
+                           usecols=['user_id', 'video_id', 'time_ms', 'is_like', 'is_click', 'long_view',
+                                    'play_time_ms', 'duration_ms'])
 
     df_train['watch_ratio'] = df_train["play_time_ms"] / df_train["duration_ms"]
     df_train.loc[df_train['watch_ratio'].isin([np.inf, np.nan]), 'watch_ratio'] = 0
@@ -117,14 +118,13 @@ def get_df_train():
 
     return df_train, df_user, df_feat, list_feat
 
-def load_dataset_kuairand(user_features, item_features, reward_features, tau, entity_dim, feature_dim, MODEL_SAVE_PATH):
 
+def load_dataset_kuairand(user_features, item_features, reward_features, tau, entity_dim, feature_dim, MODEL_SAVE_PATH):
     df_train, df_user, df_feat, list_feat = get_df_train()
 
     # user_features = ["user_id"]
     # item_features = ["video_id"] + ["feat" + str(i) for i in range(4)] + ["video_duration"]
     # reward_features = ["watch_ratio"]
-
 
     df_x = df_train[user_features + item_features]
     if reward_features[0] == "hybrid":
@@ -138,7 +138,6 @@ def load_dataset_kuairand(user_features, item_features, reward_features, tau, en
     # df_train["long_view"].sum()
     # df_train["is_like"].sum()
     # df_train["is_click"].sum()
-
 
     x_columns = [SparseFeatP("user_id", df_train['user_id'].max() + 1, embedding_dim=entity_dim)] + \
                 [SparseFeatP(col, df_user[col].max() + 1, embedding_dim=feature_dim, padding_idx=0) for col in
@@ -181,7 +180,8 @@ def load_static_validate_data_kuairand(user_features, item_features, reward_feat
                                        DATAPATH):
     filename = os.path.join(DATAPATH, "log_random_4_22_to_5_08_pure.csv")
     df_val = pd.read_csv(filename,
-                         usecols=['user_id', 'video_id', 'time_ms', 'is_like', 'is_click', 'long_view', 'play_time_ms', 'duration_ms'])
+                         usecols=['user_id', 'video_id', 'time_ms', 'is_like', 'is_click', 'long_view', 'play_time_ms',
+                                  'duration_ms'])
 
     df_val['watch_ratio'] = df_val["play_time_ms"] / df_val["duration_ms"]
     df_val.loc[df_val['watch_ratio'].isin([np.inf, np.nan]), 'watch_ratio'] = 0
@@ -232,10 +232,10 @@ def load_static_validate_data_kuairand(user_features, item_features, reward_feat
     if not any(df_y.to_numpy() % 1):
         # make sure the label is binary
         assert reward_features[0] != "watch_ratio"
-        df_binary = pd.concat([df_val[["user_id", "video_id"]],df_y], axis=1)
+        df_binary = pd.concat([df_val[["user_id", "video_id"]], df_y], axis=1)
         df_ones = df_binary.loc[df_binary[reward_features[0]] > 0]
         ground_truth = df_ones[["user_id", "video_id"] + reward_features].groupby("user_id").agg(list)
-        ground_truth.rename(columns={"video_id":"item_id", reward_features[0]:"y"}, inplace=True)
+        ground_truth.rename(columns={"video_id": "item_id", reward_features[0]: "y"}, inplace=True)
 
         dataset_val.set_ground_truth(ground_truth)
 
@@ -243,6 +243,33 @@ def load_static_validate_data_kuairand(user_features, item_features, reward_feat
         dataset_val.set_user_col(0)
         assert dataset_val.x_columns[1].name == "video_id"
         dataset_val.set_item_col(1)
+
+        # user_ids = np.arange(dataset_val.x_columns[dataset_val.user_col].vocabulary_size)
+        user_ids = np.arange(1000)
+        item_ids = np.arange(dataset_val.x_columns[dataset_val.item_col].vocabulary_size)
+
+        df_user_complete = pd.DataFrame({"user_id": user_ids.repeat(len(item_ids))})
+        df_item_complete = pd.DataFrame(np.tile(df_item_env.reset_index(), (len(user_ids), 1)), columns=df_item_env.reset_index().columns)
+
+        # np.tile(np.concatenate([np.expand_dims(df_item_env.index.to_numpy(), df_item_env.to_numpy()], axis=1), (2, 1))
+
+        df_x_complete = pd.concat([df_user_complete, df_item_complete], axis=1)
+        df_y_complete = pd.DataFrame(np.zeros(len(df_x_complete)), columns=df_y.columns)
+
+        dataset_complete = StaticDataset(x_columns, y_columns, num_workers=4)
+        dataset_complete.compile_dataset(df_x_complete, df_x_complete)
+
+        dataset_val.set_dataset_complete(dataset_complete)
+
+        #
+        # item_ids
+        #
+        # dataset_val.x_columns[dataset_val.item_col].vocabulary_size
+        #
+        # df_complete = {"userid": range()}
+        #
+        # dataset_df_complete = StaticDataset(x_columns, y_columns, num_workers=4)
+        # dataset_df_complete.compile_dataset(df_x, df_y)
 
     return dataset_val
 
@@ -272,7 +299,7 @@ def main(args):
                      'fans_user_num_range', 'friend_user_num_range', 'register_days_range'] \
                     + [f'onehot_feat{x}' for x in range(18)]
     if not args.is_userinfo:
-        user_features = ["user_id"] # TODO!!!!
+        user_features = ["user_id"]  # TODO!!!!
     item_features = ["video_id"] + ["feat" + str(i) for i in range(3)] + ["duration_ms"]
 
     reward_features = [args.yfeat]
@@ -308,9 +335,11 @@ def main(args):
                               "MSE": lambda y, y_predict: nn.functional.mse_loss(torch.from_numpy(y).type(torch.float),
                                                                                  torch.from_numpy(y_predict)).numpy(),
                               "RMSE": lambda y, y_predict: nn.functional.mse_loss(torch.from_numpy(y).type(torch.float),
-                                                                                  torch.from_numpy(y_predict)).numpy()**0.5
+                                                                                  torch.from_numpy(
+                                                                                      y_predict)).numpy() ** 0.5
                               },
-                  metric_fun_ranking=functools.partial(get_ranking_results, K=args.rankingK, metrics=["recall","ndcg"]),
+                  metric_fun_ranking=functools.partial(get_ranking_results, K=args.rankingK,
+                                                       metrics=["Recall", "Precision", "NDCG", "HT", "MAP", "MRR"]),
                   metrics=None)  # No evaluation step at offline stage
 
     # model.compile_RL_test(

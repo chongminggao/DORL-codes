@@ -90,15 +90,24 @@ def get_Recall(rec_list, true_list, true_rel):
     # return n_union / user_sum
 
 def get_NDCG(rec_list, true_list, true_rel):
+    ndcgs = 0
     for i in range(len(rec_list)):
+        hits = []
+        dcg = 0.
         mapscore = dict(zip(true_list[i], true_rel[i]))
-        for item in rec_list[i]:
+        for k, item in enumerate(rec_list[i]):
             if item in mapscore:
-                (1 << mapscore[item] - 1) / np.log2(2 + i)
+                hits.append(mapscore[item])
+                dcg += (1 << mapscore[item] - 1) / np.log2(2 + k)
+        if len(hits):
+            hits = np.sort(np.asarray(hits))[::-1]
+            idcg = ((1 << hits - 1) / np.log2(2 + np.arange(len(hits)))).sum()
 
-        # recom = rec_list[i])
-        # truth = true_list[i]
-        # rels = []
+            ndcgs += dcg / idcg
+
+    return ndcgs / len(rec_list)
+
+
 
 METRICS = {"recall":get_Recall,
            "precision":get_Precision,
@@ -107,7 +116,7 @@ METRICS = {"recall":get_Recall,
            "map":get_MAP,
            "ht":get_HR}
 
-def get_ranking_results(df_score, true_list, K=(20,10,5), metrics=["Recall","Precision","NDCG"]):
+def get_ranking_results(df_score, df_true_list, K=(20,10,5), metrics=["Recall","Precision","NDCG","HT","MAP","MRR"]):
 
     assert all([metric.lower() in METRICS.keys() for metric in metrics])
 
@@ -119,7 +128,7 @@ def get_ranking_results(df_score, true_list, K=(20,10,5), metrics=["Recall","Pre
 
     df_rec = df_score[["item_id_sorted", "y_pred_sorted"]]
 
-    df_eval = df_rec.join(true_list, on=["user_id"], how="left")
+    df_eval = df_rec.join(df_true_list, on=["user_id"], how="left")
     df_eval = df_eval.loc[~df_eval["y"].isna()]
 
 
@@ -135,6 +144,7 @@ def get_ranking_results(df_score, true_list, K=(20,10,5), metrics=["Recall","Pre
             results[f"{metric}@{k}"] = func(rec_list, true_list, true_rel)
 
 
+    return results
 
 
 
