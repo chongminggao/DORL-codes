@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import argparse
-import functools
 import datetime
 
 import json
@@ -29,7 +28,6 @@ import logzero
 from logzero import logger
 
 from environments.KuaiRand_Pure.env.KuaiRand import KuaiRandEnv, negative_sampling
-from evaluation import test_kuaishou
 # from util.upload import my_upload
 from util.utils import create_dir, LoggerCallback_Update
 

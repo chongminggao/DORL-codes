@@ -41,9 +41,19 @@ class StaticDataset(Dataset):
 
         self.len = 0
         self.neg_items_info = None
+        self.ground_truth = None
 
     def set_env_items(self, df_item_env):  # for kuaishou data
         self.df_item_env = df_item_env
+
+    def set_ground_truth(self, ground_truth):  # for kuaishou data
+        self.ground_truth = ground_truth
+
+    def set_user_col(self, ind):
+        self.user_col = ind
+
+    def set_item_col(self, ind):
+        self.item_col = ind
         
 
     def compile_dataset(self, df_x, df_y, score=None):
@@ -124,7 +134,7 @@ class UserModel(nn.Module):
     def compile_RL_test(self, RL_eval_fun):
         self.RL_eval_fun = RL_eval_fun
 
-    def compile(self, optimizer, loss_dict=None, metrics=None, metric_fun=None, loss_func=None):
+    def compile(self, optimizer, loss_dict=None, metrics=None, metric_fun=None, loss_func=None, metric_fun_ranking=None):
         # metric_fun is a function!
 
         self.metrics_names = ["loss"]
@@ -132,6 +142,7 @@ class UserModel(nn.Module):
         self.metrics = self._get_metrics(metrics)
 
         self.metric_fun = metric_fun
+        self.metric_fun_ranking = metric_fun_ranking
 
         self.loss_dict = None if loss_dict is None else {x: self._get_loss_func(loss) if isinstance(loss, str) else loss
                                                          for x, loss in loss_dict.items()}  # deprecated!
@@ -372,6 +383,19 @@ class UserModel(nn.Module):
         eval_result = {}
         for name, metric_fun in self.metric_fun.items():
             eval_result[name] = metric_fun(y, y_predict)
+
+        if dataset_val.ground_truth is not None:
+            ground_truth = dataset_val.ground_truth
+
+            user_id = dataset_val.x_numpy[:,dataset_val.user_col]
+            item_id = dataset_val.x_numpy[:,dataset_val.item_col]
+
+            # xy_predict = pd.DataFrame([user_id, item_id, y_predict.squeeze()], columns={"user_id", "item_id", "y_pred"})
+            xy_predict = pd.DataFrame({"user_id":user_id, "item_id":item_id, "y_pred":y_predict.squeeze()})
+            xy_predict = xy_predict.astype(dtype={"user_id": "int64", "item_id": "int64", "y_pred": "float64"})
+            df_score = xy_predict.groupby("user_id").agg(list)
+            self.metric_fun_ranking(df_score, ground_truth)
+
         return eval_result
 
     def predict_data(self, dataset_predict, batch_size=256, verbose=False):
@@ -386,7 +410,10 @@ class UserModel(nn.Module):
 
         # test_loader = DataLoader(dataset=dataset_predict, shuffle=False, batch_size=batch_size)
         # test_loader = DataLoader(dataset=dataset_predict.get_dataset_eval(), shuffle=False, batch_size=batch_size)
-        test_loader = DataLoader(dataset=dataset_predict.get_dataset_eval(), shuffle=False, batch_size=batch_size,
+
+        is_shuffle=False
+        assert not is_shuffle
+        test_loader = DataLoader(dataset=dataset_predict.get_dataset_eval(), shuffle=is_shuffle, batch_size=batch_size,
                                  num_workers=dataset_predict.num_workers)
 
         sample_num = len(dataset_predict)

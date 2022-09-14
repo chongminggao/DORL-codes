@@ -32,7 +32,7 @@ import logzero
 from logzero import logger
 
 from environments.KuaiRec.env.KuaiEnv import KuaiEnv, negative_sampling
-from evaluation import test_kuaishou
+from core.evaluation.evaluator import test_kuaishou
 # from util.upload import my_upload
 from util.utils import create_dir, LoggerCallback_Update
 

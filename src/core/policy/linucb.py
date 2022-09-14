@@ -5,7 +5,7 @@
 import numpy as np
 from tqdm import tqdm
 
-from evaluation import test_kuaishou
+from core.evaluation.evaluator import test_kuaishou
 
 
 class linucb_disjoint_arm():

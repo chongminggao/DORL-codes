@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import argparse
-import functools
 import datetime
+import functools
 
 import json
 import os
@@ -13,6 +13,8 @@ import torch
 from torch import nn
 
 import sys
+
+from core.evaluation.metrics import get_ranking_results
 
 sys.path.extend(["./src", "./src/DeepCTR-Torch"])
 
@@ -29,7 +31,6 @@ import logzero
 from logzero import logger
 
 from environments.KuaiRand_Pure.env.KuaiRand import KuaiRandEnv, negative_sampling
-from evaluation import test_kuaishou
 # from util.upload import my_upload
 from util.utils import create_dir, LoggerCallback_Update
 
@@ -49,6 +50,8 @@ def get_args():
     parser.add_argument('--is_softmax', dest='is_softmax', action='store_true')
     parser.add_argument('--not_softmax', dest='is_softmax', action='store_false')
     parser.set_defaults(is_softmax=True)
+
+    parser.add_argument('--rankingK', default=(20, 10, 5), type=int, nargs="+")
 
     parser.add_argument('--is_userinfo', dest='is_userinfo', action='store_true')
     parser.add_argument('--no_userinfo', dest='is_userinfo', action='store_false')
@@ -226,6 +229,21 @@ def load_static_validate_data_kuairand(user_features, item_features, reward_feat
     df_item_env = df_item_env[item_features[1:]]
     dataset_val.set_env_items(df_item_env)
 
+    if not any(df_y.to_numpy() % 1):
+        # make sure the label is binary
+        assert reward_features[0] != "watch_ratio"
+        df_binary = pd.concat([df_val[["user_id", "video_id"]],df_y], axis=1)
+        df_ones = df_binary.loc[df_binary[reward_features[0]] > 0]
+        ground_truth = df_ones[["user_id", "video_id"] + reward_features].groupby("user_id").agg(list)
+        ground_truth.rename(columns={"video_id":"item_id", reward_features[0]:"y"}, inplace=True)
+
+        dataset_val.set_ground_truth(ground_truth)
+
+        assert dataset_val.x_columns[0].name == "user_id"
+        dataset_val.set_user_col(0)
+        assert dataset_val.x_columns[1].name == "video_id"
+        dataset_val.set_item_col(1)
+
     return dataset_val
 
 
@@ -285,10 +303,14 @@ def main(args):
     model.compile(optimizer=args.optimizer,
                   # loss_dict=task_loss_dict,
                   loss_func=loss_kuaishou_pairwise if args.use_pairwise else loss_kuaishou_pointwise,
-                  metric_fun={"mae": lambda y, y_predict: nn.functional.l1_loss(torch.from_numpy(y).type(torch.float),
+                  metric_fun={"MAE": lambda y, y_predict: nn.functional.l1_loss(torch.from_numpy(y).type(torch.float),
                                                                                 torch.from_numpy(y_predict)).numpy(),
-                              "mse": lambda y, y_predict: nn.functional.mse_loss(torch.from_numpy(y).type(torch.float),
-                                                                                 torch.from_numpy(y_predict)).numpy()},
+                              "MSE": lambda y, y_predict: nn.functional.mse_loss(torch.from_numpy(y).type(torch.float),
+                                                                                 torch.from_numpy(y_predict)).numpy(),
+                              "RMSE": lambda y, y_predict: nn.functional.mse_loss(torch.from_numpy(y).type(torch.float),
+                                                                                  torch.from_numpy(y_predict)).numpy()**0.5
+                              },
+                  metric_fun_ranking=functools.partial(get_ranking_results, K=args.rankingK, metrics=["recall","ndcg"]),
                   metrics=None)  # No evaluation step at offline stage
 
     # model.compile_RL_test(
@@ -297,7 +319,7 @@ def main(args):
 
     # %% 5. Learn model
     history = model.fit_data(static_dataset, dataset_val,
-                             batch_size=args.batch_size, epochs=args.epoch,
+                             batch_size=args.batch_size, epochs=args.epoch, shuffle=True,
                              callbacks=[[LoggerCallback_Update(logger_path)]])
     logger.info(history.history)
 
