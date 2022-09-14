@@ -93,13 +93,14 @@ def get_recommended_items(args_um, user_model):
     user_features = ["user_id", 'user_active_degree', 'is_live_streamer', 'is_video_author', 'follow_user_num_range',
                      'fans_user_num_range', 'friend_user_num_range', 'register_days_range'] \
                     + [f'onehot_feat{x}' for x in range(18)]
+    user_features = ["user_id"] # Todo!!!!
     item_features = ["video_id"] + ["feat" + str(i) for i in range(3)] + ["duration_ms"]
 
     reward_features = ["is_click"]
     dataset_val = load_static_validate_data_kuairand(user_features, item_features, reward_features,
                                                      args_um.entity_dim, args_um.feature_dim, DATAPATH)
 
-    df_y = pd.DataFrame({"item_id":dataset_val.x_numpy[:, 26], "y":dataset_val.y_numpy.squeeze()})
+    df_y = pd.DataFrame({"item_id":dataset_val.x_numpy[:, len(user_features)], "y":dataset_val.y_numpy.squeeze()})
     df_y_mean = df_y.groupby("item_id").agg(np.mean)
 
     K = 10
@@ -109,7 +110,7 @@ def get_recommended_items(args_um, user_model):
 
     # load user info
     df_user = KuaiRandEnv.load_user_info()
-    # df_user = None # Todo!!!!!!!!!!!
+    df_user = None # Todo!!!!!!!!!!!
 
     count = {i: 0 for i in range(len(dataset_val.df_item_env))}
     # for uesr_big_id in tqdm(range(dataset_val.x_columns[0].vocabulary_size)):
@@ -136,7 +137,7 @@ def visual(df_small_pop, count, df_y_mean, tau):
     group_info = {"group": [], "count": [], "y": [], "hit": [], "train_like":[], "train_view":[], "train_click":[], "watch_ratio":[]}
     for left, right in zip(sep[:-1], sep[1:]):
         df_group = df_visual[df_visual['count'].map(lambda x: x >= left and x < right)]
-        res = df_group["hit"].sum()
+        res = df_group["hit"].mean()
         # res2 = (df_group["y"] * df_group["count"]).sum() / df_group["count"].sum()
         res2 = df_group["y"].mean()
 
@@ -233,7 +234,7 @@ args = get_args()
 
 for tau in [0]:
     args.tau = tau
-    args.read_message = f"sgd 0.1 long_view"
+    args.read_message = f"testtest"
     print(args.read_message)
 
     user_model = load_model(args)

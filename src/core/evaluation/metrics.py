@@ -30,16 +30,16 @@ def get_HR(rec_list, true_list, true_rel):
     return hits / len(true_list)
 
 
-def get_AP(rec_list, true_list, true_rel):
+def get_AP(rec, true):
     """ 精度均值（Average Precision，简称AP) """
     hits = 0
     sum_precs = 0
-    for i in range(len(rec_list)):
-        if rec_list[i] in true_list:
+    for i in range(len(rec)):
+        if rec[i] in true:
             hits += 1
             sum_precs += hits / (i + 1.0)
     if hits > 0:
-        return sum_precs / len(true_list)
+        return sum_precs / len(true)
     else:
         return 0
 
@@ -89,8 +89,16 @@ def get_Recall(rec_list, true_list, true_rel):
     return np.mean(recalls)
     # return n_union / user_sum
 
-def get_NDCG():
-    pass
+def get_NDCG(rec_list, true_list, true_rel):
+    for i in range(len(rec_list)):
+        mapscore = dict(zip(true_list[i], true_rel[i]))
+        for item in rec_list[i]:
+            if item in mapscore:
+                (1 << mapscore[item] - 1) / np.log2(2 + i)
+
+        # recom = rec_list[i])
+        # truth = true_list[i]
+        # rels = []
 
 METRICS = {"recall":get_Recall,
            "precision":get_Precision,
@@ -99,7 +107,7 @@ METRICS = {"recall":get_Recall,
            "map":get_MAP,
            "ht":get_HR}
 
-def get_ranking_results(df_score, true_list, K=(20,10,5), metrics=["Recall","NDCG"]):
+def get_ranking_results(df_score, true_list, K=(20,10,5), metrics=["Recall","Precision","NDCG"]):
 
     assert all([metric.lower() in METRICS.keys() for metric in metrics])
 
