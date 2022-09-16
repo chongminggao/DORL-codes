@@ -14,11 +14,11 @@ from torch import nn
 
 import sys
 
-from core.evaluation.metrics import get_ranking_results
+
 from environments.coat.env.Coat import CoatEnv
 
 sys.path.extend(["./src", "./src/DeepCTR-Torch"])
-
+from core.evaluation.metrics import get_ranking_results
 from core.inputs import SparseFeatP, input_from_feature_columns
 from core.user_model_pairwise import UserModel_Pairwise
 from core.util import compute_exposure_effect_kuaiRec
@@ -66,16 +66,15 @@ def get_args():
     parser.add_argument('--no_ucb', dest='is_ucb', action='store_false')
     parser.set_defaults(is_ucb=False)
 
-    parser.add_argument('--use_pairwise', dest='use_pairwise', action='store_true')
-    parser.add_argument('--no_use_pairwise', dest='use_pairwise', action='store_false')
-    parser.set_defaults(use_pairwise=False)
+
+    parser.add_argument("--loss", type=str, default='pair')
 
     parser.add_argument("--feature_dim", type=int, default=8)
     parser.add_argument("--entity_dim", type=int, default=8)
     parser.add_argument("--user_model_name", type=str, default="DeepFM")
     parser.add_argument('--dnn', default=(64, 64), type=int, nargs="+")
-    parser.add_argument('--batch_size', default=512, type=int)
-    parser.add_argument('--epoch', default=3, type=int)
+    parser.add_argument('--batch_size', default=128, type=int)
+    parser.add_argument('--epoch', default=20, type=int)
     parser.add_argument('--cuda', default=1, type=int)
     # # env:
     parser.add_argument('--leave_threshold', default=1, type=float)
@@ -101,7 +100,7 @@ def get_df_coat(name):
     for item in mat_train.columns:
         one_item = mat_train.loc[mat_train[item] > 0, item].reset_index().rename(columns={"index":"user_id", item: "rating"})
         one_item["item_id"] = item
-        df_data = df_data.append(one_item)
+        df_data = pd.concat([df_data,one_item])
     df_data.reset_index(drop=True,inplace=True)
 
     # read user feature
@@ -267,9 +266,16 @@ def main(args):
                                dnn_hidden_units=args.dnn, seed=SEED, l2_reg_dnn=args.l2_reg_dnn,
                                device=device, ab_columns=ab_columns, init_std=0.001)
 
+    if args.loss == "pair":
+        loss_fun = loss_pairwise
+    if args.loss == "point":
+        loss_fun = loss_pointwise
+    if args.loss == "pointpair" or args.loss == "pairpoint" or args.loss == "pp":
+        loss_fun = loss_pairwise_pointwise
+
     model.compile(optimizer=args.optimizer,
                   # loss_dict=task_loss_dict,
-                  loss_func=loss_kuaishou_pairwise if args.use_pairwise else loss_kuaishou_pointwise,
+                  loss_func=loss_fun,
                   metric_fun={"MAE": lambda y, y_predict: nn.functional.l1_loss(torch.from_numpy(y).type(torch.float),
                                                                                 torch.from_numpy(y_predict)).numpy(),
                               "MSE": lambda y, y_predict: nn.functional.mse_loss(torch.from_numpy(y).type(torch.float),
@@ -357,7 +363,7 @@ def main(args):
     representation_item = combined_dnn_input(sparse_embedding_list, dense_value_list)
 
     # Get user representation
-    df_user = CoatEnv.load_user_info()
+    df_user = CoatEnv.load_user_feat()
     df_user["user_id"] = df_user.index
     df_user = df_user[[column.name for column in user_columns]]
 
@@ -387,7 +393,7 @@ def main(args):
 sigmoid = nn.Sigmoid()
 
 
-def loss_kuaishou_pointwise(y, y_deepfm_pos, y_deepfm_neg, exposure, alpha_u=None, beta_i=None):
+def loss_pointwise(y, y_deepfm_pos, y_deepfm_neg, exposure, alpha_u=None, beta_i=None):
     if alpha_u is not None:
         exposure_new = exposure * alpha_u * beta_i
         loss_ab = ((alpha_u - 1) ** 2).mean() + ((beta_i - 1) ** 2).mean()
@@ -400,13 +406,26 @@ def loss_kuaishou_pointwise(y, y_deepfm_pos, y_deepfm_neg, exposure, alpha_u=Non
     loss_y = ((y_exposure - y) ** 2).sum()
 
     bpr_click = 0
-
     loss = loss_y + args.lambda_ab * loss_ab
+    return loss
+
+def loss_pairwise(y, y_deepfm_pos, y_deepfm_neg, exposure, alpha_u=None, beta_i=None):
+    if alpha_u is not None:
+        exposure_new = exposure * alpha_u * beta_i
+        loss_ab = ((alpha_u - 1) ** 2).sum() + ((beta_i - 1) ** 2).sum()
+    else:
+        exposure_new = exposure
+        loss_ab = 0
+
+    # y_exposure = 1 / (1 + exposure_new) * y_deepfm_pos
+    # loss_y = ((y_exposure - y) ** 2).sum()
+
+    bpr_click = - sigmoid(y_deepfm_pos - y_deepfm_neg).log().sum()
+    loss = bpr_click + args.lambda_ab * loss_ab
 
     return loss
 
-
-def loss_kuaishou_pairwise(y, y_deepfm_pos, y_deepfm_neg, exposure, alpha_u=None, beta_i=None):
+def loss_pairwise_pointwise(y, y_deepfm_pos, y_deepfm_neg, exposure, alpha_u=None, beta_i=None):
     if alpha_u is not None:
         exposure_new = exposure * alpha_u * beta_i
         loss_ab = ((alpha_u - 1) ** 2).sum() + ((beta_i - 1) ** 2).sum()
@@ -418,9 +437,6 @@ def loss_kuaishou_pairwise(y, y_deepfm_pos, y_deepfm_neg, exposure, alpha_u=None
 
     loss_y = ((y_exposure - y) ** 2).sum()
     bpr_click = - sigmoid(y_deepfm_pos - y_deepfm_neg).log().sum()
-
-    # max(y_deepfm_neg - y_deepfm_pos + 1, y_deepfm_pos * 0)
-
     loss = loss_y + 0.2 * bpr_click + args.lambda_ab * loss_ab
 
     return loss

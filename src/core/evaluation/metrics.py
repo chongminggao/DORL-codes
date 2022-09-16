@@ -91,6 +91,7 @@ def get_Recall(rec_list, true_list, true_rel):
 
 def get_NDCG(rec_list, true_list, true_rel):
     ndcgs = 0
+    K = len(rec_list[0])
     for i in range(len(rec_list)):
         hits = []
         dcg = 0.
@@ -101,7 +102,9 @@ def get_NDCG(rec_list, true_list, true_rel):
                 dcg += (1 << mapscore[item] - 1) / np.log2(2 + k)
         if len(hits):
             hits = np.sort(np.asarray(hits))[::-1]
-            idcg = ((1 << hits - 1) / np.log2(2 + np.arange(len(hits)))).sum()
+            # idcg = ((1 << hits - 1) / np.log2(2 + np.arange(len(hits)))).sum()
+            idcg = ((1 << np.array(true_rel[i]) - 1)[:K] / np.log2(2 + np.arange(min(K, len(true_rel[i]))))).sum()
+            # true_rel[i]
 
             ndcgs += dcg / idcg
 
@@ -135,6 +138,8 @@ def get_ranking_results(df_score, df_true_list, K=(20,10,5), metrics=["Recall","
     true_list = df_eval["item_id"].to_list()
     true_rel = df_eval["y"].to_list()
 
+
+
     results = {}
     for metric in metrics:
         for k in K:
@@ -143,8 +148,52 @@ def get_ranking_results(df_score, df_true_list, K=(20,10,5), metrics=["Recall","
             func = METRICS[metric.lower()]
             results[f"{metric}@{k}"] = func(rec_list, true_list, true_rel)
 
-
     return results
+
+
+
+if __name__ == '__main__':
+
+    # # For the coat data!
+    # df_eval["item_id_sorted"] = df_eval["item_id_sorted"].map(lambda x: x.tolist())
+    # df_eval["y_pred_sorted"] = df_eval["y_pred_sorted"].map(lambda x: x.tolist())
+    # df_eval.to_excel("df_eval_coat.xlsx")
+
+    metrics = ["Recall", "Precision", "NDCG", "HT", "MAP", "MRR"]
+    df_eval = pd.read_excel("df_eval_coat.xlsx",index_col="user_id")
+    for col in df_eval.columns:
+        df_eval[col] = df_eval[col].map(eval)
+
+    threshold = 1
+
+    index = df_eval["y"].map(lambda x: [True if i >= threshold else False for i in x])
+    df_temp = pd.DataFrame(index)
+    df_temp.rename(columns={"y":"ind"},inplace=True)
+    df_temp["y"] = df_eval["y"]
+    df_temp["true_id"] = df_eval["item_id"]
+    df_true = df_temp.apply(lambda x: np.array(x["true_id"])[x["ind"]],axis=1)
+
+    df_autodebias = pd.read_csv("rec_coat.csv")
+    df_autodebias = pd.read_csv("rec_coat_all.csv")
+
+    rec_list_ad = df_autodebias[df_true.map(len) > 0].to_numpy()
+    true_ad = df_true[df_true.map(len)>0]
+    rel_ad = true_ad.map(lambda x: [1] * len(x))
+    true_ad_list=true_ad.to_list()
+    rel_ad_list = rel_ad.to_list()
+
+
+    ad_results = {}
+    for metric in metrics:
+        for k in [5]:
+            func = METRICS[metric.lower()]
+            ad_results[f"{metric}@{k}"] = func(rec_list_ad, true_ad_list, rel_ad_list)
+
+    print(ad_results)
+
+
+
+
 
 
 

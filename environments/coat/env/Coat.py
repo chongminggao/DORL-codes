@@ -21,8 +21,6 @@ import random
 
 from tqdm import tqdm
 
-from core.util import get_distance_mat
-
 CODEPATH = os.path.dirname(__file__)
 ROOTPATH = os.path.dirname(CODEPATH)
 DATAPATH = ROOTPATH
@@ -91,97 +89,6 @@ class CoatEnv(gym.Env):
         df_item.index.name = "item_id"
 
         return df_item
-
-
-
-    @staticmethod
-    def get_similarity_mat(list_feat):
-        similarity_mat_path = os.path.join(DATAPATH, "similarity_mat_video.csv")
-        if os.path.isfile(similarity_mat_path):
-            # with open(similarity_mat_path, 'rb') as f:
-            #     similarity_mat = np.load(f, allow_pickle=True, fix_imports=True)
-            print("loading similarity matrix...")
-            df_sim = pd.read_csv(similarity_mat_path, index_col=0)
-            df_sim.columns = df_sim.columns.astype(int)
-            print("loading completed.")
-            similarity_mat = df_sim.to_numpy()
-        else:
-            series_feat_list = pd.Series(list_feat)
-            df_feat_list = series_feat_list.to_frame("categories")
-            df_feat_list.index.name = "item_id"
-
-            similarity_mat = np.zeros([len(df_feat_list), len(df_feat_list)])
-            print("Compute the similarity matrix (for the first time and will be saved for later usage)")
-            for i in tqdm(range(len(df_feat_list)), desc="Computing..."):
-                for j in range(i):
-                    similarity_mat[i, j] = similarity_mat[j, i]
-                for j in range(i, len(df_feat_list)):
-                    similarity_mat[i, j] = len(set(series_feat_list[i]).intersection(set(series_feat_list[j]))) / len(
-                        set(series_feat_list[i]).union(set(series_feat_list[j])))
-
-            df_sim = pd.DataFrame(similarity_mat)
-            df_sim.to_csv(similarity_mat_path)
-
-        return similarity_mat
-
-    @staticmethod
-    def get_distance_mat(list_feat, sub_index_list):
-        if sub_index_list is not None:
-            distance_mat_small_path = os.path.join(DATAPATH, "distance_mat_video_small.csv")
-            if os.path.isfile(distance_mat_small_path):
-                print("loading small distance matrix...")
-                df_dist_small = pd.read_csv(distance_mat_small_path, index_col=0)
-                df_dist_small.columns = df_dist_small.columns.astype(int)
-                print("loading completed.")
-            else:
-                similarity_mat = KuaiEnv.get_similarity_mat(list_feat)
-                df_sim = pd.DataFrame(similarity_mat)
-                df_sim_small = df_sim.loc[sub_index_list, sub_index_list]
-
-                df_dist_small = 1.0 / df_sim_small
-
-                df_dist_small.to_csv(distance_mat_small_path)
-
-            return df_dist_small
-
-        return None
-
-    @staticmethod
-    def load_mat():
-        small_path = os.path.join(DATAPATH, "small_matrix.csv")
-        df_small = pd.read_csv(small_path, header=0, usecols=['user_id', 'item_id', 'watch_ratio'])
-        # df_small['watch_ratio'][df_small['watch_ratio'] > 5] = 5
-        df_small.loc[df_small['watch_ratio'] > 5, 'watch_ratio'] = 5
-
-        lbe_video = LabelEncoder()
-        lbe_video.fit(df_small['item_id'].unique())
-
-        lbe_user = LabelEncoder()
-        lbe_user.fit(df_small['user_id'].unique())
-
-        mat = csr_matrix(
-            (df_small['watch_ratio'],
-             (lbe_user.transform(df_small['user_id']), lbe_video.transform(df_small['item_id']))),
-            shape=(df_small['user_id'].nunique(), df_small['item_id'].nunique())).toarray()
-
-        mat[np.isnan(mat)] = df_small['watch_ratio'].mean()
-        mat[np.isinf(mat)] = df_small['watch_ratio'].mean()
-
-        # load feature info
-        list_feat, df_feat = KuaiEnv.load_category()
-
-        # Compute the average video duration
-        video_mean_duration = KuaiEnv.load_video_duration()
-
-        video_list = df_small['item_id'].unique()
-        df_video_env = df_feat.loc[video_list]
-        df_video_env['video_duration'] = np.array(
-            list(map(lambda x: video_mean_duration[x], df_video_env.index)))
-
-        # load or construct the distance mat (between item pairs):
-        df_dist_small = get_distance_mat(list_feat, lbe_video.classes_, DATAPATH)
-
-        return mat, lbe_user, lbe_video, list_feat, df_video_env, df_dist_small
 
     @staticmethod
     def compute_normed_reward(user_model, lbe_user, lbe_video, df_video_env):

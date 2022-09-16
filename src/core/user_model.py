@@ -222,6 +222,7 @@ class UserModel(nn.Module):
                         # loss = loss_func(y_pred, y.squeeze(), reduction='sum')
 
                         reg_loss = self.get_regularization_loss()
+                        reg_loss = 0
 
                         total_loss = loss + reg_loss + self.aux_loss
 
