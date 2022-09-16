@@ -23,7 +23,7 @@ CODEPATH = os.path.dirname(__file__)
 sys.path.extend(
     [f"{CODEPATH}/..", f"{CODEPATH}/../src", f"{CODEPATH}/../src/DeepCTR-Torch", f"{CODEPATH}/../src/tianshou"])
 
-from run_worldModel_kuairand import get_df_train, get_args, load_static_validate_data_kuairand
+from run_worldModel_kuairand import get_df_kuairand, get_args, load_static_validate_data_kuairand
 import pandas as pd
 from scipy.sparse import csr_matrix
 
@@ -55,7 +55,7 @@ def load_model(args):
 
 
 def load_big():
-    df_train, _, _, _ = get_df_train()
+    df_train, _, _, _ = get_df_kuairand("log_standard_4_08_to_4_21_pure.csv")
 
     # df_train = df_train[df_train["is_click"] > 0]
 

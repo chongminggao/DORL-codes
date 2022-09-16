@@ -74,7 +74,7 @@ def get_args():
     parser.add_argument("--user_model_name", type=str, default="DeepFM")
     parser.add_argument('--dnn', default=(64, 64), type=int, nargs="+")
     parser.add_argument('--batch_size', default=2048, type=int)
-    parser.add_argument('--epoch', default=3, type=int)
+    parser.add_argument('--epoch', default=10, type=int)
     parser.add_argument('--cuda', default=1, type=int)
     # # env:
     parser.add_argument('--leave_threshold', default=1, type=float)
@@ -91,36 +91,37 @@ def get_args():
     return args
 
 
-def get_df_train():
-    filename = os.path.join(DATAPATH, "log_standard_4_08_to_4_21_pure.csv")
-    df_train = pd.read_csv(filename,
-                           usecols=['user_id', 'video_id', 'time_ms', 'is_like', 'is_click', 'long_view',
-                                    'play_time_ms', 'duration_ms'])
+def get_df_kuairand(name, is_sort=True):
+    filename = os.path.join(DATAPATH, name)
+    df_data = pd.read_csv(filename,
+                          usecols=['user_id', 'video_id', 'time_ms', 'is_like', 'is_click', 'long_view',
+                                   'play_time_ms', 'duration_ms'])
 
-    df_train['watch_ratio'] = df_train["play_time_ms"] / df_train["duration_ms"]
-    df_train.loc[df_train['watch_ratio'].isin([np.inf, np.nan]), 'watch_ratio'] = 0
-    df_train.loc[df_train['watch_ratio'] > 5, 'watch_ratio'] = 5
-    df_train['duration_ms'] /= 1e5
-    df_train.rename(columns={"time_ms": "timestamp"}, inplace=True)
-    df_train["timestamp"] /= 1e3
+    df_data['watch_ratio'] = df_data["play_time_ms"] / df_data["duration_ms"]
+    df_data.loc[df_data['watch_ratio'].isin([np.inf, np.nan]), 'watch_ratio'] = 0
+    df_data.loc[df_data['watch_ratio'] > 5, 'watch_ratio'] = 5
+    df_data['duration_ms'] /= 1e5
+    df_data.rename(columns={"time_ms": "timestamp"}, inplace=True)
+    df_data["timestamp"] /= 1e3
 
     # load feature info
     list_feat, df_feat = KuaiRandEnv.load_category()
-    df_train = df_train.join(df_feat, on=['video_id'], how="left")
+    df_data = df_data.join(df_feat, on=['video_id'], how="left")
 
     # load user info
     df_user = KuaiRandEnv.load_user_info()
-    df_train = df_train.join(df_user, on=['user_id'], how="left")
+    df_data = df_data.join(df_user, on=['user_id'], how="left")
 
     # get user sequences
-    df_train.sort_values(["user_id", "timestamp"], inplace=True)
-    df_train.reset_index(drop=True, inplace=True)
+    if is_sort:
+        df_data.sort_values(["user_id", "timestamp"], inplace=True)
+        df_data.reset_index(drop=True, inplace=True)
 
-    return df_train, df_user, df_feat, list_feat
+    return df_data, df_user, df_feat, list_feat
 
 
 def load_dataset_kuairand(user_features, item_features, reward_features, tau, entity_dim, feature_dim, MODEL_SAVE_PATH):
-    df_train, df_user, df_feat, list_feat = get_df_train()
+    df_train, df_user, df_feat, list_feat = get_df_kuairand("log_standard_4_08_to_4_21_pure.csv")
 
     # user_features = ["user_id"]
     # item_features = ["video_id"] + ["feat" + str(i) for i in range(4)] + ["video_duration"]
@@ -178,25 +179,26 @@ def load_dataset_kuairand(user_features, item_features, reward_features, tau, en
 
 def load_static_validate_data_kuairand(user_features, item_features, reward_features, entity_dim, feature_dim,
                                        DATAPATH):
-    filename = os.path.join(DATAPATH, "log_random_4_22_to_5_08_pure.csv")
-    df_val = pd.read_csv(filename,
-                         usecols=['user_id', 'video_id', 'time_ms', 'is_like', 'is_click', 'long_view', 'play_time_ms',
-                                  'duration_ms'])
-
-    df_val['watch_ratio'] = df_val["play_time_ms"] / df_val["duration_ms"]
-    df_val.loc[df_val['watch_ratio'].isin([np.inf, np.nan]), 'watch_ratio'] = 0
-    df_val.loc[df_val['watch_ratio'] > 5, 'watch_ratio'] = 5
-    df_val['duration_ms'] /= 1e5
-    df_val.rename(columns={"time_ms": "timestamp"}, inplace=True)
-    df_val["timestamp"] /= 1e3
-
-    # load feature info
-    list_feat, df_feat = KuaiRandEnv.load_category()
-    df_val = df_val.join(df_feat, on=['video_id'], how="left")
-
-    # load user info
-    df_user = KuaiRandEnv.load_user_info()
-    df_val = df_val.join(df_user, on=['user_id'], how="left")
+    df_val, df_user, df_feat, list_feat = get_df_kuairand("log_random_4_22_to_5_08_pure.csv")
+    # filename = os.path.join(DATAPATH, "log_random_4_22_to_5_08_pure.csv")
+    # df_val = pd.read_csv(filename,
+    #                      usecols=['user_id', 'video_id', 'time_ms', 'is_like', 'is_click', 'long_view', 'play_time_ms',
+    #                               'duration_ms'])
+    #
+    # df_val['watch_ratio'] = df_val["play_time_ms"] / df_val["duration_ms"]
+    # df_val.loc[df_val['watch_ratio'].isin([np.inf, np.nan]), 'watch_ratio'] = 0
+    # df_val.loc[df_val['watch_ratio'] > 5, 'watch_ratio'] = 5
+    # df_val['duration_ms'] /= 1e5
+    # df_val.rename(columns={"time_ms": "timestamp"}, inplace=True)
+    # df_val["timestamp"] /= 1e3
+    #
+    # # load feature info
+    # list_feat, df_feat = KuaiRandEnv.load_category()
+    # df_val = df_val.join(df_feat, on=['video_id'], how="left")
+    #
+    # # load user info
+    # df_user = KuaiRandEnv.load_user_info()
+    # df_val = df_val.join(df_user, on=['user_id'], how="left")
 
     # df_x, df_y = df_val[user_features + item_features], df_val[reward_features]
     df_x = df_val[user_features + item_features]
@@ -248,8 +250,11 @@ def load_static_validate_data_kuairand(user_features, item_features, reward_feat
         user_ids = np.arange(1000)
         item_ids = np.arange(dataset_val.x_columns[dataset_val.item_col].vocabulary_size)
 
-        df_user_complete = pd.DataFrame({"user_id": user_ids.repeat(len(item_ids))})
-        df_item_complete = pd.DataFrame(np.tile(df_item_env.reset_index(), (len(user_ids), 1)), columns=df_item_env.reset_index().columns)
+        # df_user_complete = pd.DataFrame({"user_id": user_ids.repeat(len(item_ids))})
+        df_user_complete = pd.DataFrame(df_user.loc[user_ids].reset_index()[user_features].to_numpy().repeat(len(item_ids), axis=0),
+                                        columns=df_user.reset_index()[user_features].columns)
+        df_item_complete = pd.DataFrame(np.tile(df_item_env.reset_index()[item_features], (len(user_ids), 1)),
+                                        columns=df_item_env.reset_index()[item_features].columns)
 
         # np.tile(np.concatenate([np.expand_dims(df_item_env.index.to_numpy(), df_item_env.to_numpy()], axis=1), (2, 1))
 
@@ -257,7 +262,7 @@ def load_static_validate_data_kuairand(user_features, item_features, reward_feat
         df_y_complete = pd.DataFrame(np.zeros(len(df_x_complete)), columns=df_y.columns)
 
         dataset_complete = StaticDataset(x_columns, y_columns, num_workers=4)
-        dataset_complete.compile_dataset(df_x_complete, df_x_complete)
+        dataset_complete.compile_dataset(df_x_complete, df_y_complete)
 
         dataset_val.set_dataset_complete(dataset_complete)
 

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import argparse
 import datetime
+import functools
 
 import json
 import os
@@ -12,6 +13,9 @@ import torch
 from torch import nn
 
 import sys
+
+from core.evaluation.metrics import get_ranking_results
+from environments.coat.env.Coat import CoatEnv
 
 sys.path.extend(["./src", "./src/DeepCTR-Torch"])
 
@@ -27,19 +31,19 @@ from core.user_model import StaticDataset
 import logzero
 from logzero import logger
 
-from environments.KuaiRand_Pure.env.KuaiRand import KuaiRandEnv, negative_sampling
+from environments.coat.env.Coat import CoatEnv, negative_sampling
 # from util.upload import my_upload
 from util.utils import create_dir, LoggerCallback_Update
 
 CODEPATH = os.path.dirname(__file__)
-DATAPATH = os.path.join(CODEPATH, "environments", "KuaiRand_Pure", "data")
+DATAPATH = os.path.join(CODEPATH, "environments", "coat")
 
 
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--resume', action="store_true")
-    parser.add_argument("--env", type=str, default='KuaiRand-v0')
-    parser.add_argument("--yfeat", type=str, default='watch_ratio')
+    parser.add_argument("--env", type=str, default='Coat-v0')
+    parser.add_argument("--yfeat", type=str, default='rating')
     parser.add_argument("--optimizer", type=str, default='adam')
 
     # recommendation related:
@@ -48,9 +52,11 @@ def get_args():
     parser.add_argument('--not_softmax', dest='is_softmax', action='store_false')
     parser.set_defaults(is_softmax=True)
 
+    parser.add_argument('--rankingK', default=(20, 10, 5), type=int, nargs="+")
+
     parser.add_argument('--is_userinfo', dest='is_userinfo', action='store_true')
     parser.add_argument('--no_userinfo', dest='is_userinfo', action='store_false')
-    parser.set_defaults(is_userinfo=False)
+    parser.set_defaults(is_userinfo=True)
 
     parser.add_argument('--l2_reg_dnn', default=0.1, type=float)
     parser.add_argument('--lambda_ab', default=10, type=float)
@@ -62,13 +68,13 @@ def get_args():
 
     parser.add_argument('--use_pairwise', dest='use_pairwise', action='store_true')
     parser.add_argument('--no_use_pairwise', dest='use_pairwise', action='store_false')
-    parser.set_defaults(use_pairwise=True)
+    parser.set_defaults(use_pairwise=False)
 
     parser.add_argument("--feature_dim", type=int, default=8)
     parser.add_argument("--entity_dim", type=int, default=8)
     parser.add_argument("--user_model_name", type=str, default="DeepFM")
     parser.add_argument('--dnn', default=(64, 64), type=int, nargs="+")
-    parser.add_argument('--batch_size', default=2048, type=int)
+    parser.add_argument('--batch_size', default=512, type=int)
     parser.add_argument('--epoch', default=3, type=int)
     parser.add_argument('--cuda', default=1, type=int)
     # # env:
@@ -86,73 +92,51 @@ def get_args():
     return args
 
 
-def get_df_train():
-    filename = os.path.join(DATAPATH, "log_standard_4_08_to_4_21_pure.csv")
-    df_train = pd.read_csv(filename,
-                           usecols=['user_id', 'video_id', 'time_ms', 'is_like', 'is_click', 'long_view', 'play_time_ms', 'duration_ms'])
+def get_df_coat(name):
+    # read interaction
+    filename = os.path.join(DATAPATH, name)
+    mat_train = pd.read_csv(filename, sep="\s+", header=None)
+    df_data = pd.DataFrame([],columns=["user_id", "item_id", "rating"])
 
-    df_train['watch_ratio'] = df_train["play_time_ms"] / df_train["duration_ms"]
-    df_train.loc[df_train['watch_ratio'].isin([np.inf, np.nan]), 'watch_ratio'] = 0
-    df_train.loc[df_train['watch_ratio'] > 5, 'watch_ratio'] = 5
-    df_train['duration_ms'] /= 1e5
-    df_train.rename(columns={"time_ms": "timestamp"}, inplace=True)
-    df_train["timestamp"] /= 1e3
+    for item in mat_train.columns:
+        one_item = mat_train.loc[mat_train[item] > 0, item].reset_index().rename(columns={"index":"user_id", item: "rating"})
+        one_item["item_id"] = item
+        df_data = df_data.append(one_item)
+    df_data.reset_index(drop=True,inplace=True)
 
-    # load feature info
-    list_feat, df_feat = KuaiRandEnv.load_category()
-    df_train = df_train.join(df_feat, on=['video_id'], how="left")
+    # read user feature
+    df_user = CoatEnv.load_user_feat()
 
-    # load user info
-    df_user = KuaiRandEnv.load_user_info()
-    df_train = df_train.join(df_user, on=['user_id'], how="left")
-
-    # get user sequences
-    df_train.sort_values(["user_id", "timestamp"], inplace=True)
-    df_train.reset_index(drop=True, inplace=True)
-
-    return df_train, df_user, df_feat, list_feat
-
-def load_dataset_kuairand(user_features, item_features, reward_features, tau, entity_dim, feature_dim, MODEL_SAVE_PATH):
-
-    df_train, df_user, df_feat, list_feat = get_df_train()
-
-    # user_features = ["user_id"]
-    # item_features = ["video_id"] + ["feat" + str(i) for i in range(4)] + ["video_duration"]
-    # reward_features = ["watch_ratio"]
+    # read item features
+    df_item = CoatEnv.load_item_feat()
 
 
+    df_data = df_data.join(df_user, on="user_id",how='left')
+    df_data = df_data.join(df_item, on="item_id", how='left')
+
+    df_data = df_data.astype(int)
+
+    return df_data, df_user, df_item
+
+
+def load_dataset_coat(user_features, item_features, reward_features, tau, entity_dim, feature_dim, MODEL_SAVE_PATH):
+    df_train, df_user, df_item = get_df_coat("train.ascii")
     df_x = df_train[user_features + item_features]
-    if reward_features[0] == "hybrid":
-        a = df_train["long_view"] + df_train["is_like"] + df_train["is_click"]
-        df_y = a > 0
-        df_y = pd.DataFrame(df_y, dtype=int, columns=["hybrid"])
-    else:
-        df_y = df_train[reward_features]
-    print(f"Train: {reward_features}: {df_y.sum()[0]}/{len(df_y)}")
 
-    # df_train["long_view"].sum()
-    # df_train["is_like"].sum()
-    # df_train["is_click"].sum()
+    df_y = df_train[reward_features]
 
 
     x_columns = [SparseFeatP("user_id", df_train['user_id'].max() + 1, embedding_dim=entity_dim)] + \
-                [SparseFeatP(col, df_user[col].max() + 1, embedding_dim=feature_dim, padding_idx=0) for col in
-                 user_features[1:]] + \
-                [SparseFeatP("video_id", df_train['video_id'].max() + 1, embedding_dim=entity_dim)] + \
-                [SparseFeatP("feat{}".format(i),
-                             df_feat.max().max() + 1,
-                             embedding_dim=feature_dim,
-                             embedding_name="feat",  # Share the same feature!
-                             padding_idx=0  # using padding_idx in embedding!
-                             ) for i in range(3)] + \
-                [DenseFeat("duration_ms", 1)]
+                [SparseFeatP(col, df_user[col].max() + 1, embedding_dim=feature_dim) for col in user_features[1:]] + \
+                [SparseFeatP("item_id", df_train['item_id'].max() + 1, embedding_dim=entity_dim)] + \
+                [SparseFeatP(col, df_item[col].max() + 1, embedding_dim=feature_dim) for col in item_features[1:]]
 
     ab_columns = [SparseFeatP("alpha_u", df_train['user_id'].max() + 1, embedding_dim=1)] + \
-                 [SparseFeatP("beta_i", df_train['video_id'].max() + 1, embedding_dim=1)]
+                 [SparseFeatP("beta_i", df_train['item_id'].max() + 1, embedding_dim=1)]
 
     y_columns = [DenseFeat("y", 1)]
 
-    df_negative = negative_sampling(df_train, df_feat, df_user)
+    df_negative = negative_sampling(df_train, df_item, df_user)
 
     df_x_neg = df_negative[user_features + item_features]
 
@@ -172,58 +156,65 @@ def load_dataset_kuairand(user_features, item_features, reward_features, tau, en
     return dataset, x_columns, y_columns, ab_columns
 
 
-def load_static_validate_data_kuairand(user_features, item_features, reward_features, entity_dim, feature_dim,
+def load_static_validate_data_coat(user_features, item_features, reward_features, entity_dim, feature_dim,
                                        DATAPATH):
-    filename = os.path.join(DATAPATH, "log_random_4_22_to_5_08_pure.csv")
-    df_val = pd.read_csv(filename,
-                         usecols=['user_id', 'video_id', 'time_ms', 'is_like', 'is_click', 'long_view', 'play_time_ms', 'duration_ms'])
-
-    df_val['watch_ratio'] = df_val["play_time_ms"] / df_val["duration_ms"]
-    df_val.loc[df_val['watch_ratio'].isin([np.inf, np.nan]), 'watch_ratio'] = 0
-    df_val.loc[df_val['watch_ratio'] > 5, 'watch_ratio'] = 5
-    df_val['duration_ms'] /= 1e5
-    df_val.rename(columns={"time_ms": "timestamp"}, inplace=True)
-    df_val["timestamp"] /= 1e3
-
-    # load feature info
-    list_feat, df_feat = KuaiRandEnv.load_category()
-    df_val = df_val.join(df_feat, on=['video_id'], how="left")
-
-    # load user info
-    df_user = KuaiRandEnv.load_user_info()
-    df_val = df_val.join(df_user, on=['user_id'], how="left")
-
-    # df_x, df_y = df_val[user_features + item_features], df_val[reward_features]
+    df_val, df_user, df_item = get_df_coat("test.ascii")
     df_x = df_val[user_features + item_features]
-    if reward_features[0] == "hybrid":
-        a = df_val["long_view"] + df_val["is_like"] + df_val["is_click"]
-        df_y = a > 0
-        df_y = pd.DataFrame(df_y, dtype=int, columns=["hybrid"])
-    else:
-        df_y = df_val[reward_features]
-    print(f"Validate: {reward_features}: {df_y.sum()[0]}/{len(df_y)}")
+    df_y = df_val[reward_features]
+
+    # return df_train, df_user, df_item
 
     x_columns = [SparseFeatP("user_id", df_val['user_id'].max() + 1, embedding_dim=entity_dim)] + \
-                [SparseFeatP(col, df_user[col].max() + 1, embedding_dim=feature_dim, padding_idx=0) for col in
-                 user_features[1:]] + \
-                [SparseFeatP("video_id", df_val['video_id'].max() + 1, embedding_dim=entity_dim)] + \
-                [SparseFeatP("feat{}".format(i),
-                             df_feat.max().max() + 1,
-                             embedding_dim=feature_dim,
-                             embedding_name="feat",  # Share the same feature!
-                             padding_idx=0  # using padding_idx in embedding!
-                             ) for i in range(3)] + \
-                [DenseFeat("duration_ms", 1)]
+                [SparseFeatP(col, df_user[col].max() + 1, embedding_dim=feature_dim) for col in user_features[1:]] + \
+                [SparseFeatP("item_id", df_val['item_id'].max() + 1, embedding_dim=entity_dim)] + \
+                [SparseFeatP(col, df_item[col].max() + 1, embedding_dim=feature_dim) for col in item_features[1:]]
+
+    ab_columns = [SparseFeatP("alpha_u", df_val['user_id'].max() + 1, embedding_dim=1)] + \
+                 [SparseFeatP("beta_i", df_val['item_id'].max() + 1, embedding_dim=1)]
+
     y_columns = [DenseFeat("y", 1)]
 
     dataset_val = StaticDataset(x_columns, y_columns, num_workers=4)
     dataset_val.compile_dataset(df_x, df_y)
 
-    df_item_env = df_val[["video_id", "duration_ms"]].groupby("video_id").agg(np.mean)
-    df_item_env = df_item_env.join(df_feat, on=['video_id'], how="left")
-    df_item_env = df_item_env[item_features[1:]]
-    dataset_val.set_env_items(df_item_env)
 
+    dataset_val.set_env_items(df_item)
+
+    if not any(df_y.to_numpy() % 1):
+        # make sure the label is binary
+        df_binary = pd.concat([df_val[["user_id", "item_id"]], df_y], axis=1)
+        df_ones = df_binary.loc[df_binary[reward_features[0]] > 0]
+        ground_truth = df_ones[["user_id", "item_id"] + reward_features].groupby("user_id").agg(list)
+        ground_truth.rename(columns={"item_id": "item_id", reward_features[0]: "y"}, inplace=True)
+
+        dataset_val.set_ground_truth(ground_truth)
+
+        assert dataset_val.x_columns[0].name == "user_id"
+        dataset_val.set_user_col(0)
+        assert dataset_val.x_columns[len(user_features)].name == "item_id"
+        dataset_val.set_item_col(len(user_features))
+
+        user_ids = np.arange(dataset_val.x_columns[dataset_val.user_col].vocabulary_size)
+        # user_ids = np.arange(1000)
+        item_ids = np.arange(dataset_val.x_columns[dataset_val.item_col].vocabulary_size)
+
+
+        # df_user_complete = pd.DataFrame({"user_id": user_ids.repeat(len(item_ids))})
+        df_user_complete = pd.DataFrame(
+            df_user.loc[user_ids].reset_index()[user_features].to_numpy().repeat(len(item_ids), axis=0),
+            columns=df_user.reset_index()[user_features].columns)
+        df_item_complete = pd.DataFrame(np.tile(df_item.reset_index()[item_features], (len(user_ids), 1)),
+                                        columns=df_item.reset_index()[item_features].columns)
+
+        # np.tile(np.concatenate([np.expand_dims(df_item_env.index.to_numpy(), df_item_env.to_numpy()], axis=1), (2, 1))
+
+        df_x_complete = pd.concat([df_user_complete, df_item_complete], axis=1)
+        df_y_complete = pd.DataFrame(np.zeros(len(df_x_complete)), columns=df_y.columns)
+
+        dataset_complete = StaticDataset(x_columns, y_columns, num_workers=4)
+        dataset_complete.compile_dataset(df_x_complete, df_y_complete)
+
+        dataset_val.set_dataset_complete(dataset_complete)
     return dataset_val
 
 
@@ -248,23 +239,19 @@ def main(args):
     logger.info(json.dumps(vars(args), indent=2))
 
     # %% 3. Prepare dataset
-    user_features = ["user_id", 'user_active_degree', 'is_live_streamer', 'is_video_author', 'follow_user_num_range',
-                     'fans_user_num_range', 'friend_user_num_range', 'register_days_range'] \
-                    + [f'onehot_feat{x}' for x in range(18)]
-    if not args.is_userinfo:
-        user_features = ["user_id"] # TODO!!!!
-    item_features = ["video_id"] + ["feat" + str(i) for i in range(3)] + ["duration_ms"]
+    user_features = ["user_id", 'gender_u', 'age', 'location', 'fashioninterest']
+    item_features = ['item_id', 'gender_i', "jackettype", 'color', 'onfrontpage']
 
     reward_features = [args.yfeat]
-    static_dataset, x_columns, y_columns, ab_columns = load_dataset_kuairand(user_features, item_features,
-                                                                             reward_features,
-                                                                             args.tau, args.entity_dim,
-                                                                             args.feature_dim,
-                                                                             MODEL_SAVE_PATH)
+    static_dataset, x_columns, y_columns, ab_columns = load_dataset_coat(user_features, item_features,
+                                                                         reward_features,
+                                                                         args.tau, args.entity_dim,
+                                                                         args.feature_dim,
+                                                                         MODEL_SAVE_PATH)
     if not args.is_ab:
         ab_columns = None
 
-    dataset_val = load_static_validate_data_kuairand(user_features, item_features, reward_features, args.entity_dim,
+    dataset_val = load_static_validate_data_coat(user_features, item_features, reward_features, args.entity_dim,
                                                      args.feature_dim, DATAPATH)
 
     # %% 4. Setup model
@@ -274,7 +261,7 @@ def main(args):
     np.random.seed(SEED)
     random.seed(SEED)
 
-    task = "regression" if args.yfeat == "watch_ratio" else "binary"
+    task = "regression"
     task_logit_dim = 1
     model = UserModel_Pairwise(x_columns, y_columns, task, task_logit_dim,
                                dnn_hidden_units=args.dnn, seed=SEED, l2_reg_dnn=args.l2_reg_dnn,
@@ -283,10 +270,16 @@ def main(args):
     model.compile(optimizer=args.optimizer,
                   # loss_dict=task_loss_dict,
                   loss_func=loss_kuaishou_pairwise if args.use_pairwise else loss_kuaishou_pointwise,
-                  metric_fun={"mae": lambda y, y_predict: nn.functional.l1_loss(torch.from_numpy(y).type(torch.float),
+                  metric_fun={"MAE": lambda y, y_predict: nn.functional.l1_loss(torch.from_numpy(y).type(torch.float),
                                                                                 torch.from_numpy(y_predict)).numpy(),
-                              "mse": lambda y, y_predict: nn.functional.mse_loss(torch.from_numpy(y).type(torch.float),
-                                                                                 torch.from_numpy(y_predict)).numpy()},
+                              "MSE": lambda y, y_predict: nn.functional.mse_loss(torch.from_numpy(y).type(torch.float),
+                                                                                 torch.from_numpy(y_predict)).numpy(),
+                              "RMSE": lambda y, y_predict: nn.functional.mse_loss(torch.from_numpy(y).type(torch.float),
+                                                                                  torch.from_numpy(
+                                                                                      y_predict)).numpy() ** 0.5
+                              },
+                  metric_fun_ranking=functools.partial(get_ranking_results, K=args.rankingK,
+                                                       metrics=["Recall", "Precision", "NDCG", "HT", "MAP", "MRR"]),
                   metrics=None)  # No evaluation step at offline stage
 
     # model.compile_RL_test(
@@ -295,7 +288,7 @@ def main(args):
 
     # %% 5. Learn model
     history = model.fit_data(static_dataset, dataset_val,
-                             batch_size=args.batch_size, epochs=args.epoch,
+                             batch_size=args.batch_size, epochs=args.epoch, shuffle=True,
                              callbacks=[[LoggerCallback_Update(logger_path)]])
     logger.info(history.history)
 
@@ -345,14 +338,14 @@ def main(args):
     item_columns = x_columns[len(user_features):]
 
     # Get item representation
-    # list_feat, df_feat = KuaiRandEnv.load_category()
-    # df_item = pd.DataFrame(range(num_item), columns=["video_id"])
-    # df_item = df_item.join(df_feat, on=['video_id'], how="left")
+    # list_feat, df_item = CoatEnv.load_category()
+    # df_item = pd.DataFrame(range(num_item), columns=["item_id"])
+    # df_item = df_item.join(df_item, on=['item_id'], how="left")
     # video_mean_duration = KuaiEnv.load_video_duration()
-    # df_item = df_item.join(video_mean_duration, on=['video_id'], how="left")
+    # df_item = df_item.join(video_mean_duration, on=['item_id'], how="left")
 
     df_item = dataset_val.df_item_env
-    df_item["video_id"] = df_item.index
+    df_item["item_id"] = df_item.index
     df_item = df_item[[column.name for column in item_columns]]
 
     feature_index_item = build_input_features(item_columns)
@@ -364,7 +357,7 @@ def main(args):
     representation_item = combined_dnn_input(sparse_embedding_list, dense_value_list)
 
     # Get user representation
-    df_user = KuaiRandEnv.load_user_info()
+    df_user = CoatEnv.load_user_info()
     df_user["user_id"] = df_user.index
     df_user = df_user[[column.name for column in user_columns]]
 
