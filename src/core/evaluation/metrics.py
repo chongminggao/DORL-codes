@@ -133,6 +133,7 @@ def get_ranking_results(df_score, df_true_list, K=(20,10,5), metrics=["Recall","
 
     df_eval = df_rec.join(df_true_list, on=["user_id"], how="left")
     df_eval = df_eval.loc[~df_eval["y"].isna()]
+    df_eval = df_eval.loc[~df_eval["y"].map(lambda x:len(x)==0)]
 
 
     true_list = df_eval["item_id"].to_list()
@@ -164,7 +165,7 @@ if __name__ == '__main__':
     for col in df_eval.columns:
         df_eval[col] = df_eval[col].map(eval)
 
-    threshold = 1
+    threshold = 4
 
     index = df_eval["y"].map(lambda x: [True if i >= threshold else False for i in x])
     df_temp = pd.DataFrame(index)

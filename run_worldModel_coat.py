@@ -49,10 +49,19 @@ def get_args():
     # recommendation related:
     # parser.add_argument('--not_softmax', action="store_false")
     parser.add_argument('--is_softmax', dest='is_softmax', action='store_true')
-    parser.add_argument('--not_softmax', dest='is_softmax', action='store_false')
+    parser.add_argument('--no_softmax', dest='is_softmax', action='store_false')
     parser.set_defaults(is_softmax=True)
 
+    parser.add_argument('--rating_threshold', default=4, type=float)
     parser.add_argument('--rankingK', default=(20, 10, 5), type=int, nargs="+")
+
+    parser.add_argument('--is_binarize', dest='is_binarize', action='store_true')
+    parser.add_argument('--no_binarize', dest='is_binarize', action='store_false')
+    parser.set_defaults(is_binarize=True)
+
+    parser.add_argument('--is_all_item_ranking', dest='is_all_item_ranking', action='store_true')
+    parser.add_argument('--no_all_item_ranking', dest='is_all_item_ranking', action='store_false')
+    parser.set_defaults(all_item_ranking=False)
 
     parser.add_argument('--is_userinfo', dest='is_userinfo', action='store_true')
     parser.add_argument('--no_userinfo', dest='is_userinfo', action='store_false')
@@ -67,7 +76,7 @@ def get_args():
     parser.set_defaults(is_ucb=False)
 
 
-    parser.add_argument("--loss", type=str, default='pair')
+    parser.add_argument("--loss", type=str, default='point')
 
     parser.add_argument("--feature_dim", type=int, default=8)
     parser.add_argument("--entity_dim", type=int, default=8)
@@ -85,7 +94,7 @@ def get_args():
     parser.add_argument('--is_ab', dest='is_ab', action='store_true')
     parser.add_argument('--no_ab', dest='is_ab', action='store_false')
     parser.set_defaults(is_ab=False)
-    parser.add_argument("--message", type=str, default="UserModel1")
+    parser.add_argument("--message", type=str, default="right")
 
     args = parser.parse_known_args()[0]
     return args
@@ -186,34 +195,50 @@ def load_static_validate_data_coat(user_features, item_features, reward_features
         ground_truth = df_ones[["user_id", "item_id"] + reward_features].groupby("user_id").agg(list)
         ground_truth.rename(columns={"item_id": "item_id", reward_features[0]: "y"}, inplace=True)
 
-        dataset_val.set_ground_truth(ground_truth)
+
+        threshold = args.rating_threshold
+        index = ground_truth["y"].map(lambda x: [True if i >= threshold else False for i in x])
+        df_temp = pd.DataFrame(index)
+        df_temp.rename(columns={"y": "ind"}, inplace=True)
+        df_temp["y"] = ground_truth["y"]
+        df_temp["true_id"] = ground_truth["item_id"]
+        df_true_id = df_temp.apply(lambda x: np.array(x["true_id"])[x["ind"]].tolist(), axis=1)
+        df_true_y = df_temp.apply(lambda x: np.array(x["y"])[x["ind"]].tolist(), axis=1)
+
+        if args.is_binarize:
+            df_true_y = df_true_y.map(lambda x: [1]*len(x))
+
+        ground_truth_revise = pd.concat([df_true_id,df_true_y], axis=1)
+        ground_truth_revise.rename(columns={0:"item_id",1:"y"},inplace=True)
+        dataset_val.set_ground_truth(ground_truth_revise)
+
 
         assert dataset_val.x_columns[0].name == "user_id"
         dataset_val.set_user_col(0)
         assert dataset_val.x_columns[len(user_features)].name == "item_id"
         dataset_val.set_item_col(len(user_features))
 
-        user_ids = np.arange(dataset_val.x_columns[dataset_val.user_col].vocabulary_size)
-        # user_ids = np.arange(1000)
-        item_ids = np.arange(dataset_val.x_columns[dataset_val.item_col].vocabulary_size)
 
+        if args.all_item_ranking:
+            dataset_val.set_all_item_ranking_in_evaluation(args.all_item_ranking)
+            user_ids = np.arange(dataset_val.x_columns[dataset_val.user_col].vocabulary_size)
+            # user_ids = np.arange(1000)
+            item_ids = np.arange(dataset_val.x_columns[dataset_val.item_col].vocabulary_size)
+            df_user_complete = pd.DataFrame(
+                df_user.loc[user_ids].reset_index()[user_features].to_numpy().repeat(len(item_ids), axis=0),
+                columns=df_user.reset_index()[user_features].columns)
+            df_item_complete = pd.DataFrame(np.tile(df_item.reset_index()[item_features], (len(user_ids), 1)),
+                                            columns=df_item.reset_index()[item_features].columns)
 
-        # df_user_complete = pd.DataFrame({"user_id": user_ids.repeat(len(item_ids))})
-        df_user_complete = pd.DataFrame(
-            df_user.loc[user_ids].reset_index()[user_features].to_numpy().repeat(len(item_ids), axis=0),
-            columns=df_user.reset_index()[user_features].columns)
-        df_item_complete = pd.DataFrame(np.tile(df_item.reset_index()[item_features], (len(user_ids), 1)),
-                                        columns=df_item.reset_index()[item_features].columns)
+            # np.tile(np.concatenate([np.expand_dims(df_item_env.index.to_numpy(), df_item_env.to_numpy()], axis=1), (2, 1))
 
-        # np.tile(np.concatenate([np.expand_dims(df_item_env.index.to_numpy(), df_item_env.to_numpy()], axis=1), (2, 1))
+            df_x_complete = pd.concat([df_user_complete, df_item_complete], axis=1)
+            df_y_complete = pd.DataFrame(np.zeros(len(df_x_complete)), columns=df_y.columns)
 
-        df_x_complete = pd.concat([df_user_complete, df_item_complete], axis=1)
-        df_y_complete = pd.DataFrame(np.zeros(len(df_x_complete)), columns=df_y.columns)
+            dataset_complete = StaticDataset(x_columns, y_columns, num_workers=4)
+            dataset_complete.compile_dataset(df_x_complete, df_y_complete)
+            dataset_val.set_dataset_complete(dataset_complete)
 
-        dataset_complete = StaticDataset(x_columns, y_columns, num_workers=4)
-        dataset_complete.compile_dataset(df_x_complete, df_y_complete)
-
-        dataset_val.set_dataset_complete(dataset_complete)
     return dataset_val
 
 

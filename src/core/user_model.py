@@ -43,6 +43,11 @@ class StaticDataset(Dataset):
         self.neg_items_info = None
         self.ground_truth = None
 
+        self.all_item_ranking = False
+
+    def set_all_item_ranking_in_evaluation(self, all_item_ranking):
+        self.all_item_ranking = all_item_ranking
+
     def set_env_items(self, df_item_env):  # for kuaishou data
         self.df_item_env = df_item_env
 
@@ -222,7 +227,6 @@ class UserModel(nn.Module):
                         # loss = loss_func(y_pred, y.squeeze(), reduction='sum')
 
                         reg_loss = self.get_regularization_loss()
-                        reg_loss = 0
 
                         total_loss = loss + reg_loss + self.aux_loss
 
@@ -388,17 +392,25 @@ class UserModel(nn.Module):
             eval_result[name] = metric_fun(y, y_predict)
 
         if self.metric_fun_ranking is not None:
-            y_complete_predict = self.predict_data(dataset_val.dataset_complete, batch_size*10)
-
             ground_truth = dataset_val.ground_truth
 
-            user_id = dataset_val.dataset_complete.x_numpy[:,dataset_val.user_col]
-            item_id = dataset_val.dataset_complete.x_numpy[:,dataset_val.item_col]
+            if dataset_val.all_item_ranking:
+                y_complete_predict = self.predict_data(dataset_val.dataset_complete, batch_size*10)
 
-            # xy_predict = pd.DataFrame([user_id, item_id, y_predict.squeeze()], columns={"user_id", "item_id", "y_pred"})
-            xy_predict = pd.DataFrame({"user_id":user_id, "item_id":item_id, "y_pred":y_complete_predict.squeeze()})
+                user_id = dataset_val.dataset_complete.x_numpy[:,dataset_val.user_col]
+                item_id = dataset_val.dataset_complete.x_numpy[:,dataset_val.item_col]
+
+                # xy_predict = pd.DataFrame([user_id, item_id, y_predict.squeeze()], columns={"user_id", "item_id", "y_pred"})
+                xy_predict = pd.DataFrame({"user_id":user_id, "item_id":item_id, "y_pred":y_complete_predict.squeeze()})
+            else:
+                user_id = dataset_val.x_numpy[:, dataset_val.user_col]
+                item_id = dataset_val.x_numpy[:, dataset_val.item_col]
+                xy_predict = pd.DataFrame(
+                    {"user_id": user_id, "item_id": item_id, "y_pred": y_predict.squeeze()})
+
             xy_predict = xy_predict.astype(dtype={"user_id": "int64", "item_id": "int64", "y_pred": "float64"})
             df_score = xy_predict.groupby("user_id").agg(list)
+
             eval_result.update(self.metric_fun_ranking(df_score, ground_truth))
 
         return eval_result
