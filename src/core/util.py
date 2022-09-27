@@ -24,8 +24,9 @@ def compute_action_distance(action: np.ndarray, actions_hist: np.ndarray,
         # item_index = realenv.lbe_video.inverse_transform([action])
         # item_index_hist = realenv.lbe_video.inverse_transform(actions_hist)
         df_dist_small = realenv.df_dist_small
-
         dist = df_dist_small.iloc[action, actions_hist].to_numpy()
+    else: # Coat
+        dist = realenv.mat_distance[action, actions_hist]
 
     return dist
 

@@ -31,14 +31,11 @@ from deepctr_torch.layers import PredictionLayer
 # from ..layers.utils import slice_arrays
 from deepctr_torch.callbacks import History
 
-
 class StaticDataset(Dataset):
     def __init__(self, x_columns, y_columns, num_workers=4):
         self.x_columns = x_columns
         self.y_columns = y_columns
-
         self.num_workers = num_workers
-
         self.len = 0
         self.neg_items_info = None
         self.ground_truth = None
@@ -408,10 +405,11 @@ class UserModel(nn.Module):
                 xy_predict = pd.DataFrame(
                     {"user_id": user_id, "item_id": item_id, "y_pred": y_predict.squeeze()})
 
+            xy_predict["y_true"] = y
             xy_predict = xy_predict.astype(dtype={"user_id": "int64", "item_id": "int64", "y_pred": "float64"})
-            df_score = xy_predict.groupby("user_id").agg(list)
+            # df_score = xy_predict.groupby("user_id").agg(list)
 
-            eval_result.update(self.metric_fun_ranking(df_score, ground_truth))
+            eval_result.update(self.metric_fun_ranking(xy_predict, ground_truth))
 
         return eval_result
 

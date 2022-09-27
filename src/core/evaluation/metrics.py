@@ -119,7 +119,9 @@ METRICS = {"recall":get_Recall,
            "map":get_MAP,
            "ht":get_HR}
 
-def get_ranking_results(df_score, df_true_list, K=(20,10,5), metrics=["Recall","Precision","NDCG","HT","MAP","MRR"]):
+def get_ranking_results(xy_predict, df_true_list, K=(20,10,5), metrics=["Recall","Precision","NDCG","HT","MAP","MRR"]):
+
+    df_score = xy_predict.groupby("user_id").agg(list)
 
     assert all([metric.lower() in METRICS.keys() for metric in metrics])
 

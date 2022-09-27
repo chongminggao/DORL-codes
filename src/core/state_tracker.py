@@ -190,8 +190,24 @@ class StateTrackerAvg(nn.Module):
             res = {"obs": s0}
 
         elif obs_next is not None:  # 2. add action autoregressively
+            # item = obs_next[~done]
+            # user = obs_next[done]
+            # if len(user):
+            #     a_item = self.get_embedding(item, "action")
+            #     print(user)
+            #     a_user = self.get_embedding(user, "user")
+            #
+            #     a_t = torch.zeros([obs_next.shape[0], a_item.shape[1]])
+            #     a_t = a_t.to(self.device)
+            #
+            #     a_t[done] = a_user.to(self.device)
+            #     a_t[~done] = a_item
+            #     a_t = a_t.to(self.device)
+            # else:
+            #     a_t = self.get_embedding(obs_next, "action")
 
             a_t = self.get_embedding(obs_next, "action")
+
             self.len_data[env_id] += 1
             length = int(self.len_data[env_id[0]])
 
@@ -303,7 +319,7 @@ class StateTrackerTransformer(StateTrackerBase):
         if obs is not None:  # 1. initialize the state vectors
             if self.dataset == "VirtualTB-v0":
                 e_u = self.get_embedding(obs[:, :-3], "user")
-            elif self.dataset == "KuaiEnv-v0":
+            else: # "KuaiEnv-v0":
                 e_u = self.get_embedding(obs, "user")
 
             e_u_prime = self.ffn_user(e_u)
@@ -322,7 +338,7 @@ class StateTrackerTransformer(StateTrackerBase):
         elif obs_next is not None:  # 2. add action autoregressively
             if self.dataset == "VirtualTB-v0":
                 a_t = self.get_embedding(obs_next[:, :-3], "action")
-            elif self.dataset == "KuaiEnv-v0":
+            else: # "KuaiEnv-v0":
                 a_t = self.get_embedding(obs_next, "action")
 
             self.len_data[env_id] += 1

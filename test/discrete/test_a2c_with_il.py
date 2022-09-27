@@ -2,13 +2,14 @@ import argparse
 import os
 import pprint
 
-import envpool
+# import envpool
 import gym
 import numpy as np
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
 from tianshou.data import Collector, VectorReplayBuffer
+from tianshou.env import DummyVectorEnv
 from tianshou.policy import A2CPolicy, ImitationPolicy
 from tianshou.trainer import offpolicy_trainer, onpolicy_trainer
 from tianshou.utils import TensorboardLogger
@@ -53,10 +54,24 @@ def get_args():
 
 
 def test_a2c_with_il(args=get_args()):
-    train_envs = env = envpool.make_gym(
-        args.task, num_envs=args.training_num, seed=args.seed
+    # train_envs = env = envpool.make_gym(
+    #     args.task, num_envs=args.training_num, seed=args.seed
+    # )
+    #
+    # test_envs = envpool.make_gym(args.task, num_envs=args.test_num, seed=args.seed)
+
+    env = gym.make(args.task)
+    train_envs = DummyVectorEnv(
+        [lambda: gym.make(args.task) for _ in range(args.training_num)]
     )
-    test_envs = envpool.make_gym(args.task, num_envs=args.test_num, seed=args.seed)
+    # test_envs = gym.make(args.task)
+    test_envs = DummyVectorEnv(
+        [lambda: gym.make(args.task) for _ in range(args.test_num)]
+    )
+
+    # train_collector = Collector(policy, train_envs, buf, exploration_noise=True)
+    # test_collector = Collector(policy, test_envs, exploration_noise=True)
+
     args.state_shape = env.observation_space.shape or env.observation_space.n
     args.action_shape = env.action_space.shape or env.action_space.n
     if args.reward_threshold is None:
@@ -119,53 +134,7 @@ def test_a2c_with_il(args=get_args()):
     )
     assert stop_fn(result['best_reward'])
 
-    if __name__ == '__main__':
-        pprint.pprint(result)
-        # Let's watch its performance!
-        env = gym.make(args.task)
-        policy.eval()
-        collector = Collector(policy, env)
-        result = collector.collect(n_episode=1, render=args.render)
-        rews, lens = result["rews"], result["lens"]
-        print(f"Final reward: {rews.mean()}, length: {lens.mean()}")
 
-    policy.eval()
-    # here we define an imitation collector with a trivial policy
-    # if args.task == 'CartPole-v0':
-    #     env.spec.reward_threshold = 190  # lower the goal
-    net = Net(args.state_shape, hidden_sizes=args.hidden_sizes, device=args.device)
-    net = Actor(net, args.action_shape, device=args.device).to(args.device)
-    optim = torch.optim.Adam(net.parameters(), lr=args.il_lr)
-    il_policy = ImitationPolicy(net, optim, action_space=env.action_space)
-    il_test_collector = Collector(
-        il_policy,
-        envpool.make_gym(args.task, num_envs=args.test_num, seed=args.seed),
-    )
-    train_collector.reset()
-    result = offpolicy_trainer(
-        il_policy,
-        train_collector,
-        il_test_collector,
-        args.epoch,
-        args.il_step_per_epoch,
-        args.step_per_collect,
-        args.test_num,
-        args.batch_size,
-        stop_fn=stop_fn,
-        save_best_fn=save_best_fn,
-        logger=logger
-    )
-    assert stop_fn(result['best_reward'])
-
-    if __name__ == '__main__':
-        pprint.pprint(result)
-        # Let's watch its performance!
-        env = gym.make(args.task)
-        il_policy.eval()
-        collector = Collector(il_policy, env)
-        result = collector.collect(n_episode=1, render=args.render)
-        rews, lens = result["rews"], result["lens"]
-        print(f"Final reward: {rews.mean()}, length: {lens.mean()}")
 
 
 if __name__ == '__main__':

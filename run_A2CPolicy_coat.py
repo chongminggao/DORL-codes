@@ -16,6 +16,8 @@ from torch.utils.tensorboard import SummaryWriter
 
 import sys
 
+os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
+
 sys.path.extend(["./src", "./src/DeepCTR-Torch", "./src/tianshou"])
 from core.collector import Collector
 from core.inputs import get_dataset_columns
@@ -25,7 +27,7 @@ from core.trainer.onpolicy import onpolicy_trainer
 from core.user_model_pairwise import UserModel_Pairwise
 from core.worldModel.simulated_env import SimulatedEnv
 
-from environments.KuaiRec.env.KuaiEnv import KuaiEnv
+from environments.coat.env.Coat import CoatEnv
 from tianshou.data import VectorReplayBuffer
 from tianshou.env import DummyVectorEnv
 
@@ -48,7 +50,7 @@ def get_args():
     parser = argparse.ArgumentParser()
 
     # parser.add_argument("--env", type=str, default="KuaiRand-v0")
-    parser.add_argument("--env", type=str, default="KuaiEnv-v0")
+    parser.add_argument("--env", type=str, default="CoatEnv-v0")
     parser.add_argument("--user_model_name", type=str, default="DeepFM")
     parser.add_argument("--model_name", type=str, default="A2C_with_emb")
     parser.add_argument('--seed', default=2022, type=int)
@@ -79,8 +81,8 @@ def get_args():
     parser.add_argument('--tau', default=100, type=float)
     parser.add_argument('--gamma_exposure', default=10, type=float)
 
-    parser.add_argument('--leave_threshold', default=0, type=int)
-    parser.add_argument('--num_leave_compute', default=1, type=int)
+    parser.add_argument('--leave_threshold', default=10, type=float)
+    parser.add_argument('--num_leave_compute', default=3, type=int)
     parser.add_argument('--max_turn', default=30, type=int)
 
     # state_tracker
@@ -124,7 +126,7 @@ def get_args():
     parser.add_argument('--gae-lambda', type=float, default=1.)
     parser.add_argument('--rew-norm', action="store_true", default=False)
 
-    parser.add_argument("--read_message", type=str, default="UserModel1")
+    parser.add_argument("--read_message", type=str, default="point")
     parser.add_argument("--message", type=str, default="A2C_with_emb")
 
     args = parser.parse_known_args()[0]
@@ -173,49 +175,44 @@ def prepare_um(args=get_args()):
         beta_i = user_model.ab_embedding_dict["beta_i"].weight.detach().cpu().numpy()
     else:
         print("Note there are no available alpha and beta！！")
-        alpha_u = np.ones([7176, 1])
-        beta_i = np.ones([10728, 1])
+        alpha_u = None
+        beta_i = None
 
     # env = gym.make('VirtualTB-v0')
 
     # %% 3. prepare envs
-    mat, lbe_user, lbe_video, list_feat, df_video_env, df_dist_small = KuaiEnv.load_mat()
+    mat, df_item, mat_distance = CoatEnv.load_mat()
 
     kwargs_um = {"mat": mat,
-                 "lbe_user": lbe_user,
-                 "lbe_video": lbe_video,
+                 "df_item": df_item,
+                 "mat_distance": mat_distance,
                  "num_leave_compute": args.num_leave_compute,
                  "leave_threshold": args.leave_threshold,
-                 "max_turn": args.max_turn,
-                 "list_feat": list_feat,
-                 "df_video_env": df_video_env,
-                 "df_dist_small": df_dist_small}
-    env = KuaiEnv(**kwargs_um)
+                 "max_turn": args.max_turn}
 
-    with open(MODEL_MAT_PATH, "rb") as file:
-        normed_mat = pickle.load(file)
+    env = CoatEnv(**kwargs_um)
 
-    kwargs = {"env_task_class": KuaiEnv,
-              "user_model": user_model,
-              "task_env_param": kwargs_um,
-              "task_name": args.env,
-              "version": args.version,
-              "tau": args.tau,
-              "alpha_u": alpha_u,
-              "beta_i": beta_i,
-              "normed_mat": normed_mat,
-              "gamma_exposure": args.gamma_exposure}
+    # with open(MODEL_MAT_PATH, "rb") as file:
+    #     normed_mat = pickle.load(file)
+
+    kwargs = {
+        "env_task_class":CoatEnv,
+        "user_model": user_model,
+        "task_env_param": kwargs_um,
+        "task_name": args.env,
+        "version": args.version,
+        "tau": args.tau,
+        "alpha_u": alpha_u,
+        "beta_i": beta_i,
+        "normed_mat": mat,
+        "gamma_exposure": args.gamma_exposure}
     simulatedEnv = SimulatedEnv(**kwargs)
-
-    state_shape = simulatedEnv.observation_space.shape or simulatedEnv.observation_space.n
-    action_shape = simulatedEnv.action_space.shape or simulatedEnv.action_space.n
-    max_action = simulatedEnv.action_space.high[0]
 
     train_envs = DummyVectorEnv(
         [lambda: SimulatedEnv(**kwargs) for _ in range(args.training_num)])
     # test_envs = gym.make(args.task)
     test_envs = DummyVectorEnv(
-        [lambda: KuaiEnv(**kwargs_um) for _ in range(args.test_num)])
+        [lambda: CoatEnv(**kwargs_um) for _ in range(args.test_num)])
 
     random.seed(args.seed)
     np.random.seed(args.seed)
@@ -227,8 +224,6 @@ def prepare_um(args=get_args()):
 
     user_embedding = torch.load(USER_EMBEDDING_PATH)
     item_embedding = torch.load(ITEM_EMBEDDING_PATH)
-    user_embedding = user_embedding[env.lbe_user.classes_]
-    item_embedding = item_embedding[env.lbe_video.classes_]
     saved_embedding = torch.nn.ModuleDict({"feat_user": torch.nn.Embedding.from_pretrained(user_embedding, freeze=True),
                                            "feat_item": torch.nn.Embedding.from_pretrained(item_embedding,
                                                                                            freeze=True)})
@@ -240,7 +235,7 @@ def prepare_um(args=get_args()):
         [lambda: SimulatedEnv(**kwargs) for _ in range(args.training_num)])
     # test_envs = gym.make(args.task)
     test_envs = DummyVectorEnv(
-        [lambda: KuaiEnv(**kwargs_um) for _ in range(args.test_num)])
+        [lambda: CoatEnv(**kwargs_um) for _ in range(args.test_num)])
 
     # args.state_shape = args.dim_state # no use?
     args.action_shape = env.mat.shape[1]
@@ -252,7 +247,6 @@ def prepare_um(args=get_args()):
     state_tracker = StateTrackerAvg(user_columns, action_columns, feedback_columns, args.state_shape,
                                     saved_embedding, device=device, window=args.window,
                                     use_userEmbedding=args.use_userEmbedding, MAX_TURN=args.max_turn + 1).to(device)
-
 
     if args.cpu:
         args.device = "cpu"
@@ -280,8 +274,8 @@ def prepare_um(args=get_args()):
         max_grad_norm=args.max_grad_norm,
         reward_normalization=args.rew_norm,
         action_space=env.action_space,
-        action_bound_method="" if args.env == "KuaiEnv-v0" else "clip",
-        action_scaling=False if args.env == "KuaiEnv-v0" else True
+        action_bound_method="",  # not clip
+        action_scaling=False
     )
     policy.set_eps(args.eps)
 

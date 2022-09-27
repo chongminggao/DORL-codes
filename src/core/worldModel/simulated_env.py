@@ -18,16 +18,17 @@ from environments.VirtualTaobao.virtualTB.utils import *
 
 class SimulatedEnv(gym.Env):
 
-    def __init__(self, user_model, task_env_param: dict, task_name: str, version: str = "v1", tau: float = 1.0,
+    def __init__(self, env_task_class, user_model, task_env_param: dict, task_name: str, version: str = "v1", tau: float = 1.0,
                  use_exposure_intervention=True,
                  alpha_u=None, beta_i=None,
                  normed_mat=None,
                  gamma_exposure=1):
         self.user_model = user_model.eval()
 
-        if task_name == "KuaiEnv-v0":
-            from environments.KuaiRec.env.KuaiEnv import KuaiEnv
-            self.env_task = KuaiEnv(**task_env_param)
+        # if task_name == "KuaiEnv-v0":
+        #     from environments.KuaiRec.env.KuaiEnv import KuaiEnv
+        #     self.env_task = KuaiEnv(**task_env_param)
+        self.env_task = env_task_class(**task_env_param)
 
         self.observation_space = self.env_task.observation_space
         self.action_space = self.env_task.action_space
@@ -54,7 +55,7 @@ class SimulatedEnv(gym.Env):
 
         if self.env_name == "VirtualTB-v0":
             res = np.concatenate((self.action, np.array([reward, 0.0, self.total_turn])), axis=-1)  # [29,9,100]
-        elif self.env_name == "KuaiEnv-v0":
+        else: # elif self.env_name == "KuaiEnv-v0":
             res = self.env_task.state
 
         return res
@@ -73,7 +74,7 @@ class SimulatedEnv(gym.Env):
         self._reset_history()
         if self.env_name == "VirtualTB-v0":
             self.cur_user = self.state[:-3]
-        elif self.env_name == "KuaiEnv-v0":
+        else: # elif self.env_name == "KuaiEnv-v0":
             self.cur_user = self.state
         return self.state
 
@@ -90,19 +91,7 @@ class SimulatedEnv(gym.Env):
                 pred_reward = 0
             if pred_reward > 10:
                 pred_reward = 10
-        elif self.env_name == "KuaiEnv-v0":
-            # real_user = self.env_task.lbe_user.inverse_transform(self.cur_user)
-            # user = np.expand_dims(real_user, 0)
-            #
-            # df_video_env = self.env_task.df_video_env
-            # item_index = self.env_task.lbe_video.inverse_transform([action])
-            # item_info = df_video_env.loc[item_index].to_numpy()
-            #
-            # u_i = torch.tensor(np.concatenate((user, np.expand_dims(item_index, 0), item_info), axis=1),
-            #                    dtype=torch.float, device=self.user_model.device, requires_grad=False)
-            #
-            # pred_reward = self.user_model.forward(u_i).detach().squeeze().cpu().numpy()
-
+        else: # elif self.env_name == "KuaiEnv-v0":
             pred_reward = self.normed_mat[self.cur_user[0], action]
 
         if self.version == "v1":
@@ -137,11 +126,12 @@ class SimulatedEnv(gym.Env):
         self.total_turn = self.env_task.total_turn
 
         done = real_done
-        if done:
-            self.state = self.env_task.reset()
+
+        # Rethink commented, do not use new user as new state
+        # if done:
+        #     self.state = self.env_task.reset()
 
         self.state = self._construct_state(pred_reward)
-
         return self.state, pred_reward, done, {'CTR': self.cum_reward / self.total_turn / 10}
 
     def _compute_exposure_effect(self, t, action):
@@ -172,7 +162,7 @@ class SimulatedEnv(gym.Env):
         if self.env_name == "VirtualTB-v0":
             # self.history_action = np.empty([0, self.action_space.shape[0]])
             self.history_action = np.zeros([self.env_task.max_turn, self.env_task.action_space.shape[0]])
-        elif self.env_name == "KuaiEnv-v0":
+        else: # elif self.env_name == "KuaiEnv-v0":
             self.history_action = np.zeros(self.env_task.max_turn, dtype=np.int)
         self.history_exposure = {}
         self.max_history = 0
@@ -182,7 +172,7 @@ class SimulatedEnv(gym.Env):
             action2 = np.expand_dims(action, 0)
             # self.history_action = np.append(self.history_action, action2, axis=0)
             self.history_action[t] = action2
-        elif self.env_name == "KuaiEnv-v0":
+        else: # elif self.env_name == "KuaiEnv-v0":
             self.history_action[t] = action
 
         self.history_exposure[t] = exposure

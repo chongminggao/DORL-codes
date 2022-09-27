@@ -15,8 +15,6 @@ from torch import nn
 import sys
 
 
-from environments.coat.env.Coat import CoatEnv
-
 sys.path.extend(["./src", "./src/DeepCTR-Torch"])
 from core.evaluation.metrics import get_ranking_results
 from core.inputs import SparseFeatP, input_from_feature_columns
@@ -31,18 +29,18 @@ from core.user_model import StaticDataset
 import logzero
 from logzero import logger
 
-from environments.coat.env.Coat import CoatEnv, negative_sampling
+from environments.YahooR3.env.Yahoo import YahooEnv, negative_sampling
 # from util.upload import my_upload
 from util.utils import create_dir, LoggerCallback_Update
 
 CODEPATH = os.path.dirname(__file__)
-DATAPATH = os.path.join(CODEPATH, "environments", "coat")
+DATAPATH = os.path.join(CODEPATH, "environments", "YahooR3")
 
 
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--resume', action="store_true")
-    parser.add_argument("--env", type=str, default='CoatEnv-v0')
+    parser.add_argument("--env", type=str, default='YahooEnv-v0')
     parser.add_argument("--yfeat", type=str, default='rating')
     parser.add_argument("--optimizer", type=str, default='adam')
 
@@ -82,7 +80,7 @@ def get_args():
     parser.add_argument("--entity_dim", type=int, default=8)
     parser.add_argument("--user_model_name", type=str, default="DeepFM")
     parser.add_argument('--dnn', default=(64, 64), type=int, nargs="+")
-    parser.add_argument('--batch_size', default=256, type=int)
+    parser.add_argument('--batch_size', default=1024, type=int)
     parser.add_argument('--epoch', default=10, type=int)
     parser.add_argument('--cuda', default=1, type=int)
     # # env:
@@ -100,51 +98,33 @@ def get_args():
     return args
 
 
-def get_df_coat(name):
+def get_df_yahoo(name):
     # read interaction
     filename = os.path.join(DATAPATH, name)
-    mat_train = pd.read_csv(filename, sep="\s+", header=None)
-    df_data = pd.DataFrame([],columns=["user_id", "item_id", "rating"])
+    df_data = pd.read_csv(filename, sep="\s+", header=None, names=["user_id", "item_id", "rating"])
 
-    for item in mat_train.columns:
-        one_item = mat_train.loc[mat_train[item] > 0, item].reset_index().rename(columns={"index":"user_id", item: "rating"})
-        one_item["item_id"] = item
-        df_data = pd.concat([df_data,one_item])
-    df_data.reset_index(drop=True,inplace=True)
+    df_data["user_id"] -= 1
+    df_data["item_id"] -= 1
 
-    # read user feature
-    df_user = CoatEnv.load_user_feat()
-
-    # read item features
-    df_item = CoatEnv.load_item_feat()
+    return df_data
 
 
-    df_data = df_data.join(df_user, on="user_id",how='left')
-    df_data = df_data.join(df_item, on="item_id", how='left')
-
-    df_data = df_data.astype(int)
-
-    return df_data, df_user, df_item
-
-
-def load_dataset_coat(user_features, item_features, reward_features, tau, entity_dim, feature_dim, MODEL_SAVE_PATH):
-    df_train, df_user, df_item = get_df_coat("train.ascii")
+def load_dataset_yahoo(user_features, item_features, reward_features, tau, entity_dim, feature_dim, MODEL_SAVE_PATH):
+    df_train = get_df_yahoo("ydata-ymusic-rating-study-v1_0-train.txt")
     df_x = df_train[user_features + item_features]
 
     df_y = df_train[reward_features]
 
 
     x_columns = [SparseFeatP("user_id", df_train['user_id'].max() + 1, embedding_dim=entity_dim)] + \
-                [SparseFeatP(col, df_user[col].max() + 1, embedding_dim=feature_dim) for col in user_features[1:]] + \
-                [SparseFeatP("item_id", df_train['item_id'].max() + 1, embedding_dim=entity_dim)] + \
-                [SparseFeatP(col, df_item[col].max() + 1, embedding_dim=feature_dim) for col in item_features[1:]]
+                [SparseFeatP("item_id", df_train['item_id'].max() + 1, embedding_dim=entity_dim)]
 
     ab_columns = [SparseFeatP("alpha_u", df_train['user_id'].max() + 1, embedding_dim=1)] + \
                  [SparseFeatP("beta_i", df_train['item_id'].max() + 1, embedding_dim=1)]
 
     y_columns = [DenseFeat("y", 1)]
 
-    df_negative = negative_sampling(df_train, df_item, df_user)
+    df_negative = negative_sampling(df_train)
 
     df_x_neg = df_negative[user_features + item_features]
 
@@ -164,18 +144,16 @@ def load_dataset_coat(user_features, item_features, reward_features, tau, entity
     return dataset, x_columns, y_columns, ab_columns
 
 
-def load_static_validate_data_coat(user_features, item_features, reward_features, entity_dim, feature_dim,
-                                       DATAPATH):
-    df_val, df_user, df_item = get_df_coat("test.ascii")
+def load_static_validate_data_yahoo(user_features, item_features, reward_features, entity_dim, feature_dim,
+                                    DATAPATH):
+    df_val= get_df_yahoo("ydata-ymusic-rating-study-v1_0-test.txt")
     df_x = df_val[user_features + item_features]
     df_y = df_val[reward_features]
 
     # return df_train, df_user, df_item
 
     x_columns = [SparseFeatP("user_id", df_val['user_id'].max() + 1, embedding_dim=entity_dim)] + \
-                [SparseFeatP(col, df_user[col].max() + 1, embedding_dim=feature_dim) for col in user_features[1:]] + \
-                [SparseFeatP("item_id", df_val['item_id'].max() + 1, embedding_dim=entity_dim)] + \
-                [SparseFeatP(col, df_item[col].max() + 1, embedding_dim=feature_dim) for col in item_features[1:]]
+                [SparseFeatP("item_id", df_val['item_id'].max() + 1, embedding_dim=entity_dim)]
 
     ab_columns = [SparseFeatP("alpha_u", df_val['user_id'].max() + 1, embedding_dim=1)] + \
                  [SparseFeatP("beta_i", df_val['item_id'].max() + 1, embedding_dim=1)]
@@ -185,6 +163,9 @@ def load_static_validate_data_coat(user_features, item_features, reward_features
     dataset_val = StaticDataset(x_columns, y_columns, num_workers=4)
     dataset_val.compile_dataset(df_x, df_y)
 
+    items = df_val["item_id"].unique()
+    items.sort()
+    df_item = pd.DataFrame(items, columns=["item_id"])
 
     dataset_val.set_env_items(df_item)
 
@@ -224,9 +205,7 @@ def load_static_validate_data_coat(user_features, item_features, reward_features
             user_ids = np.arange(dataset_val.x_columns[dataset_val.user_col].vocabulary_size)
             # user_ids = np.arange(1000)
             item_ids = np.arange(dataset_val.x_columns[dataset_val.item_col].vocabulary_size)
-            df_user_complete = pd.DataFrame(
-                df_user.loc[user_ids].reset_index()[user_features].to_numpy().repeat(len(item_ids), axis=0),
-                columns=df_user.reset_index()[user_features].columns)
+            df_user_complete = pd.DataFrame({"user_id": user_ids.repeat(len(item_ids))})
             df_item_complete = pd.DataFrame(np.tile(df_item.reset_index()[item_features], (len(user_ids), 1)),
                                             columns=df_item.reset_index()[item_features].columns)
 
@@ -263,20 +242,20 @@ def main(args):
     logger.info(json.dumps(vars(args), indent=2))
 
     # %% 3. Prepare dataset
-    user_features = ["user_id", 'gender_u', 'age', 'location', 'fashioninterest']
-    item_features = ['item_id', 'gender_i', "jackettype", 'color', 'onfrontpage']
+    user_features = ["user_id"]
+    item_features = ['item_id']
 
     reward_features = [args.yfeat]
-    static_dataset, x_columns, y_columns, ab_columns = load_dataset_coat(user_features, item_features,
-                                                                         reward_features,
-                                                                         args.tau, args.entity_dim,
-                                                                         args.feature_dim,
-                                                                         MODEL_SAVE_PATH)
+    static_dataset, x_columns, y_columns, ab_columns = load_dataset_yahoo(user_features, item_features,
+                                                                          reward_features,
+                                                                          args.tau, args.entity_dim,
+                                                                          args.feature_dim,
+                                                                          MODEL_SAVE_PATH)
     if not args.is_ab:
         ab_columns = None
 
-    dataset_val = load_static_validate_data_coat(user_features, item_features, reward_features, args.entity_dim,
-                                                     args.feature_dim, DATAPATH)
+    dataset_val = load_static_validate_data_yahoo(user_features, item_features, reward_features, args.entity_dim,
+                                                  args.feature_dim, DATAPATH)
 
     # %% 4. Setup model
     device = torch.device("cuda:{}".format(args.cuda) if torch.cuda.is_available() else "cpu")
@@ -289,7 +268,7 @@ def main(args):
     task_logit_dim = 1
     model = UserModel_Pairwise(x_columns, y_columns, task, task_logit_dim,
                                dnn_hidden_units=args.dnn, seed=SEED, l2_reg_dnn=args.l2_reg_dnn,
-                               device=device, ab_columns=ab_columns, init_std=0.001)
+                               device=device, ab_columns=ab_columns, init_std=0.0001)
 
     if args.loss == "pair":
         loss_fun = loss_pairwise
@@ -368,13 +347,6 @@ def main(args):
     user_columns = x_columns[:len(user_features)]
     item_columns = x_columns[len(user_features):]
 
-    # Get item representation
-    # list_feat, df_item = CoatEnv.load_category()
-    # df_item = pd.DataFrame(range(num_item), columns=["item_id"])
-    # df_item = df_item.join(df_item, on=['item_id'], how="left")
-    # video_mean_duration = KuaiEnv.load_video_duration()
-    # df_item = df_item.join(video_mean_duration, on=['item_id'], how="left")
-
     df_item = dataset_val.df_item_env
     df_item["item_id"] = df_item.index
     df_item = df_item[[column.name for column in item_columns]]
@@ -388,7 +360,10 @@ def main(args):
     representation_item = combined_dnn_input(sparse_embedding_list, dense_value_list)
 
     # Get user representation
-    df_user = CoatEnv.load_user_feat()
+    users = list(set(dataset_val.x_numpy[:, 0]))
+    users.sort()
+    df_user = pd.DataFrame(users, columns=["user_id"], dtype=int)
+
     df_user["user_id"] = df_user.index
     df_user = df_user[[column.name for column in user_columns]]
 

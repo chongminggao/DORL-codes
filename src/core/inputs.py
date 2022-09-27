@@ -35,7 +35,7 @@ def get_dataset_columns(dim_user, dim_action, envname="VirtualTB-v0", env=None):
         has_user_embedding = True
         has_action_embedding = True
         has_feedback_embedding = True
-    elif envname == "KuaiEnv-v0":
+    else: # for kuairecenv, coat
         user_columns = [SparseFeatP("feat_user", env.mat.shape[0], embedding_dim=dim_user)]
         action_columns = [SparseFeatP("feat_item", env.mat.shape[1], embedding_dim=dim_action)]
         feedback_columns = [DenseFeat("feat_feedback", 1)]
