@@ -153,6 +153,8 @@ def prepare_um(args=get_args()):
 
     # %% 2. prepare user model
 
+
+
     UM_SAVE_PATH = os.path.join(".", "saved_models", args.env, args.user_model_name)
     MODEL_MAT_PATH = os.path.join(UM_SAVE_PATH, "mats", f"[{args.read_message}]_mat.pickle")
     MODEL_PARAMS_PATH = os.path.join(UM_SAVE_PATH, "params", f"[{args.read_message}]_params.pickle")
@@ -193,7 +195,7 @@ def prepare_um(args=get_args()):
     env = KuaiEnv(**kwargs_um)
 
     with open(MODEL_MAT_PATH, "rb") as file:
-        normed_mat = pickle.load(file)
+        predicted_mat = pickle.load(file)
 
     kwargs = {"env_task_class": KuaiEnv,
               "user_model": user_model,
@@ -203,7 +205,7 @@ def prepare_um(args=get_args()):
               "tau": args.tau,
               "alpha_u": alpha_u,
               "beta_i": beta_i,
-              "normed_mat": normed_mat,
+              "predicted_mat": predicted_mat,
               "gamma_exposure": args.gamma_exposure}
     simulatedEnv = SimulatedEnv(**kwargs)
 

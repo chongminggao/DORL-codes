@@ -4,33 +4,28 @@
 # @FileName: evaluation.py
 import numpy as np
 import torch
+from tqdm import tqdm
 
 
-
-def test_kuaishou(model, env, dataset_val, is_softmax=True, epsilon=0, is_ucb=False, k=1):
+def test_static_model_in_RL_env(model, env, dataset_val, is_softmax=True, epsilon=0, is_ucb=False, k=1, need_transform=False, num_trajectory=200):
     cumulative_reward = 0
     total_click_loss = 0
     total_turns = 0
-    num_trajectory = 100
 
-    for i in range(num_trajectory):
+    for i in tqdm(range(num_trajectory), desc=f"evaluate static method in {env.__str__()}"):
         user = env.reset()
-        real_user_id = env.lbe_user.inverse_transform(user)
+        if need_transform:
+            user = env.lbe_user.inverse_transform(user)[0]
 
         done = False
         while not done:
-            recommendation, reward_pred = model.recommend_k_item(real_user_id[0], dataset_val, k=k, is_softmax=is_softmax, epsilon=epsilon, is_ucb=is_ucb)
-
-            # if need_transform:
-            rec_small = env.lbe_video.transform([recommendation])[0]
-
-            state, reward, done, info = env.step(rec_small)
-
+            recommendation, reward_pred = model.recommend_k_item(user, dataset_val, k=k, is_softmax=is_softmax, epsilon=epsilon, is_ucb=is_ucb)
+            if need_transform:
+                recommendation = env.lbe_item.transform([recommendation])[0]
+            state, reward, done, info = env.step(recommendation)
             total_turns += 1
-
             # metric 1
             cumulative_reward += reward
-
             # metric 2
             click_loss = np.absolute(reward_pred - reward)
             total_click_loss += click_loss

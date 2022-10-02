@@ -45,8 +45,11 @@ class StaticDataset(Dataset):
     def set_all_item_ranking_in_evaluation(self, all_item_ranking):
         self.all_item_ranking = all_item_ranking
 
-    def set_env_items(self, df_item_env):  # for kuaishou data
-        self.df_item_env = df_item_env
+    def set_df_user_val(self, df_user_val):
+        self.df_user_val = df_user_val
+
+    def set_df_item_val(self, df_item_val):  # for kuaishou data
+        self.df_item_val = df_item_val
 
     def set_ground_truth(self, ground_truth):  # for kuaishou data
         self.ground_truth = ground_truth
@@ -311,24 +314,36 @@ class UserModel(nn.Module):
         self.n_rec = n_arm
         self.n_each = np.ones(n_arm)
 
-    def recommend_k_item(self, user, dataset_val, k=1, is_softmax=True, epsilon=0, is_ucb=False, df_user=None):  # for kuaishou data
+    def recommend_k_item(self, user, dataset_val, k=1, is_softmax=True, epsilon=0, is_ucb=False):  # for kuaishou data
 
-        df_item_env = dataset_val.df_item_env # 小数据集的feature
-        item_index = df_item_env.index.to_numpy()
-        # 用户的所有评分
-        if df_user is None:
-            u_all_item = torch.tensor(
-                np.concatenate((np.ones([len(df_item_env), 1]) * user,
-                                np.expand_dims(item_index, axis=-1),
-                                df_item_env.values), 1),
-                dtype=torch.float, device=self.device, requires_grad=False)
-        else:
-            u_all_item = torch.tensor(
-                np.concatenate((np.ones([len(df_item_env), 1]) * user,
-                                df_user.loc[user].to_numpy() * np.array([[1]] * len(df_item_env)),
-                                np.expand_dims(item_index, axis=-1),
-                                df_item_env.values), 1),
-                dtype=torch.float, device=self.device, requires_grad=False)
+        df_user_val = dataset_val.df_user_val
+        df_item_val = dataset_val.df_item_val
+
+        item_index = df_item_val.index.to_numpy()
+
+        u_all_item = torch.tensor(
+            np.concatenate((np.ones([len(df_item_val), 1]) * user,
+                            df_user_val.loc[user].to_numpy() * np.array([[1]] * len(df_item_val)),
+                            np.expand_dims(item_index, axis=-1),
+                            df_item_val.values), 1),
+            dtype=torch.float, device=self.device, requires_grad=False)
+
+        assert u_all_item.shape[1] == len(dataset_val.x_columns)
+
+        # # 用户的所有评分
+        # if df_user is None:
+        #     u_all_item = torch.tensor(
+        #         np.concatenate((np.ones([len(df_item_val), 1]) * user,
+        #                         np.expand_dims(item_index, axis=-1),
+        #                         df_item_val.values), 1),
+        #         dtype=torch.float, device=self.device, requires_grad=False)
+        # else:
+        #     u_all_item = torch.tensor(
+        #         np.concatenate((np.ones([len(df_item_val), 1]) * user,
+        #                         df_user.loc[user].to_numpy() * np.array([[1]] * len(df_item_val)),
+        #                         np.expand_dims(item_index, axis=-1),
+        #                         df_item_val.values), 1),
+        #         dtype=torch.float, device=self.device, requires_grad=False)
 
         u_value = self.forward(u_all_item).detach().squeeze() # predicted value
 

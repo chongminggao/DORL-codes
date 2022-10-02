@@ -7,6 +7,7 @@ import os
 import numpy as np
 import pandas as pd
 from numba import njit
+from scipy.sparse import csr_matrix
 from tqdm import tqdm
 
 
@@ -161,27 +162,120 @@ def compute_exposure_effect_kuaiRec(df_x, timestamp, list_feat, tau, MODEL_SAVE_
 
     return exposure_pos
 
-# @njit
-# def find_negative(user_ids, video_ids, mat_small, mat_big, mat_negative, max_item):
-#     for i in range(len(user_ids)):
-#         user, item = user_ids[i], video_ids[i]
-#
-#         neg = item + 1
-#         while neg <= max_item:
-#             if neg == 1225:  # 1225 is an absent video_id
-#                 neg = 1226
-#             if mat_small[user, neg] or mat_big[user, neg] or mat_negative[user, neg]:
-#                 neg += 1
-#             else:
-#                 mat_negative[user, neg] = True
-#                 break
-#         else:
-#             neg = item - 1
-#             while neg >= 0:
-#                 if neg == 1225:  # 1225 is an absent video_id
-#                     neg = 1224
-#                 if mat_small[user, neg] or mat_big[user, neg] or mat_negative[user, neg]:
-#                     neg -= 1
-#                 else:
-#                     mat_negative[user, neg] = True
-#                     break
+@njit
+def find_negative(user_ids, item_ids, neg_u_list, neg_i_list, mat_train, df_negative, is_rand=True, num_break=3):
+    if is_rand:
+        ind = 0
+        for i in range(len(user_ids)):
+            num_try = 0
+            user, item = user_ids[i], item_ids[i]
+            value = mat_train[user, item]
+            while True:
+                num_try += 1
+                neg_u = neg_u_list[ind]
+                neg_i = neg_i_list[ind]
+                # neg_u = np.random.randint(max(user_ids) + 1)
+                # neg_i = np.random.randint(max(item_ids) + 1)
+                neg_v = mat_train[neg_u, neg_i]
+                # if neg_v <= 0:
+
+                ind = (ind + 1) % len(user_ids)
+                if neg_v < value or num_try >= num_break:
+                    break
+            df_negative[i, 0] = neg_u
+            df_negative[i, 1] = neg_i
+            df_negative[i, 2] = neg_v
+    else:
+        for i in range(len(user_ids)):
+            user, item = user_ids[i], item_ids[i]
+            value = mat_train[user, item]
+
+            neg_i = item + 1
+            while neg_i < mat_train.shape[1]:
+                neg_v = mat_train[user, neg_i]
+                # if neg_v <= 0:
+                if neg_v < value:
+                    break
+                neg_i += 1
+
+            else:
+                neg_i = item - 1
+                while neg_i >= 0:
+                    neg_v = mat_train[user, neg_i]
+                    # if neg_v <= 0:
+                    if neg_v < value:
+                        break
+                    neg_i -= 1
+
+            df_negative[i, 0] = user
+            df_negative[i, 1] = neg_i
+            df_negative[i, 2] = neg_v
+
+
+
+def align_ab(df_a, df_b):
+    """
+    len(df_b) > len(df_a)!!!
+    """
+    df_a.reset_index(drop=True,inplace=True)
+    df_b.reset_index(drop=True, inplace=True)
+
+    num_repeat = len(df_b) // len(df_a)
+    df_ak = pd.concat([df_a] * int(num_repeat), ignore_index=True)
+    num_rand = len(df_b) - len(df_ak)
+    added_index = np.random.randint(low=0, high=len(df_a), size=num_rand)
+    df_added = df_a.loc[added_index]
+
+    df_a_res = pd.concat([df_ak, df_added], ignore_index=True)
+    return df_a_res, df_b
+
+
+def align_pos_neg(df_positive, df_negative, can_divide:bool):
+    if can_divide:
+        neg_K = len(df_negative) / len(df_positive)
+        assert neg_K % 1 == 0
+        df_pos = pd.concat([df_positive]*int(neg_K), ignore_index=True)
+        df_neg = df_negative.reset_index(drop=True)
+    else:
+        if len(df_negative) > len(df_positive):
+            df_pos, df_neg = align_ab(df_positive, df_negative)
+        else:
+            df_neg, df_pos = align_ab(df_negative, df_positive)
+
+    return df_pos, df_neg
+
+def negative_sampling(df_train, df_item, df_user, y_name, is_rand=True, neg_in_train=False, neg_K=5, num_break=3):
+    print("negative sampling...")
+    if neg_in_train:
+        neg_index = df_train[y_name] == 0
+        pos_index = ~neg_index
+        df_negative = df_train.loc[neg_index]
+        df_positive = df_train.loc[pos_index]
+
+        df_neg_K = pd.concat([df_negative] * neg_K, ignore_index=True)
+        df_neg_K_permutated = df_neg_K.loc[np.random.permutation(len(df_neg_K))]
+
+        df_pos, df_neg = align_pos_neg(df_positive, df_neg_K_permutated, can_divide=False)
+    else:
+        df_positive = df_train
+
+        mat_train = csr_matrix((df_train[y_name], (df_train["user_id"], df_train["item_id"])),
+                               shape=(df_train['user_id'].max() + 1, df_train['item_id'].max() + 1)).toarray()
+        user_ids = df_train["user_id"].to_numpy()
+        item_ids = df_train["item_id"].to_numpy()
+
+        df_negative = pd.DataFrame([], columns=["user_id", "item_id", y_name])
+        for k in tqdm(range(neg_K), desc="Negative sampling..."):
+            array_k = np.zeros([len(df_train), 3])
+            neg_u_list = np.random.randint(max(user_ids) + 1, size=len(user_ids) * num_break)
+            neg_i_list = np.random.randint(max(item_ids) + 1, size=len(user_ids) * num_break)
+            find_negative(user_ids, item_ids, neg_u_list, neg_i_list, mat_train, array_k, is_rand=is_rand, num_break=num_break)
+            df_k = pd.DataFrame(array_k, columns=["user_id", "item_id", y_name])
+            df_negative = df_negative.append(df_k, ignore_index=True)
+
+        df_negative = df_negative.join(df_item, on=['item_id'], how="left")
+        df_negative = df_negative.join(df_user, on=['user_id'], how="left")
+
+        df_pos, df_neg = align_pos_neg(df_positive, df_negative, can_divide=True)
+
+    return df_pos, df_neg

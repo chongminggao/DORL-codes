@@ -179,8 +179,6 @@ def prepare_um(args=get_args()):
 
     # %% 3. prepare envs
     mat, mat_distance = YahooEnv.load_mat()
-
-
     kwargs_um = {"mat": mat,
                  "mat_distance": mat_distance,
                  "num_leave_compute": args.num_leave_compute,
@@ -189,8 +187,8 @@ def prepare_um(args=get_args()):
 
     env = YahooEnv(**kwargs_um)
 
-    # with open(MODEL_MAT_PATH, "rb") as file:
-    #     normed_mat = pickle.load(file)
+    with open(MODEL_MAT_PATH, "rb") as file:
+        predicted_mat = pickle.load(file)
 
     kwargs = {
         "env_task_class":YahooEnv,
@@ -201,7 +199,7 @@ def prepare_um(args=get_args()):
         "tau": args.tau,
         "alpha_u": alpha_u,
         "beta_i": beta_i,
-        "normed_mat": mat,
+        "predicted_mat": predicted_mat,
         "gamma_exposure": args.gamma_exposure}
     simulatedEnv = SimulatedEnv(**kwargs)
 

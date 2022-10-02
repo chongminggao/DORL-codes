@@ -109,10 +109,10 @@ def get_recommended_items(args_um, user_model):
     is_ucb = False
 
     # load user info
-    df_user = KuaiRandEnv.load_user_info()
+    df_user = KuaiRandEnv.load_user_feat()
     df_user = None # Todo!!!!!!!!!!!
 
-    count = {i: 0 for i in range(len(dataset_val.df_item_env))}
+    count = {i: 0 for i in range(len(dataset_val.df_item_val))}
     # for uesr_big_id in tqdm(range(dataset_val.x_columns[0].vocabulary_size)):
     for user in tqdm(range(100)):
         recommendation, reward_pred = user_model.recommend_k_item(user, dataset_val, k=K, is_softmax=is_softmax,

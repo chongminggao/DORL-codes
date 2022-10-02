@@ -21,7 +21,7 @@ class SimulatedEnv(gym.Env):
     def __init__(self, env_task_class, user_model, task_env_param: dict, task_name: str, version: str = "v1", tau: float = 1.0,
                  use_exposure_intervention=True,
                  alpha_u=None, beta_i=None,
-                 normed_mat=None,
+                 predicted_mat=None,
                  gamma_exposure=1):
         self.user_model = user_model.eval()
 
@@ -40,7 +40,7 @@ class SimulatedEnv(gym.Env):
         self.use_exposure_intervention = use_exposure_intervention
         self.alpha_u = alpha_u
         self.beta_i = beta_i
-        self.normed_mat = normed_mat
+        self.predicted_mat = predicted_mat
         self.gamma_exposure = gamma_exposure
 
         self._reset_history()
@@ -92,7 +92,7 @@ class SimulatedEnv(gym.Env):
             if pred_reward > 10:
                 pred_reward = 10
         else: # elif self.env_name == "KuaiEnv-v0":
-            pred_reward = self.normed_mat[self.cur_user[0], action]
+            pred_reward = self.predicted_mat[self.cur_user[0], action]
 
         if self.version == "v1":
             # version 1

@@ -48,6 +48,46 @@ class CoatEnv(gym.Env):
         self.reset()
 
     @staticmethod
+    def get_df_coat(name):
+        # read interaction
+        filename = os.path.join(DATAPATH, name)
+        mat_train = pd.read_csv(filename, sep="\s+", header=None)
+        df_data = pd.DataFrame([], columns=["user_id", "item_id", "rating"])
+
+        for item in mat_train.columns:
+            one_item = mat_train.loc[mat_train[item] > 0, item].reset_index().rename(
+                columns={"index": "user_id", item: "rating"})
+            one_item["item_id"] = item
+            df_data = pd.concat([df_data, one_item])
+        df_data.reset_index(drop=True, inplace=True)
+
+        # read user feature
+        df_user = CoatEnv.load_user_feat()
+
+        # read item features
+        df_item = CoatEnv.load_item_feat()
+
+        df_data = df_data.join(df_user, on="user_id", how='left')
+        df_data = df_data.join(df_item, on="item_id", how='left')
+
+        df_data = df_data.astype(int)
+        list_feat = None
+
+        return df_data, df_user, df_item, list_feat
+
+    @staticmethod
+    def load_exposure_and_popularity(predicted_mat, filename="train.ascii"):
+        filepath = os.path.join(DATAPATH, filename)
+        mat_train = pd.read_csv(filepath, sep="\s+", header=None)
+        isexposure = mat_train > 0
+        df_popularity = isexposure.sum()
+
+        df_train, _, _ = CoatEnv.get_df_coat("train.ascii")
+        df_frequency = df_train.groupby(["user_id", "item_id"])["rating"].agg(len)
+
+        return df_frequency, df_popularity
+
+    @staticmethod
     def load_mat():
         filename_GT = os.path.join(DATAPATH, "..", "RL4Rec", "data", "coat_pseudoGT_ratingM.ascii")
         mat = pd.read_csv(filename_GT, sep="\s+", header=None, dtype=str).to_numpy(dtype=int)
@@ -119,38 +159,8 @@ class CoatEnv(gym.Env):
 
         return df_item
 
-    @staticmethod
-    def compute_normed_reward(user_model, lbe_user, lbe_video, df_video_env):
-        # filename = "normed_reward.pickle"
-        # filepath = os.path.join(DATAPATH, filename)
 
-        # if os.path.isfile(filepath):
-        #     with open(filepath, "rb") as file:
-        #         normed_mat = pickle.load(file)
-        #     return normed_mat
 
-        n_user = len(lbe_user.classes_)
-        n_item = len(lbe_video.classes_)
-
-        item_info = df_video_env.loc[lbe_video.classes_]
-        item_info["item_id"] = item_info.index
-        item_info = item_info[["item_id", "feat0", "feat1", "feat2", "feat3", "video_duration"]]
-        item_np = item_info.to_numpy()
-
-        predict_mat = np.zeros((n_user, n_item))
-
-        for i, user in tqdm(enumerate(lbe_user.classes_), total=n_user, desc="predict all users' rewards on all items"):
-            ui = torch.tensor(np.concatenate((np.ones((n_item, 1)) * user, item_np), axis=1),
-                              dtype=torch.float, device=user_model.device, requires_grad=False)
-            reward_u = user_model.forward(ui).detach().squeeze().cpu().numpy()
-            predict_mat[i] = reward_u
-
-        minn = predict_mat.min()
-        maxx = predict_mat.max()
-
-        normed_mat = (predict_mat - minn) / (maxx - minn)
-
-        return normed_mat
 
     @property
     def state(self):
@@ -275,49 +285,56 @@ def get_distance_mat(mat):
     # plt.show()
 
 
-@njit
-def find_negative(user_ids, item_ids, mat_train, df_negative, K=1):
-    for i in range(len(user_ids)):
-        user, item = user_ids[i], item_ids[i]
-        value = mat_train[user, item]
-
-        neg = item + 1
-        # neg_v = mat_train[user, neg]
-
-        while neg < mat_train.shape[1]:
-            neg_v = mat_train[user, neg]
-            if neg_v > 0:
-                neg += 1
-            else:
-                df_negative[i, 0] = user
-                df_negative[i, 1] = neg
-                break
-        else:
-            neg = item - 1
-            while neg >= 0:
-                neg_v = mat_train[user, neg]
-                if neg_v > 0:
-                    neg -= 1
-                else:
-                    df_negative[i, 0] = user
-                    df_negative[i, 1] = neg
-                    break
 
 
-def negative_sampling(df_train, df_item, df_user):
-    print("negative sampling...")
-    mat_train = csr_matrix((df_train["rating"], (df_train["user_id"], df_train["item_id"])),
-                           shape=(df_train['user_id'].max() + 1, df_train['item_id'].max() + 1)).toarray()
-    df_negative = np.zeros([len(df_train), 2])
+# def negative_sampling(df_train, df_item, df_user, y_name):
+#     print("negative sampling...")
+#     mat_train = csr_matrix((df_train[y_name], (df_train["user_id"], df_train["item_id"])),
+#                            shape=(df_train['user_id'].max() + 1, df_train['item_id'].max() + 1)).toarray()
+#     df_negative = np.zeros([len(df_train), 2])
+#
+#     user_ids = df_train["user_id"].to_numpy()
+#     item_ids = df_train["item_id"].to_numpy()
+#
+#     find_negative(user_ids, item_ids, mat_train, df_negative, is_rand=True)
+#     df_negative = pd.DataFrame(df_negative, columns=["user_id", "item_id"], dtype=int)
+#
+#     df_negative = df_negative.join(df_item, on=['item_id'], how="left")
+#     df_negative = df_negative.join(df_user, on=['user_id'], how="left")
+#
+#     # df_negative.loc[df_negative["duration_ms"].isna(), "duration_ms"] = 0
+#     return df_train, df_negative
 
-    user_ids = df_train["user_id"].to_numpy()
-    item_ids = df_train["item_id"].to_numpy()
+def construct_complete_val_x(dataset_val, user_features, item_features):
+    df_item = CoatEnv.load_item_feat()
+    df_user = CoatEnv.load_user_feat()
 
-    find_negative(user_ids, item_ids, mat_train, df_negative)
-    df_negative = pd.DataFrame(df_negative, columns=["user_id", "item_id"], dtype=int)
+    user_ids = np.arange(dataset_val.x_columns[dataset_val.user_col].vocabulary_size)
+    item_ids = np.arange(dataset_val.x_columns[dataset_val.item_col].vocabulary_size)
+    df_user_complete = pd.DataFrame(
+        df_user.loc[user_ids].reset_index()[user_features].to_numpy().repeat(len(item_ids), axis=0),
+        columns=df_user.reset_index()[user_features].columns)
+    df_item_complete = pd.DataFrame(np.tile(df_item.reset_index()[item_features], (len(user_ids), 1)),
+                                    columns=df_item.reset_index()[item_features].columns)
 
-    df_negative = df_negative.join(df_item, on=['item_id'], how="left")
-    df_negative = df_negative.join(df_user, on=['user_id'], how="left")
+    # np.tile(np.concatenate([np.expand_dims(df_item_env.index.to_numpy(), df_item_env.to_numpy()], axis=1), (2, 1))
 
-    # df_negative.loc[df_negative["duration_ms"].isna(), "duration_ms"] = 0
-    return df_negative
+    df_x_complete = pd.concat([df_user_complete, df_item_complete], axis=1)
+    return df_x_complete
+
+def compute_normed_reward_for_all(user_model, dataset_val, user_features, item_features):
+    df_x_complete = construct_complete_val_x(dataset_val, user_features, item_features)
+    n_user, n_item = df_x_complete[["user_id", "item_id"]].nunique()
+    predict_mat = np.zeros((n_user, n_item))
+
+    for i, user in tqdm(enumerate(range(n_user)), total=n_user, desc="predict all users' rewards on all items"):
+        ui = torch.tensor(df_x_complete[df_x_complete["user_id"] == user].to_numpy(),dtype=torch.float, device=user_model.device, requires_grad=False)
+        reward_u = user_model.forward(ui).detach().squeeze().cpu().numpy()
+        predict_mat[i] = reward_u
+
+    minn = predict_mat.min()
+    maxx = predict_mat.max()
+
+    normed_mat = (predict_mat - minn) / (maxx - minn)
+
+    return normed_mat

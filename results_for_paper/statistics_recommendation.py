@@ -19,7 +19,7 @@ import sys
 CODEPATH = os.path.dirname(__file__)
 sys.path.extend([f"{CODEPATH}/..", f"{CODEPATH}/../src", f"{CODEPATH}/../src/DeepCTR-Torch", f"{CODEPATH}/../src/tianshou"])
 
-from run_worldModel import load_static_validate_data_kuairec, get_args
+from run_worldModel_kuairec import load_static_validate_data_kuairec, get_args
 import pandas as pd
 from scipy.sparse import csr_matrix
 

@@ -25,6 +25,8 @@ ROOTPATH = os.path.dirname(CODEPATH)
 DATAPATH = ROOTPATH
 
 
+
+
 class YahooEnv(gym.Env):
     metadata = {'render.modes': ['human']}
 
@@ -48,6 +50,34 @@ class YahooEnv(gym.Env):
         self.leave_threshold = leave_threshold
 
         self.reset()
+
+    @staticmethod
+    def get_df_yahoo(name):
+        # read interaction
+        filename = os.path.join(DATAPATH, name)
+        df_data = pd.read_csv(filename, sep="\s+", header=None, names=["user_id", "item_id", "rating"])
+
+        df_data["user_id"] -= 1
+        df_data["item_id"] -= 1
+
+        df_user = YahooEnv.load_user_feat()
+        df_item = YahooEnv.load_item_feat()
+        list_feat = None
+
+        return df_data, df_user, df_item, list_feat
+
+    @staticmethod
+    def load_user_feat():
+        df_user = pd.DataFrame(np.arange(15400), columns=["user_id"])
+        df_user.set_index("user_id", inplace=True)
+        return df_user
+
+    @staticmethod
+    def load_item_feat():
+        df_item = pd.DataFrame(np.arange(1000), columns=["item_id"])
+        df_item.set_index("item_id", inplace=True)
+        return df_item
+
 
     @staticmethod
     def load_mat():
@@ -176,33 +206,33 @@ class YahooEnv(gym.Env):
         self.max_history += 1
 
 
-@njit
-def find_negative(user_ids, item_ids, mat_train, df_negative, K=1):
-    for i in range(len(user_ids)):
-        user, item = user_ids[i], item_ids[i]
-        value = mat_train[user, item]
-
-        neg = item + 1
-        # neg_v = mat_train[user, neg]
-
-        while neg < mat_train.shape[1]:
-            neg_v = mat_train[user, neg]
-            if neg_v > 0:
-                neg += 1
-            else:
-                df_negative[i, 0] = user
-                df_negative[i, 1] = neg
-                break
-        else:
-            neg = item - 1
-            while neg >= 0:
-                neg_v = mat_train[user, neg]
-                if neg_v > 0:
-                    neg -= 1
-                else:
-                    df_negative[i, 0] = user
-                    df_negative[i, 1] = neg
-                    break
+# @njit
+# def find_negative(user_ids, item_ids, mat_train, df_negative, K=1):
+#     for i in range(len(user_ids)):
+#         user, item = user_ids[i], item_ids[i]
+#         value = mat_train[user, item]
+#
+#         neg = item + 1
+#         # neg_v = mat_train[user, neg]
+#
+#         while neg < mat_train.shape[1]:
+#             neg_v = mat_train[user, neg]
+#             if neg_v > 0:
+#                 neg += 1
+#             else:
+#                 df_negative[i, 0] = user
+#                 df_negative[i, 1] = neg
+#                 break
+#         else:
+#             neg = item - 1
+#             while neg >= 0:
+#                 neg_v = mat_train[user, neg]
+#                 if neg_v > 0:
+#                     neg -= 1
+#                 else:
+#                     df_negative[i, 0] = user
+#                     df_negative[i, 1] = neg
+#                     break
 
 
 @njit
@@ -216,9 +246,9 @@ def get_distance_mat(mat, distance):
             distance[item_i, item_j] = dist
     return distance
 
-def negative_sampling(df_train):
+def negative_sampling(df_train, df_user, df_item, y_name):
     print("negative sampling...")
-    mat_train = csr_matrix((df_train["rating"], (df_train["user_id"], df_train["item_id"])),
+    mat_train = csr_matrix((df_train[y_name], (df_train["user_id"], df_train["item_id"])),
                            shape=(df_train['user_id'].max() + 1, df_train['item_id'].max() + 1)).toarray()
     df_negative = np.zeros([len(df_train), 2])
 
@@ -229,4 +259,41 @@ def negative_sampling(df_train):
     df_negative = pd.DataFrame(df_negative, columns=["user_id", "item_id"], dtype=int)
 
     # df_negative.loc[df_negative["duration_ms"].isna(), "duration_ms"] = 0
-    return df_negative
+    return df_train, df_negative
+
+
+def construct_complete_val_x(dataset_val, user_features, item_features):
+
+    user_ids = np.arange(dataset_val.x_columns[dataset_val.user_col].vocabulary_size)
+    # user_ids = np.arange(1000)
+    item_ids = np.arange(dataset_val.x_columns[dataset_val.item_col].vocabulary_size)
+
+    df_item = dataset_val.df_item_val
+    df_user = pd.DataFrame(range(15400), columns=["user_id"])
+
+    # df_user_complete = pd.DataFrame({"user_id": user_ids.repeat(len(item_ids))})
+    df_user_complete = pd.DataFrame(
+        df_user.loc[user_ids].reset_index()[user_features].to_numpy().repeat(len(item_ids), axis=0),
+        columns=df_user.reset_index()[user_features].columns)
+    df_item_complete = pd.DataFrame(np.tile(df_item.reset_index()[item_features], (len(user_ids), 1)),
+                                    columns=df_item.reset_index()[item_features].columns)
+
+    df_x_complete = pd.concat([df_user_complete, df_item_complete], axis=1)
+    return df_x_complete
+
+def compute_normed_reward_for_all(user_model, dataset_val, user_features, item_features):
+    df_x_complete = construct_complete_val_x(dataset_val, user_features, item_features)
+    n_user, n_item = df_x_complete[["user_id", "item_id"]].nunique()
+    predict_mat = np.zeros((n_user, n_item))
+
+    for i, user in tqdm(enumerate(range(n_user)), total=n_user, desc="predict all users' rewards on all items"):
+        ui = torch.tensor(df_x_complete[df_x_complete["user_id"] == user].to_numpy(),dtype=torch.float, device=user_model.device, requires_grad=False)
+        reward_u = user_model.forward(ui).detach().squeeze().cpu().numpy()
+        predict_mat[i] = reward_u
+
+    minn = predict_mat.min()
+    maxx = predict_mat.max()
+
+    normed_mat = (predict_mat - minn) / (maxx - minn)
+
+    return normed_mat

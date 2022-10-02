@@ -27,7 +27,7 @@ from core.trainer.onpolicy import onpolicy_trainer
 from core.user_model_pairwise import UserModel_Pairwise
 from core.worldModel.simulated_env import SimulatedEnv
 
-from environments.coat.env.Coat import CoatEnv
+from environments.KuaiRand_Pure.env.KuaiRand import KuaiRandEnv
 from tianshou.data import VectorReplayBuffer
 from tianshou.env import DummyVectorEnv
 
@@ -50,7 +50,7 @@ def get_args():
     parser = argparse.ArgumentParser()
 
     # parser.add_argument("--env", type=str, default="KuaiRand-v0")
-    parser.add_argument("--env", type=str, default="CoatEnv-v0")
+    parser.add_argument("--env", type=str, default="KuaiRandEnv-v0")
     parser.add_argument("--user_model_name", type=str, default="DeepFM")
     parser.add_argument("--model_name", type=str, default="A2C_with_emb")
     parser.add_argument('--seed', default=2022, type=int)
@@ -181,8 +181,7 @@ def prepare_um(args=get_args()):
     # env = gym.make('VirtualTB-v0')
 
     # %% 3. prepare envs
-    mat, df_item, mat_distance = CoatEnv.load_mat()
-
+    mat, df_item, mat_distance = KuaiRandEnv.load_mat()
     kwargs_um = {"mat": mat,
                  "df_item": df_item,
                  "mat_distance": mat_distance,
@@ -190,13 +189,13 @@ def prepare_um(args=get_args()):
                  "leave_threshold": args.leave_threshold,
                  "max_turn": args.max_turn}
 
-    env = CoatEnv(**kwargs_um)
+    env = KuaiRandEnv(**kwargs_um)
 
-    # with open(MODEL_MAT_PATH, "rb") as file:
-    #     normed_mat = pickle.load(file)
+    with open(MODEL_MAT_PATH, "rb") as file:
+        predicted_mat = pickle.load(file)
 
     kwargs = {
-        "env_task_class":CoatEnv,
+        "env_task_class":KuaiRandEnv,
         "user_model": user_model,
         "task_env_param": kwargs_um,
         "task_name": args.env,
@@ -204,15 +203,16 @@ def prepare_um(args=get_args()):
         "tau": args.tau,
         "alpha_u": alpha_u,
         "beta_i": beta_i,
-        "normed_mat": mat,
-        "gamma_exposure": args.gamma_exposure}
+        "predicted_mat": predicted_mat,
+        "gamma_exposure": args.gamma_exposure
+    }
     simulatedEnv = SimulatedEnv(**kwargs)
 
     train_envs = DummyVectorEnv(
         [lambda: SimulatedEnv(**kwargs) for _ in range(args.training_num)])
     # test_envs = gym.make(args.task)
     test_envs = DummyVectorEnv(
-        [lambda: CoatEnv(**kwargs_um) for _ in range(args.test_num)])
+        [lambda: KuaiRandEnv(**kwargs_um) for _ in range(args.test_num)])
 
     random.seed(args.seed)
     np.random.seed(args.seed)
@@ -235,7 +235,7 @@ def prepare_um(args=get_args()):
         [lambda: SimulatedEnv(**kwargs) for _ in range(args.training_num)])
     # test_envs = gym.make(args.task)
     test_envs = DummyVectorEnv(
-        [lambda: CoatEnv(**kwargs_um) for _ in range(args.test_num)])
+        [lambda: KuaiRandEnv(**kwargs_um) for _ in range(args.test_num)])
 
     # args.state_shape = args.dim_state # no use?
     args.action_shape = env.mat.shape[1]

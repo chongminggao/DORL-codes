@@ -5,7 +5,7 @@
 import numpy as np
 from tqdm import tqdm
 
-from core.evaluation.evaluator import test_kuaishou
+from core.evaluation.evaluator import test_static_model_in_RL_env
 
 
 class linucb_disjoint_arm():
@@ -131,7 +131,7 @@ class linucb_policy():
         return eval_result
 
     def recommend_k_item(self, user, dataset_val, k=1, is_softmax=True):  # for kuaishou data
-        df_video_env = dataset_val.df_item_env
+        df_video_env = dataset_val.df_item_val
         # item_index = df_video_env.index.to_numpy()
         video = np.arange(len(df_video_env))
         # df_video_env.index.to_numpy()
@@ -180,7 +180,7 @@ def linucb_trainer(model, env, epoch, df_x, df_y, dataset_val, logger, metric_fu
             model.linucb_arms[arm_small].reward_update(reward, x)
 
         eval_result = model.evaluate_data(dataset_val, metric_fun, env.lbe_video)
-        eval_result_RL = test_kuaishou(model, env=env, dataset_val=dataset_val, is_softmax=False)
+        eval_result_RL = test_static_model_in_RL_env(model, env=env, dataset_val=dataset_val, is_softmax=False)
 
         eval_result = {"val_" + k: v for k, v in eval_result.items()}
         eval_result_RL = {"RL_val_" + k: v for k, v in eval_result_RL.items()}

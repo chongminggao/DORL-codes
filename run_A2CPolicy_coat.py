@@ -126,7 +126,7 @@ def get_args():
     parser.add_argument('--gae-lambda', type=float, default=1.)
     parser.add_argument('--rew-norm', action="store_true", default=False)
 
-    parser.add_argument("--read_message", type=str, default="point")
+    parser.add_argument("--read_message", type=str, default="pointneg")
     parser.add_argument("--message", type=str, default="A2C_with_emb")
 
     args = parser.parse_known_args()[0]
@@ -192,8 +192,10 @@ def prepare_um(args=get_args()):
 
     env = CoatEnv(**kwargs_um)
 
-    # with open(MODEL_MAT_PATH, "rb") as file:
-    #     normed_mat = pickle.load(file)
+    with open(MODEL_MAT_PATH, "rb") as file:
+        predicted_mat = pickle.load(file)
+
+    df_frequency, df_popularity = CoatEnv.load_exposure_and_popularity(predicted_mat)
 
     kwargs = {
         "env_task_class":CoatEnv,
@@ -204,7 +206,7 @@ def prepare_um(args=get_args()):
         "tau": args.tau,
         "alpha_u": alpha_u,
         "beta_i": beta_i,
-        "normed_mat": mat,
+        "predicted_mat": predicted_mat,
         "gamma_exposure": args.gamma_exposure}
     simulatedEnv = SimulatedEnv(**kwargs)
 

@@ -21,7 +21,6 @@ import random
 
 from tqdm import tqdm
 
-from core.util import get_distance_mat
 
 CODEPATH = os.path.dirname(__file__)
 ROOTPATH = os.path.dirname(CODEPATH)
@@ -48,8 +47,6 @@ class KuaiRandEnv(gym.Env):
 
         self.list_feat_small = list(map(lambda x: self.list_feat[x], self.lbe_video.classes_))
 
-        # smallmat shape: (1411, 3327)
-
         self.observation_space = spaces.Box(low=0, high=len(self.mat) - 1, shape=(1,), dtype=np.int32)
         self.action_space = spaces.Box(low=0, high=self.mat.shape[1] - 1, shape=(1,), dtype=np.int32)
 
@@ -59,7 +56,44 @@ class KuaiRandEnv(gym.Env):
         self.reset()
 
     @staticmethod
-    def load_user_info():
+    def load_mat(filepath_GT):
+        df_mat = pd.read_csv(filepath_GT, header=0, nrows=1000000)
+
+        # mat_distance = get_distance_mat(mat)
+
+        num_item = mat.shape[1]
+        distance = np.zeros([num_item, num_item])
+        mat_distance = get_distance_mat1(mat, distance)
+
+        df_item = CoatEnv.load_item_feat()
+
+        # dist_cat = np.zeros_like(mat_distance)
+        # for i in range(len(dist_cat)):
+        #     for j in range(len(dist_cat)):
+        #         sim = (sum(df_item.loc[i] - df_item.loc[j] == 0) / len(df_item.columns))
+        #         dist_cat[i,j] = 6 if sim == 0 else 1 / sim
+        #
+        #
+        # dist_cat[np.isinf(dist_cat)] = 6
+        # dist_cat = dist_cat * 3
+        # df = pd.DataFrame(zip(mat_distance.reshape([-1]), dist_cat.reshape([-1])), columns=["dist","category"])
+        #
+        # df.groupby("category").agg(np.mean)
+        #
+        # import seaborn as sns
+        # sns.boxplot(x = df["category"], y=df["dist"])
+        # from matplotlib import pyplot as plt
+        # plt.show()
+
+        # import seaborn as sns
+        # sns.histplot(data=mat_distance.reshape([-1]))
+        # from matplotlib import pyplot as plt
+        # plt.show()
+
+        return mat, df_item, mat_distance
+
+    @staticmethod
+    def load_user_feat():
         print("load user features")
         filepath = os.path.join(DATAPATH, 'user_features_pure.csv')
         df_user = pd.read_csv(filepath, usecols=['user_id', 'user_active_degree',
@@ -95,6 +129,37 @@ class KuaiRandEnv(gym.Env):
         return df_user
 
     @staticmethod
+    def get_df_kuairand(name, is_sort=True):
+        filename = os.path.join(DATAPATH, name)
+        df_data = pd.read_csv(filename,
+                              usecols=['user_id', 'item_id', 'time_ms', 'is_like', 'is_click', 'long_view',
+                                       'duration_normed', "watch_ratio_normed"])
+
+        # df_data['watch_ratio'] = df_data["play_time_ms"] / df_data["duration_ms"]
+        # df_data.loc[df_data['watch_ratio'].isin([np.inf, np.nan]), 'watch_ratio'] = 0
+        # df_data.loc[df_data['watch_ratio'] > 5, 'watch_ratio'] = 5
+        # df_data['duration_01'] = df_data['duration_ms'] / 1e5
+        # df_data.rename(columns={"time_ms": "timestamp"}, inplace=True)
+        # df_data["timestamp"] /= 1e3
+
+        # load feature info
+        list_feat, df_feat = KuaiRandEnv.load_category()
+        df_data = df_data.join(df_feat, on=['item_id'], how="left")
+
+        df_item = KuaiRandEnv.load_item_feat()
+
+        # load user info
+        df_user = KuaiRandEnv.load_user_feat()
+        df_data = df_data.join(df_user, on=['user_id'], how="left")
+
+        # get user sequences
+        if is_sort:
+            df_data.sort_values(["user_id", "time_ms"], inplace=True)
+            df_data.reset_index(drop=True, inplace=True)
+
+        return df_data, df_user, df_item, list_feat
+
+    @staticmethod
     def load_category():
         print("load item feature")
         filepath = os.path.join(DATAPATH, 'video_features_basic_pure.csv')
@@ -106,7 +171,7 @@ class KuaiRandEnv(gym.Env):
         list_feat = df_item['tag'].to_list()
 
         df_feat = pd.DataFrame(list_feat, columns=['feat0', 'feat1', 'feat2'], dtype=int)
-        df_feat.index.name = "video_id"
+        df_feat.index.name = "item_id"
         df_feat[df_feat.isna()] = -1
         df_feat = df_feat + 1
         df_feat = df_feat.astype(int)
@@ -114,21 +179,29 @@ class KuaiRandEnv(gym.Env):
         return list_feat, df_feat
 
     @staticmethod
+    def load_item_feat(only_small=False):
+        list_feat, df_feat = KuaiRandEnv.load_category()
+        video_mean_duration = KuaiRandEnv.load_video_duration()
+        df_item = df_feat.join(video_mean_duration, on=['item_id'], how="left")
+
+        return df_item
+
+    @staticmethod
     def load_video_duration():
-        duration_path = os.path.join(DATAPATH, "video_duration.csv")
+        duration_path = os.path.join(DATAPATH, "video_duration_normed.csv")
         if os.path.isfile(duration_path):
-            video_mean_duration = pd.read_csv(duration_path, header=0)["video_duration"]
+            video_mean_duration = pd.read_csv(duration_path, header=0)["duration_normed"]
         else:
-            small_path = os.path.join(DATAPATH, "small_matrix.csv")
-            small_duration = pd.read_csv(small_path, header=0, usecols=["video_id", 'video_duration'])
-            big_path = os.path.join(DATAPATH, "big_matrix.csv")
-            big_duration = pd.read_csv(big_path, header=0, usecols=["video_id", 'video_duration'])
+            small_path = os.path.join(DATAPATH, "test_processed.csv")
+            small_duration = pd.read_csv(small_path, header=0, usecols=["item_id", 'duration_normed'])
+            big_path = os.path.join(DATAPATH, "train_processed.csv")
+            big_duration = pd.read_csv(big_path, header=0, usecols=["item_id", 'duration_normed'])
             duration_all = small_duration.append(big_duration)
-            video_mean_duration = duration_all.groupby("video_id").agg(lambda x: sum(list(x)) / len(x))[
-                "video_duration"]
+            video_mean_duration = duration_all.groupby("item_id").agg(lambda x: sum(list(x)) / len(x))[
+                "duration_normed"]
             video_mean_duration.to_csv(duration_path, index=False)
 
-        video_mean_duration.index.name = "video_id"
+        video_mean_duration.index.name = "item_id"
         return video_mean_duration
 
     @staticmethod
@@ -145,7 +218,7 @@ class KuaiRandEnv(gym.Env):
         else:
             series_feat_list = pd.Series(list_feat)
             df_feat_list = series_feat_list.to_frame("categories")
-            df_feat_list.index.name = "video_id"
+            df_feat_list.index.name = "item_id"
 
             similarity_mat = np.zeros([len(df_feat_list), len(df_feat_list)])
             print("Compute the similarity matrix (for the first time and will be saved for later usage)")
@@ -182,76 +255,6 @@ class KuaiRandEnv(gym.Env):
             return df_dist_small
 
         return None
-
-    @staticmethod
-    def load_mat():
-        small_path = os.path.join(DATAPATH, "small_matrix.csv")
-        df_small = pd.read_csv(small_path, header=0, usecols=['user_id', 'video_id', 'watch_ratio'])
-        # df_small['watch_ratio'][df_small['watch_ratio'] > 5] = 5
-        df_small.loc[df_small['watch_ratio'] > 5, 'watch_ratio'] = 5
-
-        lbe_video = LabelEncoder()
-        lbe_video.fit(df_small['video_id'].unique())
-
-        lbe_user = LabelEncoder()
-        lbe_user.fit(df_small['user_id'].unique())
-
-        mat = csr_matrix(
-            (df_small['watch_ratio'],
-             (lbe_user.transform(df_small['user_id']), lbe_video.transform(df_small['video_id']))),
-            shape=(df_small['user_id'].nunique(), df_small['video_id'].nunique())).toarray()
-
-        mat[np.isnan(mat)] = df_small['watch_ratio'].mean()
-        mat[np.isinf(mat)] = df_small['watch_ratio'].mean()
-
-        # load feature info
-        list_feat, df_feat = KuaiEnv.load_category()
-
-        # Compute the average video duration
-        video_mean_duration = KuaiEnv.load_video_duration()
-
-        video_list = df_small['video_id'].unique()
-        df_video_env = df_feat.loc[video_list]
-        df_video_env['video_duration'] = np.array(
-            list(map(lambda x: video_mean_duration[x], df_video_env.index)))
-
-        # load or construct the distance mat (between item pairs):
-        df_dist_small = get_distance_mat(list_feat, lbe_video.classes_, DATAPATH)
-
-        return mat, lbe_user, lbe_video, list_feat, df_video_env, df_dist_small
-
-    @staticmethod
-    def compute_normed_reward(user_model, lbe_user, lbe_video, df_video_env):
-        # filename = "normed_reward.pickle"
-        # filepath = os.path.join(DATAPATH, filename)
-
-        # if os.path.isfile(filepath):
-        #     with open(filepath, "rb") as file:
-        #         normed_mat = pickle.load(file)
-        #     return normed_mat
-
-        n_user = len(lbe_user.classes_)
-        n_item = len(lbe_video.classes_)
-
-        item_info = df_video_env.loc[lbe_video.classes_]
-        item_info["video_id"] = item_info.index
-        item_info = item_info[["video_id", "feat0", "feat1", "feat2", "feat3", "video_duration"]]
-        item_np = item_info.to_numpy()
-
-        predict_mat = np.zeros((n_user, n_item))
-
-        for i, user in tqdm(enumerate(lbe_user.classes_), total=n_user, desc="predict all users' rewards on all items"):
-            ui = torch.tensor(np.concatenate((np.ones((n_item, 1)) * user, item_np), axis=1),
-                              dtype=torch.float, device=user_model.device, requires_grad=False)
-            reward_u = user_model.forward(ui).detach().squeeze().cpu().numpy()
-            predict_mat[i] = reward_u
-
-        minn = predict_mat.min()
-        maxx = predict_mat.max()
-
-        normed_mat = (predict_mat - minn) / (maxx - minn)
-
-        return normed_mat
 
     @property
     def state(self):
@@ -340,49 +343,91 @@ class KuaiRandEnv(gym.Env):
         self.max_history += 1
 
 
-@njit
-def find_negative(user_ids, item_ids, mat_train, df_negative):
-    for i in range(len(user_ids)):
-        user, item = user_ids[i], item_ids[i]
-        value = mat_train[user, item]
+# @njit
+# def find_negative(user_ids, item_ids, mat_train, df_negative):
+#     for i in range(len(user_ids)):
+#         user, item = user_ids[i], item_ids[i]
+#         value = mat_train[user, item]
+#
+#         neg = item + 1
+#         # neg_v = mat_train[user, neg]
+#
+#         while neg < mat_train.shape[1]:
+#             neg_v = mat_train[user, neg]
+#             if neg_v >= value:
+#                 neg += 1
+#             else:
+#                 df_negative[i, 0] = user
+#                 df_negative[i, 1] = neg
+#                 break
+#         else:
+#             neg = item - 1
+#             while neg >= 0:
+#                 neg_v = mat_train[user, neg]
+#                 if neg_v >= value:
+#                     neg -= 1
+#                 else:
+#                     df_negative[i, 0] = user
+#                     df_negative[i, 1] = neg
+#                     break
 
-        neg = item + 1
-        # neg_v = mat_train[user, neg]
+# def negative_sampling(df_train, df_feat, df_user, y_name):
+#     print("negative sampling...")
+#     mat_train = csr_matrix((df_train[y_name], (df_train["user_id"], df_train["item_id"])),
+#                            shape=(df_train['user_id'].max() + 1, df_train['item_id'].max() + 1)).toarray()
+#     df_negative = np.zeros([len(df_train), 2])
+#
+#     user_ids = df_train["user_id"].to_numpy()
+#     item_ids = df_train["item_id"].to_numpy()
+#
+#     if y_name == "watch_ratio_normed":
+#         find_negative(user_ids, item_ids, mat_train, df_negative, is_rand=True)
+#     else:
+#         df_train[y_name]
+#
+#
+#
+#     df_negative = pd.DataFrame(df_negative, columns=["user_id", "item_id"], dtype=int)
+#
+#     df_negative = df_negative.join(df_feat, on=['item_id'], how="left")
+#     df_negative = df_negative.join(df_user, on=['user_id'], how="left")
+#     df_duration = df_train[["item_id", "duration_normed"]].groupby("item_id").agg(np.mean)
+#     df_negative = df_negative.join(df_duration, on=['item_id'], how="left")
+#     df_negative.loc[df_negative["duration_normed"].isna(), "duration_normed"] = 0
+#     return df_train, df_negative
 
-        while neg < mat_train.shape[1]:
-            neg_v = mat_train[user, neg]
-            if neg_v >= value:
-                neg += 1
-            else:
-                df_negative[i, 0] = user
-                df_negative[i, 1] = neg
-                break
-        else:
-            neg = item - 1
-            while neg >= 0:
-                neg_v = mat_train[user, neg]
-                if neg_v >= value:
-                    neg -= 1
-                else:
-                    df_negative[i, 0] = user
-                    df_negative[i, 1] = neg
-                    break
 
-def negative_sampling(df_train, df_feat, df_user):
-    print("negative sampling...")
-    mat_train = csr_matrix((df_train["watch_ratio"], (df_train["user_id"], df_train["video_id"])),
-                           shape=(df_train['user_id'].max() + 1, df_train['video_id'].max() + 1)).toarray()
-    df_negative = np.zeros([len(df_train), 2])
+def construct_complete_val_x(dataset_val, user_features, item_features):
+    df_item_env = dataset_val.df_item_val
+    df_user = KuaiRandEnv.load_user_feat()
 
-    user_ids = df_train["user_id"].to_numpy()
-    item_ids = df_train["video_id"].to_numpy()
+    user_ids = np.arange(dataset_val.x_columns[dataset_val.user_col].vocabulary_size)
+    # user_ids = np.arange(1000)
+    item_ids = np.arange(dataset_val.x_columns[dataset_val.item_col].vocabulary_size)
+    df_user_complete = pd.DataFrame(
+        df_user.loc[user_ids].reset_index()[user_features].to_numpy().repeat(len(item_ids), axis=0),
+        columns=df_user.reset_index()[user_features].columns)
+    df_item_complete = pd.DataFrame(np.tile(df_item_env.reset_index()[item_features], (len(user_ids), 1)),
+                                    columns=df_item_env.reset_index()[item_features].columns)
 
-    find_negative(user_ids, item_ids, mat_train, df_negative)
-    df_negative = pd.DataFrame(df_negative, columns=["user_id", "video_id"], dtype=int)
+    # np.tile(np.concatenate([np.expand_dims(df_item_env.index.to_numpy(), df_item_env.to_numpy()], axis=1), (2, 1))
 
-    df_negative = df_negative.join(df_feat, on=['video_id'], how="left")
-    df_negative = df_negative.join(df_user, on=['user_id'], how="left")
-    df_duration = df_train[["video_id", "duration_ms"]].groupby("video_id").agg(np.mean)
-    df_negative = df_negative.join(df_duration, on=['video_id'], how="left")
-    df_negative.loc[df_negative["duration_ms"].isna(), "duration_ms"] = 0
-    return df_negative
+    df_x_complete = pd.concat([df_user_complete, df_item_complete], axis=1)
+    return df_x_complete
+
+def compute_normed_reward_for_all(user_model, dataset_val, user_features, item_features):
+    df_x_complete = construct_complete_val_x(dataset_val, user_features, item_features)
+    n_user, n_item = df_x_complete[["user_id", "item_id"]].nunique()
+    predict_mat = np.zeros((n_user, n_item))
+
+    for i, user in tqdm(enumerate(range(n_user)), total=n_user, desc="predict all users' rewards on all items"):
+        ui = torch.tensor(df_x_complete[df_x_complete["user_id"] == user].to_numpy(),dtype=torch.float, device=user_model.device, requires_grad=False)
+        reward_u = user_model.forward(ui).detach().squeeze().cpu().numpy()
+        predict_mat[i] = reward_u
+
+    minn = predict_mat.min()
+    maxx = predict_mat.max()
+
+    normed_mat = (predict_mat - minn) / (maxx - minn)
+
+    return normed_mat
