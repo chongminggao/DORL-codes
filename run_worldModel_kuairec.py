@@ -58,6 +58,9 @@ def get_args():
     parser.add_argument('--no_userinfo', dest='is_userinfo', action='store_false')
     parser.set_defaults(is_userinfo=False)
 
+    parser.add_argument('--leave_threshold', default=0, type=int) # todo
+    parser.add_argument('--num_leave_compute', default=1, type=int) # todo
+
     args = parser.parse_known_args()[0]
     return args
 
@@ -106,7 +109,7 @@ def main(args):
                         "device": "cpu",
                         "ab_columns": ab_columns}
 
-    save_world_model(args, user_model, dataset_train, dataset_val, x_columns, df_user, df_item, df_user_val, df_item_val,
+    save_world_model(args, user_model, dataset_val, x_columns, y_columns, df_user, df_item, df_user_val, df_item_val,
                      user_features, item_features, model_parameters, MODEL_SAVE_PATH, logger_path)
 
 

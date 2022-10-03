@@ -15,7 +15,10 @@ import logzero
 import numpy as np
 import pandas as pd
 import torch
+from scipy.sparse import csr_matrix
+from sklearn.preprocessing import LabelEncoder
 from torch import nn
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 sys.path.extend(["./src", "./src/DeepCTR-Torch"])
@@ -30,7 +33,6 @@ from util.utils import create_dir
 
 
 def get_args_all():
-
     parser = argparse.ArgumentParser()
     parser.add_argument('--resume', action="store_true")
 
@@ -66,10 +68,8 @@ def get_args_all():
     parser.add_argument('--dnn', default=(64, 64), type=int, nargs="+")
     parser.add_argument('--batch_size', default=256, type=int)
     parser.add_argument('--epoch', default=10, type=int)
-    parser.add_argument('--cuda', default=1, type=int)
-    # # env:
-    parser.add_argument('--leave_threshold', default=1, type=float)
-    parser.add_argument('--num_leave_compute', default=5, type=int)
+    parser.add_argument('--cuda', default=0, type=int)
+
     # exposure parameters:
     parser.add_argument('--tau', default=0, type=float)
 
@@ -130,7 +130,8 @@ def load_dataset_train(args, user_features, item_features, reward_features, tau,
     df_user = df_user[user_features[1:]]
     df_item = df_item[item_features[1:]]
 
-    x_columns, y_columns, ab_columns = get_xy_columns(args, df_train, df_user, df_item, user_features, item_features, entity_dim, feature_dim)
+    x_columns, y_columns, ab_columns = get_xy_columns(args, df_train, df_user, df_item, user_features, item_features,
+                                                      entity_dim, feature_dim)
 
     # if args.env == "CoatEnv-v0":
     #     from environments.coat.env.Coat import negative_sampling
@@ -141,12 +142,10 @@ def load_dataset_train(args, user_features, item_features, reward_features, tau,
     # elif args.env == "YahooEnv-v0":
     #     from environments.YahooR3.env.Yahoo import negative_sampling
 
-
-
     neg_in_train = True if args.env == "KuaiRand-v0" and reward_features[0] != "watch_ratio_normed" else False
 
     df_pos, df_neg = negative_sampling(df_train, df_item, df_user, reward_features[0],
-                                              is_rand=True, neg_in_train=neg_in_train, neg_K=args.neg_K)
+                                       is_rand=True, neg_in_train=neg_in_train, neg_K=args.neg_K)
 
     df_x = df_pos[user_features + item_features]
     if reward_features[0] == "hybrid":  # for kuairand
@@ -175,9 +174,8 @@ def load_dataset_train(args, user_features, item_features, reward_features, tau,
 
 
 def construct_complete_val_x(dataset_val, df_user, df_item, user_features, item_features):
-
-    user_ids = np.unique(dataset_val.x_numpy[:,dataset_val.user_col].astype(int))
-    item_ids = np.unique(dataset_val.x_numpy[:,dataset_val.item_col].astype(int))
+    user_ids = np.unique(dataset_val.x_numpy[:, dataset_val.user_col].astype(int))
+    item_ids = np.unique(dataset_val.x_numpy[:, dataset_val.item_col].astype(int))
 
     df_user_complete = pd.DataFrame(
         df_user.loc[user_ids].reset_index()[user_features].to_numpy().repeat(len(item_ids), axis=0),
@@ -189,21 +187,63 @@ def construct_complete_val_x(dataset_val, df_user, df_item, user_features, item_
     return df_x_complete
 
 
-def compute_normed_reward_for_all(user_model, dataset_val, df_user, df_item, user_features, item_features):
+def compute_normed_reward_for_all(user_model, dataset_val, df_user, df_item, user_features, item_features, x_columns,
+                                  y_columns):
     df_x_complete = construct_complete_val_x(dataset_val, df_user, df_item, user_features, item_features)
     n_user, n_item = df_x_complete[["user_id", "item_id"]].nunique()
-    user_ids = np.sort(df_x_complete["user_id"].unique())
-    predict_mat = np.zeros((n_user, n_item))
 
-    for i, user in tqdm(enumerate(user_ids), total=n_user, desc="predict all users' rewards on all items"):
-        ui = torch.tensor(df_x_complete[df_x_complete["user_id"] == user].to_numpy(), dtype=torch.float,
-                          device=user_model.device, requires_grad=False)
-        reward_u = user_model.forward(ui).detach().squeeze().cpu().numpy()
-        predict_mat[i] = reward_u
+    print("predict all users' rewards on all items")
+
+    dataset_um = StaticDataset(x_columns, y_columns, num_workers=4)
+    dataset_um.compile_dataset(df_x_complete, pd.DataFrame(np.zeros([len(df_x_complete), 1]), columns=["y"]))
+
+    sample_num = len(dataset_um)
+    batch_size = 10000
+    steps_per_epoch = (sample_num - 1) // batch_size + 1
+
+    test_loader = DataLoader(dataset=dataset_um.get_dataset_eval(), shuffle=False, batch_size=batch_size,
+                             num_workers=dataset_um.num_workers)
+    pred_ans = []
+    with torch.no_grad():
+        for _, (x, y) in tqdm(enumerate(test_loader), total=steps_per_epoch, desc="Predicting data..."):
+            x = x.to(user_model.device).float()
+            y_pred = user_model.forward(x).cpu().data.numpy()  # .squeeze()
+            pred_ans.append(y_pred)
+    y_pred = np.concatenate(pred_ans).astype("float64").reshape([-1])
+
+    # user_ids = np.sort(df_x_complete["user_id"].unique())
+
+    num_user = len(df_x_complete["user_id"].unique())
+    num_item = len(df_x_complete["item_id"].unique())
+
+    if num_user != df_x_complete["user_id"].max() + 1:
+        assert num_item != df_x_complete["item_id"].max() + 1
+        lbe_user = LabelEncoder()
+        lbe_item = LabelEncoder()
+
+        lbe_user.fit(df_x_complete["user_id"])
+        lbe_item.fit(df_x_complete["item_id"])
+
+        predict_mat = csr_matrix(
+            (y_pred, (lbe_user.transform(df_x_complete["user_id"]), lbe_user.transform(df_x_complete["item_id"]))),
+            shape=(num_user, num_item)).toarray()
+    else:
+        assert num_item == df_x_complete["item_id"].max() + 1
+        predict_mat = csr_matrix(
+            (y_pred, (df_x_complete["user_id"], df_x_complete["item_id"])),
+            shape=(num_user, num_item)).toarray()
+
+    # predict_mat = np.zeros((n_user, n_item))
+    # ui = torch.tensor(df_x_complete.to_numpy(), dtype=torch.float, device=user_model.device, requires_grad=False)
+    # for i, user in tqdm(enumerate(user_ids), total=n_user, desc="predict all users' rewards on all items"):
+    #     ui = torch.tensor(df_x_complete[df_x_complete["user_id"] == user].to_numpy(), dtype=torch.float,
+    #                       device=user_model.device, requires_grad=False)
+    #     reward_u = user_model.forward(ui).detach().squeeze().cpu().numpy()
+    #     predict_mat[i] = reward_u
+
 
     minn = predict_mat.min()
     maxx = predict_mat.max()
-
     normed_mat = (predict_mat - minn) / (maxx - minn)
 
     return normed_mat
@@ -236,7 +276,8 @@ def load_dataset_val(args, user_features, item_features, reward_features, entity
     else:
         df_y = df_val[reward_features]
 
-    x_columns, y_columns, ab_columns = get_xy_columns(args, df_val, df_user_val, df_item_val, user_features, item_features,
+    x_columns, y_columns, ab_columns = get_xy_columns(args, df_val, df_user_val, df_item_val, user_features,
+                                                      item_features,
                                                       entity_dim, feature_dim)
 
     dataset_val = StaticDataset(x_columns, y_columns, num_workers=4)
@@ -250,7 +291,7 @@ def load_dataset_val(args, user_features, item_features, reward_features, entity
     assert dataset_val.x_columns[len(user_features)].name == "item_id"
     dataset_val.set_item_col(len(user_features))
 
-    if not any(df_y.to_numpy() % 1): # 整数
+    if not any(df_y.to_numpy() % 1):  # 整数
         # make sure the label is binary
 
         df_binary = pd.concat([df_val[["user_id", "item_id"]], df_y], axis=1)
@@ -367,7 +408,8 @@ def setup_world_model(args, x_columns, y_columns, ab_columns, task, task_logit_d
 
 
 # %% 6. Save model
-def save_world_model(args, user_model, dataset_train, dataset_val, x_columns, df_user, df_item, df_user_val, df_item_val,
+def save_world_model(args, user_model, dataset_val, x_columns, y_columns, df_user, df_item, df_user_val,
+                     df_item_val,
                      user_features, item_features, model_parameters, MODEL_SAVE_PATH, logger_path):
     MODEL_MAT_PATH = os.path.join(MODEL_SAVE_PATH, "mats", f"[{args.message}]_mat.pickle")
     MODEL_PARAMS_PATH = os.path.join(MODEL_SAVE_PATH, "params", f"[{args.message}]_params.pickle")
@@ -379,7 +421,8 @@ def save_world_model(args, user_model, dataset_train, dataset_val, x_columns, df
     ITEM_VAL_EMBEDDING_PATH = os.path.join(MODEL_SAVE_PATH, "embeddings", f"[{args.message}]_emb_item_val.pt")
 
     # (1) Compute and save Mat
-    normed_mat = compute_normed_reward_for_all(user_model, dataset_val, df_user, df_item, user_features, item_features)
+    normed_mat = compute_normed_reward_for_all(user_model, dataset_val, df_user, df_item, user_features, item_features,
+                                               x_columns, y_columns)
     with open(MODEL_MAT_PATH, "wb") as f:
         pickle.dump(normed_mat, f)
 

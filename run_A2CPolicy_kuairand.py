@@ -54,7 +54,8 @@ def get_args():
     parser.add_argument("--user_model_name", type=str, default="DeepFM")
     parser.add_argument("--model_name", type=str, default="A2C_with_emb")
     parser.add_argument('--seed', default=2022, type=int)
-    parser.add_argument('--cuda', default=1, type=int)
+    parser.add_argument('--cuda', default=0, type=int)
+    parser.add_argument("--yfeat", type=str, default='is_click')
 
     parser.add_argument('--is_ab', dest='is_ab', action='store_true')
     parser.add_argument('--no_ab', dest='is_ab', action='store_false')
@@ -181,14 +182,14 @@ def prepare_um(args=get_args()):
     # env = gym.make('VirtualTB-v0')
 
     # %% 3. prepare envs
-    mat, df_item, mat_distance = KuaiRandEnv.load_mat()
-    kwargs_um = {"mat": mat,
+    mat, df_item, mat_distance = KuaiRandEnv.load_mat(args.yfeat)
+    kwargs_um = {"yname": args.yfeat,
+                 "mat": mat,
                  "df_item": df_item,
                  "mat_distance": mat_distance,
                  "num_leave_compute": args.num_leave_compute,
                  "leave_threshold": args.leave_threshold,
                  "max_turn": args.max_turn}
-
     env = KuaiRandEnv(**kwargs_um)
 
     with open(MODEL_MAT_PATH, "rb") as file:
