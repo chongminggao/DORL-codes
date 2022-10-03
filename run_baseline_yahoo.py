@@ -10,7 +10,7 @@ sys.path.extend(["./src", "./src/DeepCTR-Torch"])
 
 from core.evaluation.evaluator import test_static_model_in_RL_env
 from environments.YahooR3.env.Yahoo import YahooEnv
-from run_worldModel import prepare_dataset, setup_world_model, save_world_model, prepare_dir_log, get_args_all
+from run_baseline import prepare_dataset, setup_world_model, save_world_model, prepare_dir_log, get_args_all
 
 from logzero import logger
 from util.utils import LoggerCallback_Update
