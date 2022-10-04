@@ -6,8 +6,9 @@ import os
 
 import sys
 
-sys.path.extend(["./src", "./src/DeepCTR-Torch"])
+import traceback
 
+sys.path.extend(["./src", "./src/DeepCTR-Torch"])
 from core.evaluation.evaluator import test_static_model_in_RL_env
 from environments.YahooR3.env.Yahoo import YahooEnv
 from run_worldModel import prepare_dataset, setup_world_model, save_world_model, prepare_dir_log, get_args_all
@@ -91,4 +92,9 @@ if __name__ == '__main__':
     args_all = get_args_all()
     args = get_args()
     args_all.__dict__.update(args.__dict__)
-    main(args_all)
+    try:
+        main(args_all)
+    except Exception as e:
+        var = traceback.format_exc()
+        print(var)
+        logger.error(var)

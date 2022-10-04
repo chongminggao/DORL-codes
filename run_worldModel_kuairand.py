@@ -5,6 +5,7 @@ import functools
 import os
 
 import sys
+import traceback
 
 sys.path.extend(["./src", "./src/DeepCTR-Torch"])
 
@@ -101,4 +102,9 @@ if __name__ == '__main__':
     args_all = get_args_all()
     args = get_args()
     args_all.__dict__.update(args.__dict__)
-    main(args_all)
+    try:
+        main(args_all)
+    except Exception as e:
+        var = traceback.format_exc()
+        print(var)
+        logger.error(var)

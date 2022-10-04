@@ -21,6 +21,7 @@ visualization/results
 results_for_paper/*.pdf
 *.pdf
 *.pth
+*.png
 
 *.egg*
 events.*
