@@ -123,9 +123,6 @@ def get_distance_mat(list_feat, sub_index_list, DATAPATH):
 
     return None
 
-
-
-
 def compute_exposure_effect_kuaiRec(df_x, timestamp, list_feat, tau, MODEL_SAVE_PATH, DATAPATH):
     exposure_path = os.path.join(MODEL_SAVE_PATH, "..", "saved_exposure", "exposure_pos_{:.1f}.csv".format(tau))
 

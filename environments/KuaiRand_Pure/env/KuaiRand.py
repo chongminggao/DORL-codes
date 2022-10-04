@@ -30,22 +30,19 @@ DATAPATH = os.path.join(ROOTPATH, "data")
 class KuaiRandEnv(gym.Env):
     metadata = {'render.modes': ['human']}
 
-    def __init__(self, mat=None, lbe_user=None, lbe_video=None, list_feat=None, df_video_env=None, df_dist_small=None,
+    def __init__(self, yname, mat=None, df_item=None, mat_distance=None,
                  num_leave_compute=5, leave_threshold=1, max_turn=100):
 
+        self.yname = yname
         self.max_turn = max_turn
 
         if mat is not None:
             self.mat = mat
-            self.lbe_user = lbe_user
-            self.lbe_video = lbe_video
-            self.list_feat = list_feat
-            self.df_video_env = df_video_env
-            self.df_dist_small = df_dist_small
+            self.df_item = df_item
+            self.mat_distance = mat_distance
         else:
-            self.mat, self.lbe_user, self.lbe_video, self.list_feat, self.df_video_env, self.df_dist_small = self.load_mat()
-
-        self.list_feat_small = list(map(lambda x: self.list_feat[x], self.lbe_video.classes_))
+            self.mat, self.df_item, self.mat_distance = self.load_mat(yname)
+        # self.list_feat_small = list(map(lambda x: self.list_feat[x], self.lbe_video.classes_))
 
         self.observation_space = spaces.Box(low=0, high=len(self.mat) - 1, shape=(1,), dtype=np.int32)
         self.action_space = spaces.Box(low=0, high=self.mat.shape[1] - 1, shape=(1,), dtype=np.int32)
@@ -56,16 +53,50 @@ class KuaiRandEnv(gym.Env):
         self.reset()
 
     @staticmethod
-    def load_mat(filepath_GT):
-        df_mat = pd.read_csv(filepath_GT, header=0, nrows=1000000)
+    def get_saved_mat(yname, mat):
+        distance_mat_path = os.path.join(DATAPATH, f"distance_mat_{yname}.csv")
+        if os.path.isfile(distance_mat_path):
+            print("loading small distance matrix...")
+            mat_distance = pickle.load(open(distance_mat_path, "rb"))
+            print("loading completed.")
+        else:
+            num_item = mat.shape[1]
+            distance = np.zeros([num_item, num_item])
+            print("computing distance matrix for the first time...")
+            # mat_distance = get_distance_mat1(mat, distance)
+            mat_distance = get_distance_mat(mat)
+            print(f"saving the distance matrix to {distance_mat_path}...")
+            pickle.dump(mat_distance, open(distance_mat_path, 'wb'))
+        return mat_distance
 
-        # mat_distance = get_distance_mat(mat)
 
-        num_item = mat.shape[1]
-        distance = np.zeros([num_item, num_item])
-        mat_distance = get_distance_mat1(mat, distance)
+    @staticmethod
+    def load_mat(yname, read_user=1000):
+        filename = ""
+        if yname == "is_click":
+            filename = "kuairand_is_click.csv"
+        elif yname == "is_like":
+            filename = "kuairand_is_like.csv"
+        elif yname == "long_view":
+            filename = "kuairand_long_view.csv"
+        elif yname == "watch_ratio_normed":
+            filename = "kuairand_watchratio.csv"
 
-        df_item = CoatEnv.load_item_feat()
+        filepath_GT = os.path.join(ROOTPATH, "MF_results_GT", filename)
+        df_mat = pd.read_csv(filepath_GT, header=0)
+
+        df_mat_part = df_mat.loc[df_mat["user_id"]<read_user]
+
+        num_user = df_mat_part['user_id'].nunique()
+        num_item = df_mat_part['item_id'].nunique()
+
+        mat = csr_matrix((df_mat_part["value"], (df_mat_part['user_id'], df_mat_part['item_id'])),
+                         shape=(num_user, num_item)).toarray()
+
+        mat_distance = KuaiRandEnv.get_saved_mat(yname, mat)
+        # mat_distance = get_distance_mat1(mat, distance)
+
+        df_item = KuaiRandEnv.load_item_feat()
 
         # dist_cat = np.zeros_like(mat_distance)
         # for i in range(len(dist_cat)):
@@ -204,57 +235,6 @@ class KuaiRandEnv(gym.Env):
         video_mean_duration.index.name = "item_id"
         return video_mean_duration
 
-    @staticmethod
-    def get_similarity_mat(list_feat):
-        similarity_mat_path = os.path.join(DATAPATH, "similarity_mat_video.csv")
-        if os.path.isfile(similarity_mat_path):
-            # with open(similarity_mat_path, 'rb') as f:
-            #     similarity_mat = np.load(f, allow_pickle=True, fix_imports=True)
-            print("loading similarity matrix...")
-            df_sim = pd.read_csv(similarity_mat_path, index_col=0)
-            df_sim.columns = df_sim.columns.astype(int)
-            print("loading completed.")
-            similarity_mat = df_sim.to_numpy()
-        else:
-            series_feat_list = pd.Series(list_feat)
-            df_feat_list = series_feat_list.to_frame("categories")
-            df_feat_list.index.name = "item_id"
-
-            similarity_mat = np.zeros([len(df_feat_list), len(df_feat_list)])
-            print("Compute the similarity matrix (for the first time and will be saved for later usage)")
-            for i in tqdm(range(len(df_feat_list)), desc="Computing..."):
-                for j in range(i):
-                    similarity_mat[i, j] = similarity_mat[j, i]
-                for j in range(i, len(df_feat_list)):
-                    similarity_mat[i, j] = len(set(series_feat_list[i]).intersection(set(series_feat_list[j]))) / len(
-                        set(series_feat_list[i]).union(set(series_feat_list[j])))
-
-            df_sim = pd.DataFrame(similarity_mat)
-            df_sim.to_csv(similarity_mat_path)
-
-        return similarity_mat
-
-    @staticmethod
-    def get_distance_mat(list_feat, sub_index_list):
-        if sub_index_list is not None:
-            distance_mat_small_path = os.path.join(DATAPATH, "distance_mat_video_small.csv")
-            if os.path.isfile(distance_mat_small_path):
-                print("loading small distance matrix...")
-                df_dist_small = pd.read_csv(distance_mat_small_path, index_col=0)
-                df_dist_small.columns = df_dist_small.columns.astype(int)
-                print("loading completed.")
-            else:
-                similarity_mat = KuaiEnv.get_similarity_mat(list_feat)
-                df_sim = pd.DataFrame(similarity_mat)
-                df_sim_small = df_sim.loc[sub_index_list, sub_index_list]
-
-                df_dist_small = 1.0 / df_sim_small
-
-                df_dist_small.to_csv(distance_mat_small_path)
-
-            return df_dist_small
-
-        return None
 
     @property
     def state(self):
@@ -313,21 +293,47 @@ class KuaiRandEnv(gym.Env):
         if t == 0:
             return False
         window_actions = self.sequence_action[t - self.num_leave_compute:t]
-        hist_categories_each = list(map(lambda x: self.list_feat_small[x], window_actions))
 
+        dist_list = np.array([self.mat_distance[action, x] for x in window_actions])
+
+        if any(dist_list < self.leave_threshold):
+            return True
+
+        # hist_categories_each = list(map(lambda x: self.list_feat_small[x], window_actions))
         # hist_set = set.union(*list(map(lambda x: self.list_feat[x], self.sequence_action[t - self.num_leave_compute:t-1])))
+        # hist_categories = list(itertools.chain(*hist_categories_each))
+        # hist_dict = Counter(hist_categories)
+        # category_a = self.list_feat_small[action]
 
-        hist_categories = list(itertools.chain(*hist_categories_each))
-        hist_dict = Counter(hist_categories)
-        category_a = self.list_feat_small[action]
-        for c in category_a:
-            if hist_dict[c] > self.leave_threshold:
-                return True
+        # for c in category_a:
+        #     if hist_dict[c] > self.leave_threshold:
+        #         return True
 
         # if action in window_actions:
         #     return True
 
         return False
+
+    # def _determine_whether_to_leave(self, t, action):
+    #     # self.list_feat[action]
+    #     if t == 0:
+    #         return False
+    #     window_actions = self.sequence_action[t - self.num_leave_compute:t]
+    #     hist_categories_each = list(map(lambda x: self.list_feat_small[x], window_actions))
+    #
+    #     # hist_set = set.union(*list(map(lambda x: self.list_feat[x], self.sequence_action[t - self.num_leave_compute:t-1])))
+    #
+    #     hist_categories = list(itertools.chain(*hist_categories_each))
+    #     hist_dict = Counter(hist_categories)
+    #     category_a = self.list_feat_small[action]
+    #     for c in category_a:
+    #         if hist_dict[c] > self.leave_threshold:
+    #             return True
+    #
+    #     # if action in window_actions:
+    #     #     return True
+    #
+    #     return False
 
     def _reset_history(self):
         self.history_action = {}
@@ -342,92 +348,33 @@ class KuaiRandEnv(gym.Env):
         assert self.max_history == t
         self.max_history += 1
 
+@njit
+def get_distance_mat1(mat, distance):
+    matt = np.transpose(mat)
+    for item_i in range(len(distance)):
+        vec_i = matt[item_i]
+        for item_j in range(len(distance)):
+            vec_j = matt[item_j]
+            dist = ((vec_i-vec_j)**2).sum()**0.5
+            distance[item_i, item_j] = dist
+    return distance
 
-# @njit
-# def find_negative(user_ids, item_ids, mat_train, df_negative):
-#     for i in range(len(user_ids)):
-#         user, item = user_ids[i], item_ids[i]
-#         value = mat_train[user, item]
-#
-#         neg = item + 1
-#         # neg_v = mat_train[user, neg]
-#
-#         while neg < mat_train.shape[1]:
-#             neg_v = mat_train[user, neg]
-#             if neg_v >= value:
-#                 neg += 1
-#             else:
-#                 df_negative[i, 0] = user
-#                 df_negative[i, 1] = neg
-#                 break
-#         else:
-#             neg = item - 1
-#             while neg >= 0:
-#                 neg_v = mat_train[user, neg]
-#                 if neg_v >= value:
-#                     neg -= 1
-#                 else:
-#                     df_negative[i, 0] = user
-#                     df_negative[i, 1] = neg
-#                     break
+def get_distance_mat(mat):
+    num_item = mat.shape[1]
+    distance = np.zeros([num_item, num_item])
+    for item_i in tqdm(range(len(distance))):
+        vec_i = mat[:, item_i]
+        a = vec_i - mat.T
+        b = np.linalg.norm(a, axis=1)
+        distance[item_i] = b
+        # for item_j in range(len(distance)):
+        #     vec_j = mat[:, item_j]
+        #     dist = np.linalg.norm(vec_i-vec_j)
+        #     distance[item_i, item_j] = dist
+    return distance
 
-# def negative_sampling(df_train, df_feat, df_user, y_name):
-#     print("negative sampling...")
-#     mat_train = csr_matrix((df_train[y_name], (df_train["user_id"], df_train["item_id"])),
-#                            shape=(df_train['user_id'].max() + 1, df_train['item_id'].max() + 1)).toarray()
-#     df_negative = np.zeros([len(df_train), 2])
-#
-#     user_ids = df_train["user_id"].to_numpy()
-#     item_ids = df_train["item_id"].to_numpy()
-#
-#     if y_name == "watch_ratio_normed":
-#         find_negative(user_ids, item_ids, mat_train, df_negative, is_rand=True)
-#     else:
-#         df_train[y_name]
-#
-#
-#
-#     df_negative = pd.DataFrame(df_negative, columns=["user_id", "item_id"], dtype=int)
-#
-#     df_negative = df_negative.join(df_feat, on=['item_id'], how="left")
-#     df_negative = df_negative.join(df_user, on=['user_id'], how="left")
-#     df_duration = df_train[["item_id", "duration_normed"]].groupby("item_id").agg(np.mean)
-#     df_negative = df_negative.join(df_duration, on=['item_id'], how="left")
-#     df_negative.loc[df_negative["duration_normed"].isna(), "duration_normed"] = 0
-#     return df_train, df_negative
+    # import seaborn as sns
+    # sns.histplot(c)
+    # from matplotlib import pyplot as plt
+    # plt.show()
 
-
-def construct_complete_val_x(dataset_val, user_features, item_features):
-    df_item_env = dataset_val.df_item_val
-    df_user = KuaiRandEnv.load_user_feat()
-
-    user_ids = np.arange(dataset_val.x_columns[dataset_val.user_col].vocabulary_size)
-    # user_ids = np.arange(1000)
-    item_ids = np.arange(dataset_val.x_columns[dataset_val.item_col].vocabulary_size)
-    df_user_complete = pd.DataFrame(
-        df_user.loc[user_ids].reset_index()[user_features].to_numpy().repeat(len(item_ids), axis=0),
-        columns=df_user.reset_index()[user_features].columns)
-    df_item_complete = pd.DataFrame(np.tile(df_item_env.reset_index()[item_features], (len(user_ids), 1)),
-                                    columns=df_item_env.reset_index()[item_features].columns)
-
-    # np.tile(np.concatenate([np.expand_dims(df_item_env.index.to_numpy(), df_item_env.to_numpy()], axis=1), (2, 1))
-
-    df_x_complete = pd.concat([df_user_complete, df_item_complete], axis=1)
-    return df_x_complete
-
-def compute_normed_reward_for_all(user_model, dataset_val, user_features, item_features):
-    df_x_complete = construct_complete_val_x(dataset_val, user_features, item_features)
-    n_user, n_item = df_x_complete[["user_id", "item_id"]].nunique()
-    predict_mat = np.zeros((n_user, n_item))
-
-    for i, user in tqdm(enumerate(range(n_user)), total=n_user, desc="predict all users' rewards on all items"):
-        ui = torch.tensor(df_x_complete[df_x_complete["user_id"] == user].to_numpy(),dtype=torch.float, device=user_model.device, requires_grad=False)
-        reward_u = user_model.forward(ui).detach().squeeze().cpu().numpy()
-        predict_mat[i] = reward_u
-
-    minn = predict_mat.min()
-    maxx = predict_mat.max()
-
-    normed_mat = (predict_mat - minn) / (maxx - minn)
-
-    return normed_mat

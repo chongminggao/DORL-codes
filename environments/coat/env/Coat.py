@@ -270,7 +270,7 @@ def get_distance_mat1(mat, distance):
 def get_distance_mat(mat):
     num_item = mat.shape[1]
     distance = np.zeros([num_item, num_item])
-    for item_i in range(len(distance)):
+    for item_i in tqdm(range(len(distance))):
         vec_i = mat[:, item_i]
         for item_j in range(len(distance)):
             vec_j = mat[:, item_j]

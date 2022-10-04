@@ -11,9 +11,22 @@
 import argparse
 import os
 import pickle
+import sys
+
 import numpy as np
 import pandas as pd
+import seaborn as sns
 
+# import matplotlib
+# matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+plt.rcParams['pdf.fonttype'] = 42
+plt.rcParams['ps.fonttype'] = 42
+
+
+CODEPATH = os.path.dirname(__file__)
+ROOTPATH = os.path.dirname(CODEPATH)
+sys.path.extend([ROOTPATH])
 from environments.coat.env.Coat import CoatEnv
 
 CODEPATH = os.path.dirname(__file__)
@@ -25,7 +38,7 @@ DATAPATH = os.path.join(ROOTPATH, ".","environments","coat")
 parser = argparse.ArgumentParser()
 parser.add_argument("--env", type=str, default="CoatEnv-v0")
 parser.add_argument("--user_model_name", type=str, default="DeepFM")
-parser.add_argument("--read_message", type=str, default="pointneg")
+parser.add_argument("--read_message", type=str, default="point")
 
 args = parser.parse_known_args()[0]
 
@@ -39,39 +52,42 @@ filename = "train.ascii"
 filepath = os.path.join(DATAPATH, filename)
 mat_train = pd.read_csv(filepath, sep="\s+", header=None)
 isexposure = mat_train > 0
-df_popularity = isexposure.sum()
+df_popularity = isexposure.sum(0)
 
-df_train, _, _ = CoatEnv.get_df_coat("train.ascii")
+df_train, _, _, _ = CoatEnv.get_df_coat("train.ascii")
 df_frequency = df_train.groupby(["user_id", "item_id"])["rating"].agg(len)
 df_train["y_pred"] = predicted_mat[df_train["user_id"],df_train["item_id"]] * 5
 df_train["item_pop"] = df_popularity.loc[df_train["item_id"]].reset_index(drop=True)
 df_train["bonus"] = np.abs(df_train["y_pred"] - df_train["rating"])
 
 
-import seaborn as sns
-import matplotlib.pyplot as plt
-# sns.countplot(x=df_popularity)
-# plt.show()
-
 sns.lineplot(x=df_train["item_pop"], y=df_train["bonus"])
-plt.show()
+plt.savefig(os.path.join(CODEPATH, f'train_{args.env}.pdf'), bbox_inches='tight', pad_inches=0)
+# plt.show()
+plt.close()
 
 df_train["pop_group"] = df_train["item_pop"]//20
 sns.boxplot(x=df_train["pop_group"], y=df_train["bonus"])
-plt.show()
+plt.savefig(os.path.join(CODEPATH, f'box_train_{args.env}.pdf'), bbox_inches='tight', pad_inches=0)
+# plt.show()
+plt.close()
 
-df_test, _, _ = CoatEnv.get_df_coat("test.ascii")
+df_test, _, _, _ = CoatEnv.get_df_coat("test.ascii")
 df_frequency = df_test.groupby(["user_id", "item_id"])["rating"].agg(len)
 df_test["y_pred"] = predicted_mat[df_test["user_id"], df_test["item_id"]] * 5
 df_test["item_pop"] = df_popularity.loc[df_test["item_id"]].reset_index(drop=True)
 df_test["bonus"] = np.abs(df_test["y_pred"] - df_test["rating"])
 
 sns.lineplot(x=df_test["item_pop"], y=df_test["bonus"])
-plt.show()
+plt.savefig(os.path.join(CODEPATH, f'test_{args.env}.pdf'), bbox_inches='tight', pad_inches=0)
+# plt.show()
+plt.close()
 
 df_test["pop_group"] = df_test["item_pop"] // 20
 sns.boxplot(x=df_test["pop_group"], y=df_test["bonus"])
-plt.show()
+plt.savefig(os.path.join(CODEPATH, f'box_test_{args.env}.pdf'), bbox_inches='tight', pad_inches=0)
+# plt.show()
+plt.close()
 a = 1
 
 

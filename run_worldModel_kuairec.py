@@ -5,38 +5,21 @@
 
 import argparse
 import functools
-import datetime
 
-import json
 import os
-import pickle
-import random
-import time
-
-import torch
-from torch import nn
 
 import sys
+import traceback
 
 from run_worldModel import prepare_dir_log, prepare_dataset, setup_world_model, save_world_model, get_args_all
 
 sys.path.extend(["./src","./src/DeepCTR-Torch"])
 
-from core.inputs import SparseFeatP, input_from_feature_columns
-from core.user_model_pairwise import UserModel_Pairwise
-from core.util import compute_exposure_effect_kuaiRec
-from deepctr_torch.inputs import DenseFeat, build_input_features, combined_dnn_input
-import pandas as pd
-import numpy as np
 
-from core.user_model import StaticDataset
-
-import logzero
 from logzero import logger
 
-from environments.KuaiRec.env.KuaiEnv import KuaiEnv, negative_sampling
+from environments.KuaiRec.env.KuaiEnv import KuaiEnv
 from core.evaluation.evaluator import test_static_model_in_RL_env
-# from util.upload import my_upload
 from util.utils import create_dir, LoggerCallback_Update
 
 CODEPATH = os.path.dirname(__file__)
@@ -57,6 +40,9 @@ def get_args():
     parser.add_argument('--is_userinfo', dest='is_userinfo', action='store_true')
     parser.add_argument('--no_userinfo', dest='is_userinfo', action='store_false')
     parser.set_defaults(is_userinfo=False)
+
+    parser.add_argument('--leave_threshold', default=0, type=int) # todo
+    parser.add_argument('--num_leave_compute', default=1, type=int) # todo
 
     args = parser.parse_known_args()[0]
     return args
@@ -106,7 +92,7 @@ def main(args):
                         "device": "cpu",
                         "ab_columns": ab_columns}
 
-    save_world_model(args, user_model, dataset_train, dataset_val, x_columns, df_user, df_item, df_user_val, df_item_val,
+    save_world_model(args, user_model, dataset_val, x_columns, y_columns, df_user, df_item, df_user_val, df_item_val,
                      user_features, item_features, model_parameters, MODEL_SAVE_PATH, logger_path)
 
 
@@ -114,4 +100,9 @@ if __name__ == '__main__':
     args_all = get_args_all()
     args = get_args()
     args_all.__dict__.update(args.__dict__)
-    main(args_all)
+    try:
+        main(args_all)
+    except Exception as e:
+        var = traceback.format_exc()
+        print(var)
+        logger.error(var)
