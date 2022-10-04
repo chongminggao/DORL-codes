@@ -15,6 +15,8 @@ import torch
 from torch import nn
 from tqdm import tqdm
 
+from core.user_model_dice import UserModel_DICE
+
 sys.path.extend(["./src", "./src/DeepCTR-Torch"])
 from core.evaluation.metrics import get_ranking_results
 from core.inputs import SparseFeatP, input_from_feature_columns
@@ -75,20 +77,23 @@ def get_args_all():
     parser.set_defaults(is_ab=False)
     parser.add_argument("--message", type=str, default="point")
 
-    # FIXME: add IPS, PD arguments
+    # TODO: add IPS, PD arguments
     parser.add_argument('--use_IPS', dest='use_IPS', action='store_true')
     parser.add_argument('--no_IPS',dest='use_IPS',action='store_false')
     parser.set_defaults(use_IPS=False)
     parser.add_argument('--use_PD', dest='use_PD', action='store_true')
     parser.add_argument('--no_PD', dest='use_PD', action='store_false')
-    parser.set_defaults(use_PD=True)
-    parser.add_argument('--PD_gamma', default=0.1, type=float)
+    parser.set_defaults(use_PD=False)
+    parser.add_argument('--PD_gamma', default=0.01, type=float)
+    parser.add_argument('--use_DICE', dest='use_DICE', action='store_true')
+    parser.add_argument('--no_DICE', dest='use_DICE', action='store_false')
+    parser.set_defaults(use_DICE=True)
 
     args = parser.parse_known_args()[0]
     return args
 
 
-def get_xy_columns(args, df_data, df_user, df_item, user_features, item_features, entity_dim, feature_dim):
+def get_xy_columns(args, df_data, df_user, df_item, user_features, item_features, entity_dim, feature_dim, is_val=False):
     if args.env == "KuaiRand-v0" or args.env == "KuaiEnv-v0":
         feat = [x for x in df_item.columns if x[:4] == "feat"]
         x_columns = [SparseFeatP("user_id", df_data['user_id'].max() + 1, embedding_dim=entity_dim)] + \
@@ -108,6 +113,12 @@ def get_xy_columns(args, df_data, df_user, df_item, user_features, item_features
                     [SparseFeatP(col, df_user[col].max() + 1, embedding_dim=feature_dim) for col in user_features[1:]] + \
                     [SparseFeatP("item_id", df_data['item_id'].max() + 1, embedding_dim=entity_dim)] + \
                     [SparseFeatP(col, df_item[col].max() + 1, embedding_dim=feature_dim) for col in item_features[1:]]
+
+    # TODO: add columns for DICE(user_id_int, item_id_int)
+    if args.use_DICE and not is_val:
+        x_columns += [SparseFeatP("user_id_int", df_data['user_id'].max() + 1, embedding_dim=entity_dim),
+                    SparseFeatP("item_id_int", df_data['item_id'].max() + 1, embedding_dim=entity_dim)]
+
 
     ab_columns = [SparseFeatP("alpha_u", df_data['user_id'].max() + 1, embedding_dim=1)] + \
                  [SparseFeatP("beta_i", df_data['item_id'].max() + 1, embedding_dim=1)]
@@ -154,7 +165,12 @@ def load_dataset_train(args, user_features, item_features, reward_features, tau,
     df_pos, df_neg = negative_sampling(df_train, df_item, df_user, reward_features[0],
                                               is_rand=True, neg_in_train=neg_in_train, neg_K=args.neg_K)
 
+    # TODO: copy user_id,item_id for DICE
+
     df_x = df_pos[user_features + item_features]
+    if args.use_DICE:
+        df_x['user_id_int'] = df_x['user_id']
+        df_x['item_id_int'] = df_x['item_id']
     if reward_features[0] == "hybrid":  # for kuairand
         a = df_pos["long_view"] + df_pos["is_like"] + df_pos["is_click"]
         df_y = a > 0
@@ -164,6 +180,9 @@ def load_dataset_train(args, user_features, item_features, reward_features, tau,
         df_y = df_pos[reward_features]
 
     df_x_neg = df_neg[user_features + item_features]
+    if args.use_DICE:
+        df_x_neg['user_id_int'] = df_x_neg['user_id']
+        df_x_neg['item_id_int'] = df_x_neg['item_id']
     df_x_neg = df_x_neg.rename(columns={k: k + "_neg" for k in df_x_neg.columns.to_numpy()})
 
     df_x_all = pd.concat([df_x, df_x_neg], axis=1)
@@ -174,26 +193,40 @@ def load_dataset_train(args, user_features, item_features, reward_features, tau,
         timestamp = df_pos['timestamp']
         exposure_pos = compute_exposure_effect_kuaiRec(df_x, timestamp, list_feat, tau, MODEL_SAVE_PATH, DATAPATH)
 
-    # FIXME: add PD/IPS scores & "get" function
+    # TODO: add PD/IPS/DICE scores & "get" function
 
     score = exposure_pos
 
     if args.use_PD:
         if 'timestamp' in df_train.columns:
             timestamp = df_train['timestamp']
+            all_time = df_pos['timestamp']
         else:
             timestamp = None
-        score = get_PD_score(df_train, df_x_all, timestamp, args.PD_gamma)
+            all_time = None
+        score = get_PD_score(df_train, df_x_all, timestamp, all_time, args.PD_gamma)
 
     if args.use_IPS:
         score = get_IPS_score(df_train, df_x_all)
+
+    if args.use_DICE:
+        score = get_DICE_score(df_train,df_x_all)
 
     dataset = StaticDataset(x_columns, y_columns, num_workers=4)
     dataset.compile_dataset(df_x_all, df_y, score)
 
     return dataset, df_user, df_item, x_columns, y_columns, ab_columns
 
-def get_PD_score(df_train,df_x_all,timestamp,gamma,num_bin=5) -> np.ndarray:
+def get_DICE_score(df_train,df_x_all) -> np.ndarray:
+    counter = collections.Counter(df_train['item_id'])
+    popularity_pos = df_x_all['item_id'].map(lambda x: counter[x])
+    popularity_neg = df_x_all['item_id_neg'].map(lambda x: counter[x])
+    # compute whether pos item is more popular than neg item
+    mask = popularity_pos.to_numpy() > popularity_neg.to_numpy()
+    DICE_score = np.where(mask,1,-1)
+    return DICE_score
+
+def get_PD_score(df_train,df_x_all,timestamp,all_time,gamma,num_bin=5) -> np.ndarray:
     if timestamp is None:
         num_bin = 1
         all_counter = collections.Counter(df_train['item_id'])
@@ -222,7 +255,7 @@ def get_PD_score(df_train,df_x_all,timestamp,gamma,num_bin=5) -> np.ndarray:
             dict_total[i] = sum(dict_counter[i].values())
         # get popularity for every interaction
         popularity = np.zeros([len(df_x_all),1])
-        all_time = df_x_all['timestamp']
+        assert len(df_x_all) == len(all_time)
         for i in range(num_bin):
             if i < num_bin - 1:
                 index = (dict_start[i][0] <= all_time) & (all_time < dict_start[i][1])
@@ -312,7 +345,7 @@ def load_dataset_val(args, user_features, item_features, reward_features, entity
         df_y = df_val[reward_features]
 
     x_columns, y_columns, ab_columns = get_xy_columns(args, df_val, df_user_val, df_item_val, user_features, item_features,
-                                                      entity_dim, feature_dim)
+                                                      entity_dim, feature_dim, is_val=True)
 
     dataset_val = StaticDataset(x_columns, y_columns, num_workers=4)
     dataset_val.compile_dataset(df_x, df_y)
@@ -403,11 +436,17 @@ def setup_world_model(args, x_columns, y_columns, ab_columns, task, task_logit_d
     np.random.seed(args.seed)
     random.seed(args.seed)
 
-    user_model = UserModel_Pairwise(x_columns, y_columns, task, task_logit_dim,
+    # TODO: add DICE model
+    if args.use_DICE:
+        user_model = UserModel_DICE(x_columns, y_columns, task, task_logit_dim,
+                                    dnn_hidden_units=args.dnn, seed=args.seed, l2_reg_dnn=args.l2_reg_dnn,
+                                    device=device, ab_columns=ab_columns, init_std=0.001)
+    else:
+        user_model = UserModel_Pairwise(x_columns, y_columns, task, task_logit_dim,
                                     dnn_hidden_units=args.dnn, seed=args.seed, l2_reg_dnn=args.l2_reg_dnn,
                                     device=device, ab_columns=ab_columns, init_std=0.001)
 
-    # FIXME add PD/IPS loss
+    # TODO add PD/IPS/DICE loss
     if args.use_PD:
         if args.loss not in ['pair', 'pointpair', 'pairpoint', 'pp']:
             raise RuntimeError(f"{args.loss} is not supported using PD!")
@@ -424,6 +463,13 @@ def setup_world_model(args, x_columns, y_columns, ab_columns, task, task_logit_d
             loss_fun = loss_pairpoint_IPS
         else:
             raise RuntimeError(f"{args.loss} is not supported using IPS!")
+    elif args.use_DICE:
+        if args.loss not in ['pair', 'pointpair', 'pairpoint', 'pp']:
+            raise RuntimeError(f"{args.loss} is not supported using DICE!")
+        if args.loss == 'pair':
+            loss_fun = loss_pairwise_DICE
+        else:
+            loss_fun = loss_pairpoint_DICE
     else:
         if args.loss == "pair":
             loss_fun = loss_pairwise
@@ -482,10 +528,15 @@ def save_world_model(args, user_model, dataset_train, dataset_val, x_columns, df
         pickle.dump(model_parameters, output_file)
 
     # (3) Save Model
+    # TODO: save DICE model
     #  To cpu
     model = user_model.cpu()
     model.linear_model.device = "cpu"
-    model.linear.device = "cpu"
+    if args.use_DICE:
+        model.linear_main.device= 'cpu'
+        model.linear_ui.device = 'cpu'
+    else:
+        model.linear.device = "cpu"
     # for linear_model in user_model.linear_model_task:
     #     linear_model.device = "cpu"
 
@@ -493,6 +544,9 @@ def save_world_model(args, user_model, dataset_train, dataset_val, x_columns, df
     torch.save(model.state_dict(), MODEL_PATH)
 
     # (4) Save Embedding
+    if args.use_DICE:
+        # do not save.....
+        exit(0)
     torch.save(model.embedding_dict.state_dict(), MODEL_EMBEDDING_PATH)
 
     def save_embedding(df_save, columns, SAVEPATH):
@@ -578,7 +632,7 @@ def loss_pairwise_pointwise(y, y_deepfm_pos, y_deepfm_neg, score, alpha_u=None, 
     loss = loss_y + args.bpr_weight * bpr_click + loss_ab
     return loss
 
-# FIXME: add PD/IPS loss function
+# TODO: add PD/IPS loss function
 
 
 def loss_pairwise_PD(y, y_deepfm_pos, y_deepfm_neg, score, alpha_u=None, beta_i=None, args=None):
@@ -620,4 +674,31 @@ def loss_pairpoint_IPS(y, y_deepfm_pos, y_deepfm_neg, score, alpha_u=None, beta_
     loss_y = (((y_deepfm_pos - y)**2)*score).mean()
     loss_bpr = - (sigmoid(y_deepfm_pos - y_deepfm_neg).log() * score).mean()
     loss = loss_y + loss_bpr
+    return loss
+
+def loss_pairwise_DICE(y, y_deepfm_pos, y_deepfm_neg,
+                       y_deepfm_pos_int, y_deepfm_neg_int,
+                       y_deepfm_pos_con, y_deepfm_neg_con, score, args=None):
+    bpr_click = - sigmoid(y_deepfm_pos - y_deepfm_neg).log().mean()
+
+    # score: whether pos is popular than neg
+    mask_con = torch.where(score, torch.ones_like(score), -torch.ones_like(score))
+    mask_int = ~score
+    bpr_con = - (sigmoid(y_deepfm_pos_con - y_deepfm_neg_con).log() * mask_con).mean()
+    bpr_int = - (sigmoid(y_deepfm_pos_int - y_deepfm_neg_int).log() * mask_int).mean()
+    loss = bpr_click + bpr_con + bpr_int
+    return loss
+
+def loss_pairpoint_DICE(y, y_deepfm_pos, y_deepfm_neg,
+                       y_deepfm_pos_int, y_deepfm_neg_int,
+                       y_deepfm_pos_con, y_deepfm_neg_con, score, args=None):
+    loss_y = ((y_deepfm_pos - y) ** 2).mean()
+    bpr_click = - sigmoid(y_deepfm_pos - y_deepfm_neg).log().mean()
+
+    # score: consider popularity, pos > neg => 1, pos < neg => -1
+    mask_con = score
+    mask_int = score < 0
+    bpr_con = - (sigmoid(y_deepfm_pos_con - y_deepfm_neg_con).log() * mask_con).mean()
+    bpr_int = - (sigmoid(y_deepfm_pos_int - y_deepfm_neg_int).log() * mask_int).mean()
+    loss = loss_y + bpr_click + bpr_con + bpr_int
     return loss
