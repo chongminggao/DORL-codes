@@ -66,8 +66,8 @@ def get_args_all():
     parser.add_argument("--entity_dim", type=int, default=8)
     parser.add_argument("--user_model_name", type=str, default="DeepFM")
     parser.add_argument('--dnn', default=(64, 64), type=int, nargs="+")
-    parser.add_argument('--batch_size', default=256, type=int)
-    parser.add_argument('--epoch', default=10, type=int)
+    parser.add_argument('--batch_size', default=4096, type=int)
+    parser.add_argument('--epoch', default=20, type=int)
     parser.add_argument('--cuda', default=0, type=int)
 
     # exposure parameters:
@@ -133,16 +133,8 @@ def load_dataset_train(args, user_features, item_features, reward_features, tau,
     x_columns, y_columns, ab_columns = get_xy_columns(args, df_train, df_user, df_item, user_features, item_features,
                                                       entity_dim, feature_dim)
 
-    # if args.env == "CoatEnv-v0":
-    #     from environments.coat.env.Coat import negative_sampling
-    # elif args.env == "KuaiRand-v0":
-    #     from environments.KuaiRand_Pure.env.KuaiRand import negative_sampling
-    # elif args.env == "KuaiEnv-v0":
-    #     from environments.KuaiRec.env.KuaiEnv import negative_sampling
-    # elif args.env == "YahooEnv-v0":
-    #     from environments.YahooR3.env.Yahoo import negative_sampling
-
     neg_in_train = True if args.env == "KuaiRand-v0" and reward_features[0] != "watch_ratio_normed" else False
+    neg_in_train = False # todo: test for kuairand
 
     df_pos, df_neg = negative_sampling(df_train, df_item, df_user, reward_features[0],
                                        is_rand=True, neg_in_train=neg_in_train, neg_K=args.neg_K)

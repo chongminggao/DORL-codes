@@ -27,8 +27,8 @@ if args.method == "maxmin":
     df_train['duration_normed'] = (df_train['duration_ms'] - duration_min) / (duration_max - duration_min)
     df_val['duration_normed'] = (df_val['duration_ms'] - duration_min) / (duration_max - duration_min)
 else:
-    df_duration = df_train[["item_id",'duration_ms']].append(df_val[["item_id",'duration_ms']])
-    df_item_duration = df_duration.groupby("item_id").agg(np.mean)
+    df_duration = df_train[["video_id",'duration_ms']].append(df_val[["video_id",'duration_ms']])
+    df_item_duration = df_duration.groupby("video_id").agg(np.mean)
     res = df_item_duration.describe()
     duration_mean = res.loc["mean"][0]
     duration_std = res.loc["std"][0]
@@ -49,30 +49,30 @@ df_val.loc[np.isinf(df_val['watch_ratio']), 'watch_ratio'] = 1
 
 
 if args.method == "maxmin":
-    max_y = df[["item_id", "watch_ratio"]].groupby("item_id").agg(max)["watch_ratio"]
-    min_y = df[["item_id", "watch_ratio"]].groupby("item_id").agg(min)["watch_ratio"]
-    df_train["watch_ratio_normed"] = (df_train["watch_ratio"].to_numpy() - min_y.loc[df_train["item_id"]].to_numpy()) / \
-                                   (max_y.loc[df_train["item_id"]].to_numpy() - min_y.loc[df_train["item_id"]].to_numpy())
-    df_val["watch_ratio_normed"] = (df_val["watch_ratio"].to_numpy() - min_y.loc[df_val["item_id"]].to_numpy()) / \
-                                   (max_y.loc[df_val["item_id"]].to_numpy() - min_y.loc[df_val["item_id"]].to_numpy())
+    max_y = df[["video_id", "watch_ratio"]].groupby("video_id").agg(max)["watch_ratio"]
+    min_y = df[["video_id", "watch_ratio"]].groupby("video_id").agg(min)["watch_ratio"]
+    df_train["watch_ratio_normed"] = (df_train["watch_ratio"].to_numpy() - min_y.loc[df_train["video_id"]].to_numpy()) / \
+                                   (max_y.loc[df_train["video_id"]].to_numpy() - min_y.loc[df_train["video_id"]].to_numpy())
+    df_val["watch_ratio_normed"] = (df_val["watch_ratio"].to_numpy() - min_y.loc[df_val["video_id"]].to_numpy()) / \
+                                   (max_y.loc[df_val["video_id"]].to_numpy() - min_y.loc[df_val["video_id"]].to_numpy())
 else:
-    mean_y = df[["item_id", "watch_ratio"]].groupby("item_id").agg(np.mean)["watch_ratio"]
-    std_y = df[["item_id", "watch_ratio"]].groupby("item_id").agg(np.std)["watch_ratio"]
-    df_train["watch_ratio_normed"] = (df_train["watch_ratio"].to_numpy() - mean_y.loc[df_train["item_id"]].to_numpy()) / \
-                                   std_y.loc[df_train["item_id"]].to_numpy()
-    df_val["watch_ratio_normed"] = (df_val["watch_ratio"].to_numpy() - mean_y.loc[df_val["item_id"]].to_numpy()) / \
-                                     std_y.loc[df_val["item_id"]].to_numpy()
+    mean_y = df[["video_id", "watch_ratio"]].groupby("video_id").agg(np.mean)["watch_ratio"]
+    std_y = df[["video_id", "watch_ratio"]].groupby("video_id").agg(np.std)["watch_ratio"]
+    df_train["watch_ratio_normed"] = (df_train["watch_ratio"].to_numpy() - mean_y.loc[df_train["video_id"]].to_numpy()) / \
+                                   std_y.loc[df_train["video_id"]].to_numpy()
+    df_val["watch_ratio_normed"] = (df_val["watch_ratio"].to_numpy() - mean_y.loc[df_val["video_id"]].to_numpy()) / \
+                                     std_y.loc[df_val["video_id"]].to_numpy()
     df_train.loc[df_train["watch_ratio_normed"] > 10, "watch_ratio_normed"] = 10
     df_val.loc[df_val["watch_ratio_normed"] > 10, "watch_ratio_normed"] = 10
 #
-# mylist = df[["item_id", "watch_ratio"]].groupby("item_id").agg(list)["watch_ratio"]
+# mylist = df[["video_id", "watch_ratio"]].groupby("video_id").agg(list)["watch_ratio"]
 
 
 df_train.loc[df_train["watch_ratio_normed"].isna(),"watch_ratio_normed"] = 0
 df_val.loc[df_val["watch_ratio_normed"].isna(),"watch_ratio_normed"] = 0
 
-df_train.rename(columns={"item_id":"item_id"}, inplace=True)
-df_val.rename(columns={"item_id":"item_id"}, inplace=True)
+df_train.rename(columns={"video_id":"item_id"}, inplace=True)
+df_val.rename(columns={"video_id":"item_id"}, inplace=True)
 
 df_train.to_csv(os.path.join(DATAPATH, "train_processed.csv"), index=False)
 df_val.to_csv(os.path.join(DATAPATH, "test_processed.csv"), index=False)

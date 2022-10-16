@@ -193,7 +193,8 @@ def prepare_um(args=get_args()):
     env = KuaiRandEnv(**kwargs_um)
 
     with open(MODEL_MAT_PATH, "rb") as file:
-        predicted_mat = pickle.load(file)
+        predicted_mat_ori = pickle.load(file)
+        predicted_mat = predicted_mat_ori[:len(mat), :]
 
     kwargs = {
         "env_task_class":KuaiRandEnv,
