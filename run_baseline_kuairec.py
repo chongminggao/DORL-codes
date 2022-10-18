@@ -19,21 +19,12 @@ from run_baseline import prepare_dir_log, prepare_dataset, setup_world_model, sa
 
 sys.path.extend(["./src","./src/DeepCTR-Torch"])
 
-from core.inputs import SparseFeatP, input_from_feature_columns
-from core.user_model_pairwise import UserModel_Pairwise
-from core.util import compute_exposure_effect_kuaiRec
-from deepctr_torch.inputs import DenseFeat, build_input_features, combined_dnn_input
-import pandas as pd
-import numpy as np
 
-from core.user_model import StaticDataset
-
-import logzero
 from logzero import logger
 
 from environments.KuaiRec.env.KuaiEnv import KuaiEnv, negative_sampling
 from core.evaluation.evaluator import test_static_model_in_RL_env
-# from util.upload import my_upload
+
 from util.utils import create_dir, LoggerCallback_Update
 
 CODEPATH = os.path.dirname(__file__)

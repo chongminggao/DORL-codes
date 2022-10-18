@@ -21,12 +21,14 @@ from torch import nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
+from environments.KuaiRec.env.KuaiEnv import compute_exposure_effect_kuaiRec
+
 sys.path.extend(["./src", "./src/DeepCTR-Torch"])
 from core.evaluation.metrics import get_ranking_results
 from core.inputs import SparseFeatP, input_from_feature_columns
 from core.user_model import StaticDataset
 from core.user_model_pairwise import UserModel_Pairwise
-from core.util import compute_exposure_effect_kuaiRec, negative_sampling
+from core.util import negative_sampling
 from deepctr_torch.inputs import DenseFeat, build_input_features, combined_dnn_input
 
 from util.utils import create_dir

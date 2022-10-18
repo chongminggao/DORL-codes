@@ -51,7 +51,7 @@ def main(args):
     # %% 2. Prepare dataset
     user_features = ["user_id", 'gender_u', 'age', 'location', 'fashioninterest']
     item_features = ['item_id', 'gender_i', "jackettype", 'color', 'onfrontpage']
-    reward_features = [args.yfet]
+    reward_features = [args.yfeat]
     dataset_train, dataset_val, df_user, df_item, df_user_val, df_item_val, x_columns, y_columns, ab_columns = \
         prepare_dataset(args, user_features, item_features, reward_features, MODEL_SAVE_PATH, DATAPATH)
 
