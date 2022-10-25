@@ -32,6 +32,11 @@ def get_args():
     parser.add_argument("--yfeat", type=str, default='watch_ratio_normed')
     parser.add_argument("--optimizer", type=str, default='adam')
     parser.add_argument("--loss", type=str, default='point')
+    parser.add_argument('--neg_K', default=1, type=int)
+
+    parser.add_argument("--feature_dim", type=int, default=8)
+    parser.add_argument("--entity_dim", type=int, default=8)
+    parser.add_argument('--batch_size', default=4096, type=int)
 
     parser.add_argument('--is_binarize', dest='is_binarize', action='store_true')
     parser.add_argument('--no_binarize', dest='is_binarize', action='store_false')
@@ -81,10 +86,10 @@ def main(args):
                           epsilon=args.epsilon, is_ucb=args.is_ucb, need_transform=True))
 
     # %% 5. Learn model
-    history = user_model.fit_data(dataset_train, dataset_val,
-                                  batch_size=args.batch_size, epochs=args.epoch, shuffle=True,
-                                  callbacks=[[LoggerCallback_Update(logger_path)]])
-    logger.info(history.history)
+    # history = user_model.fit_data(dataset_train, dataset_val,
+    #                               batch_size=args.batch_size, epochs=args.epoch, shuffle=True,
+    #                               callbacks=[[LoggerCallback_Update(logger_path)]])
+    # logger.info(history.history)
 
     # %% 6. Save model
     model_parameters = {"feature_columns": x_columns, "y_columns": y_columns, "task": task,

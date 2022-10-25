@@ -52,6 +52,26 @@ def clip0(x):
 
 @njit
 def find_negative(user_ids, item_ids, neg_u_list, neg_i_list, mat_train, df_negative, is_rand=True, num_break=3):
+    """
+    :param user_ids:
+    :type user_ids:
+    :param item_ids:
+    :type item_ids:
+    :param neg_u_list:
+    :type neg_u_list:
+    :param neg_i_list:
+    :type neg_i_list:
+    :param mat_train:
+    :type mat_train:
+    :param df_negative:
+    :type df_negative:
+    :param is_rand: Is sampling strategy a deterministic strategy.
+    :type is_rand: bool
+    :param num_break:
+    :type num_break:
+    :return:
+    :rtype:
+    """
     if is_rand:
         ind = 0
         for i in range(len(user_ids)):
@@ -134,7 +154,7 @@ def align_pos_neg(df_positive, df_negative, can_divide:bool):
 
 def negative_sampling(df_train, df_item, df_user, y_name, is_rand=True, neg_in_train=False, neg_K=5, num_break=3):
     print("negative sampling...")
-    if neg_in_train:
+    if neg_in_train: # 仅从已知样本中采负样本。
         neg_index = df_train[y_name] == 0
         pos_index = ~neg_index
         df_negative = df_train.loc[neg_index]

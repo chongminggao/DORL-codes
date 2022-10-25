@@ -29,6 +29,10 @@ def get_args():
     parser.add_argument("--loss", type=str, default='point')
     parser.add_argument('--rating_threshold', default=1, type=float)
 
+    parser.add_argument("--feature_dim", type=int, default=4)
+    parser.add_argument("--entity_dim", type=int, default=4)
+    parser.add_argument('--batch_size', default=4096, type=int)
+
     parser.add_argument('--is_binarize', dest='is_binarize', action='store_true')
     parser.add_argument('--no_binarize', dest='is_binarize', action='store_false')
     parser.set_defaults(is_binarize=True)

@@ -47,7 +47,7 @@ def get_args_all():
     # parser.add_argument('--not_softmax', action="store_false")
     parser.add_argument('--is_softmax', dest='is_softmax', action='store_true')
     parser.add_argument('--no_softmax', dest='is_softmax', action='store_false')
-    parser.set_defaults(is_softmax=True)
+    parser.set_defaults(is_softmax=False)
 
     parser.add_argument('--rankingK', default=(20, 10, 5), type=int, nargs="+")
     parser.add_argument('--max_turn', default=30, type=int)
@@ -68,7 +68,7 @@ def get_args_all():
     parser.add_argument("--entity_dim", type=int, default=8)
     parser.add_argument("--user_model_name", type=str, default="DeepFM")
     parser.add_argument('--dnn', default=(64, 64), type=int, nargs="+")
-    parser.add_argument('--batch_size', default=4096, type=int)
+    parser.add_argument('--batch_size', default=256, type=int)
     parser.add_argument('--epoch', default=20, type=int)
     parser.add_argument('--cuda', default=0, type=int)
 
@@ -78,7 +78,7 @@ def get_args_all():
     parser.add_argument('--is_ab', dest='is_ab', action='store_true')
     parser.add_argument('--no_ab', dest='is_ab', action='store_false')
     parser.set_defaults(is_ab=False)
-    parser.add_argument("--message", type=str, default="point")
+    parser.add_argument("--message", type=str, default="UM")
 
     args = parser.parse_known_args()[0]
     return args
@@ -180,7 +180,6 @@ def construct_complete_val_x(dataset_val, df_user, df_item, user_features, item_
     df_x_complete = pd.concat([df_user_complete, df_item_complete], axis=1)
     return df_x_complete
 
-
 def compute_normed_reward_for_all(user_model, dataset_val, df_user, df_item, user_features, item_features, x_columns,
                                   y_columns):
     df_x_complete = construct_complete_val_x(dataset_val, df_user, df_item, user_features, item_features)
@@ -219,7 +218,7 @@ def compute_normed_reward_for_all(user_model, dataset_val, df_user, df_item, use
         lbe_item.fit(df_x_complete["item_id"])
 
         predict_mat = csr_matrix(
-            (y_pred, (lbe_user.transform(df_x_complete["user_id"]), lbe_user.transform(df_x_complete["item_id"]))),
+            (y_pred, (lbe_user.transform(df_x_complete["user_id"]), lbe_item.transform(df_x_complete["item_id"]))),
             shape=(num_user, num_item)).toarray()
     else:
         assert num_item == df_x_complete["item_id"].max() + 1
