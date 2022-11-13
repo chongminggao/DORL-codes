@@ -21,6 +21,7 @@ from torch import nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
+from core.user_model_with_variance import UserModel_Variance
 from environments.KuaiRec.env.KuaiEnv import compute_exposure_effect_kuaiRec
 
 sys.path.extend(["./src", "./src/DeepCTR-Torch"])
@@ -64,10 +65,11 @@ def get_args_all():
     parser.add_argument('--no_ucb', dest='is_ucb', action='store_false')
     parser.set_defaults(is_ucb=False)
 
+    parser.add_argument("--dnn_activation", type=str, default="relu")
     parser.add_argument("--feature_dim", type=int, default=8)
     parser.add_argument("--entity_dim", type=int, default=8)
     parser.add_argument("--user_model_name", type=str, default="DeepFM")
-    parser.add_argument('--dnn', default=(64, 64), type=int, nargs="+")
+    parser.add_argument('--dnn', default=(128, 128), type=int, nargs="+")
     parser.add_argument('--batch_size', default=256, type=int)
     parser.add_argument('--epoch', default=20, type=int)
     parser.add_argument('--cuda', default=0, type=int)
@@ -362,9 +364,10 @@ def setup_world_model(args, x_columns, y_columns, ab_columns, task, task_logit_d
     np.random.seed(args.seed)
     random.seed(args.seed)
 
-    user_model = UserModel_Pairwise(x_columns, y_columns, task, task_logit_dim,
+    user_model = UserModel_Variance(x_columns, y_columns, task, task_logit_dim,
                                     dnn_hidden_units=args.dnn, seed=args.seed, l2_reg_dnn=args.l2_reg_dnn,
-                                    device=device, ab_columns=ab_columns, init_std=0.001)
+                                    device=device, ab_columns=ab_columns,
+                                    dnn_activation=args.dnn_activation, init_std=0.001)
     if args.loss == "pair":
         loss_fun = loss_pairwise
     if args.loss == "point":
