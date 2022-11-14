@@ -11,7 +11,7 @@ import os
 import sys
 import traceback
 
-from run_worldModel import prepare_dir_log, prepare_dataset, setup_world_model, save_world_model, get_args_all
+from run_worldModel_ensemble import prepare_dir_log, prepare_dataset, setup_world_model, save_world_model, get_args_all
 
 sys.path.extend(["./src","./src/DeepCTR-Torch"])
 
@@ -66,7 +66,7 @@ def main(args):
     task = "regression"
     task_logit_dim = 1
     is_ranking = False
-    user_model = setup_world_model(args, x_columns, y_columns, ab_columns, task, task_logit_dim, is_ranking)
+    ensemble_models = setup_world_model(args, x_columns, y_columns, ab_columns, task, task_logit_dim, is_ranking)
 
     # %% 4. Prepare Envs
     mat, lbe_user, lbe_item, list_feat, df_video_env, df_dist_small = KuaiEnv.load_mat()
@@ -80,14 +80,14 @@ def main(args):
               "df_video_env": df_video_env,
               "df_dist_small": df_dist_small}
     env = KuaiEnv(**kwargs)
-    user_model.compile_RL_test(
+    ensemble_models.compile_RL_test(
         functools.partial(test_static_model_in_RL_env, env=env, dataset_val=dataset_val, is_softmax=args.is_softmax,
                           epsilon=args.epsilon, is_ucb=args.is_ucb, need_transform=True))
 
     # %% 5. Learn model
-    # history = user_model.fit_data(dataset_train, dataset_val,
-    #                               batch_size=args.batch_size, epochs=args.epoch, shuffle=True,
-    #                               callbacks=[[LoggerCallback_Update(logger_path)]])
+    history = ensemble_models.fit_data(dataset_train, dataset_val,
+                                  batch_size=args.batch_size, epochs=args.epoch, shuffle=True,
+                                  callbacks=[[LoggerCallback_Update(logger_path)]])
     # logger.info(history.history)
 
     # %% 6. Save model
@@ -96,7 +96,7 @@ def main(args):
                         "device": "cpu",
                         "ab_columns": ab_columns}
 
-    save_world_model(args, user_model, dataset_val, x_columns, y_columns, df_user, df_item, df_user_val, df_item_val,
+    save_world_model(args, ensemble_models, dataset_val, x_columns, y_columns, df_user, df_item, df_user_val, df_item_val,
                      user_features, item_features, model_parameters, MODEL_SAVE_PATH, logger_path)
 
 

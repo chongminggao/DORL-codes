@@ -10,10 +10,10 @@ from torch import nn
 
 from core.inputs import input_from_feature_columns
 from core.layers import Linear, create_embedding_matrix
-from core.user_model import UserModel, compute_input_dim
+from core.user_model_variance import UserModel_Variance, compute_input_dim
 
 
-class UserModel_Variance(UserModel):
+class UserModel_Pairwise_Variance(UserModel_Variance):
     """Instantiates the Multi-gate Mixture-of-Experts architecture.
 
     :param dnn_feature_columns: An iterable containing all the features used by deep part of the model.
@@ -35,11 +35,11 @@ class UserModel_Variance(UserModel):
     """
 
     def __init__(self, feature_columns, y_columns, task, task_logit_dim,
-                 dnn_hidden_units=(128, 128),
+                 dnn_hidden_units=(128, 128), dnn_hidden_units_var=(),
                  l2_reg_embedding=1e-5, l2_reg_dnn=1e-1, init_std=0.0001, task_dnn_units=None, seed=2022, dnn_dropout=0,
                  dnn_activation='relu', dnn_use_bn=False, device='cpu', ab_columns=None):
 
-        super(UserModel_Variance, self).__init__(feature_columns, y_columns,
+        super(UserModel_Pairwise_Variance, self).__init__(feature_columns, y_columns,
                                              l2_reg_embedding=l2_reg_embedding,
                                              init_std=init_std, seed=seed, device=device)
 
@@ -68,12 +68,15 @@ class UserModel_Variance(UserModel):
         # self.out = PredictionLayer(task, task_dim=1)
         self.out = PredictionLayer(task)
 
-        self.layers_var = DNN(compute_input_dim(self.feature_columns), dnn_hidden_units,
-                            activation=dnn_activation, l2_reg=l2_reg_dnn, dropout_rate=dnn_dropout, use_bn=dnn_use_bn,
-                            init_std=init_std, device=device)
+        if len(dnn_hidden_units_var) > 0:
+            self.layers_var = DNN(dnn_hidden_units[-1], dnn_hidden_units_var,
+                                activation=dnn_activation, l2_reg=l2_reg_dnn, dropout_rate=dnn_dropout, use_bn=dnn_use_bn,
+                                init_std=init_std, device=device)
 
-
-
+            self.last_var = nn.Linear(dnn_hidden_units_var[-1], 1, bias=False)
+        else:
+            self.layers_var = None
+            self.last_var = nn.Linear(dnn_hidden_units[-1], 1, bias=False)
 
         """
         For FM Layer.
@@ -133,15 +136,24 @@ class UserModel_Variance(UserModel):
         linear_logit = logit
 
         # DNN
-        dnn_logit = last(dnn(dnn_input))
-
+        dnn_output = dnn(dnn_input)
+        dnn_logit = last(dnn_output)
         all_logit = linear_logit + dnn_logit
-
         y_pred = out(all_logit)
 
-        return y_pred
+        if self.layers_var is not None:
+            var_output = self.layers_var(dnn_output)
+        else:
+            var_output = dnn_output
+        log_var = self.last_var(var_output)
 
-    def get_loss(self, x, y, score):
+        # todo: 放缩 【-10, 0.5]
+        # logvar = self.max_logvar - tf.nn.softplus(self.max_logvar - logvar)
+        # logvar = self.min_logvar + tf.nn.softplus(logvar - self.min_logvar)
+
+        return y_pred, log_var
+
+    def get_loss(self, x, y, score, deterministic=False):
         # Split positive and negative samples
         assert x.shape[1] % 2 == 0
         num_features = x.shape[1] // 2
@@ -151,19 +163,25 @@ class UserModel_Variance(UserModel):
 
         # y_deepfm_pos = self._deepfm(X_pos, self.feature_columns, self.feature_index)
         # y_deepfm_neg = self._deepfm(X_neg, self.feature_columns, self.feature_index)
-        y_deepfm_pos = self.forward(X_pos)
-        y_deepfm_neg = self.forward(X_neg)
+        y_deepfm_pos, log_var_pos = self.forward(X_pos)
+        y_deepfm_neg, log_var_neg = self.forward(X_neg)
 
 
         if self.ab_columns is None:
-            loss = self.loss_func(y, y_deepfm_pos, y_deepfm_neg, score)
+            alpha_u, beta_i = None, None
         else:  # CIRS-UserModel-kuaishou.py
             alpha_u = self.ab_embedding_dict['alpha_u'](x[:,0].long())
             beta_i = self.ab_embedding_dict['beta_i'](x[:,1].long())
-            loss = self.loss_func(y, y_deepfm_pos, y_deepfm_neg, score, alpha_u=alpha_u, beta_i=beta_i)
+
+        if not deterministic:
+            loss_y = self.loss_func(y, y_deepfm_pos, y_deepfm_neg, score, alpha_u=alpha_u, beta_i=beta_i, log_var=log_var_pos)
+            loss_var = log_var_pos.sum()
+            loss = loss_y + loss_var
+        else:
+            loss = self.loss_func(y, y_deepfm_pos, y_deepfm_neg, score, alpha_u=alpha_u, beta_i=beta_i, log_var=None)
 
         return loss
 
     def forward(self, x):
-        y_deepfm = self._deepfm(x, self.feature_columns, self.feature_index)
-        return y_deepfm
+        y_deepfm, var = self._deepfm(x, self.feature_columns, self.feature_index)
+        return y_deepfm, var

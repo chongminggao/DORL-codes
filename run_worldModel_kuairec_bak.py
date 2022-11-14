@@ -26,7 +26,7 @@ from deepctr_torch.inputs import DenseFeat, build_input_features, combined_dnn_i
 import pandas as pd
 import numpy as np
 
-from core.user_model import StaticDataset
+from core.static_dataset import StaticDataset
 
 import logzero
 from logzero import logger

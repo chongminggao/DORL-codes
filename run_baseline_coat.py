@@ -19,7 +19,7 @@ from run_baseline import prepare_dir_log, prepare_dataset, setup_world_model, sa
 # from deepctr_torch.inputs import DenseFeat, build_input_features, combined_dnn_input
 # import pandas as pd
 # import numpy as np
-# from core.user_model import StaticDataset
+# from core.static_dataset import StaticDataset
 # import logzero
 
 from logzero import logger

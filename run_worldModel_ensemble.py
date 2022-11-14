@@ -1,5 +1,8 @@
+# -*- coding: utf-8 -*-
+# @Time    : 2022/9/30 20:23
+# @Author  : Chongming GAO
+# @FileName: run_worldModel.py
 import argparse
-import collections
 import datetime
 import functools
 import json
@@ -12,24 +15,26 @@ import logzero
 import numpy as np
 import pandas as pd
 import torch
+from scipy.sparse import csr_matrix
+from sklearn.preprocessing import LabelEncoder
 from torch import nn
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from core.user_model_dice import UserModel_DICE
+from environments.KuaiRec.env.KuaiEnv import compute_exposure_effect_kuaiRec
+from core.user_model_ensemble import EnsembleModel
 
 sys.path.extend(["./src", "./src/DeepCTR-Torch"])
 from core.evaluation.metrics import get_ranking_results
 from core.inputs import SparseFeatP, input_from_feature_columns
 from core.static_dataset import StaticDataset
-from core.user_model_pairwise import UserModel_Pairwise
-from core.util import compute_exposure_effect_kuaiRec, negative_sampling
+from core.util import negative_sampling
 from deepctr_torch.inputs import DenseFeat, build_input_features, combined_dnn_input
 
 from util.utils import create_dir
 
 
 def get_args_all():
-
     parser = argparse.ArgumentParser()
     parser.add_argument('--resume', action="store_true")
 
@@ -37,12 +42,13 @@ def get_args_all():
     parser.add_argument('--seed', default=2022, type=int)
     parser.add_argument("--bpr_weight", type=float, default=0.5)
     parser.add_argument('--neg_K', default=5, type=int)
+    parser.add_argument('--n_models', default=5, type=int)
 
     # recommendation related:
     # parser.add_argument('--not_softmax', action="store_false")
     parser.add_argument('--is_softmax', dest='is_softmax', action='store_true')
     parser.add_argument('--no_softmax', dest='is_softmax', action='store_false')
-    parser.set_defaults(is_softmax=True)
+    parser.set_defaults(is_softmax=False)
 
     parser.add_argument('--rankingK', default=(20, 10, 5), type=int, nargs="+")
     parser.add_argument('--max_turn', default=30, type=int)
@@ -59,41 +65,29 @@ def get_args_all():
     parser.add_argument('--no_ucb', dest='is_ucb', action='store_false')
     parser.set_defaults(is_ucb=False)
 
+    parser.add_argument("--dnn_activation", type=str, default="relu")
     parser.add_argument("--feature_dim", type=int, default=8)
     parser.add_argument("--entity_dim", type=int, default=8)
     parser.add_argument("--user_model_name", type=str, default="DeepFM")
-    parser.add_argument('--dnn', default=(64, 64), type=int, nargs="+")
+    parser.add_argument('--dnn', default=(128, 128), type=int, nargs="+")
+    parser.add_argument('--dnn_var', default=(), type=int, nargs="+")
     parser.add_argument('--batch_size', default=256, type=int)
-    parser.add_argument('--epoch', default=10, type=int)
+    parser.add_argument('--epoch', default=20, type=int)
     parser.add_argument('--cuda', default=0, type=int)
-    # # env:
-    parser.add_argument('--leave_threshold', default=1, type=float)
-    parser.add_argument('--num_leave_compute', default=5, type=int)
+
     # exposure parameters:
     parser.add_argument('--tau', default=0, type=float)
 
     parser.add_argument('--is_ab', dest='is_ab', action='store_true')
     parser.add_argument('--no_ab', dest='is_ab', action='store_false')
     parser.set_defaults(is_ab=False)
-    parser.add_argument("--message", type=str, default="point")
-
-    # TODO: add IPS, PD arguments
-    parser.add_argument('--use_IPS', dest='use_IPS', action='store_true')
-    parser.add_argument('--no_IPS',dest='use_IPS',action='store_false')
-    parser.set_defaults(use_IPS=False)
-    parser.add_argument('--use_PD', dest='use_PD', action='store_true')
-    parser.add_argument('--no_PD', dest='use_PD', action='store_false')
-    parser.set_defaults(use_PD=False)
-    parser.add_argument('--PD_gamma', default=0.01, type=float)
-    parser.add_argument('--use_DICE', dest='use_DICE', action='store_true')
-    parser.add_argument('--no_DICE', dest='use_DICE', action='store_false')
-    parser.set_defaults(use_DICE=True)
+    parser.add_argument("--message", type=str, default="UM")
 
     args = parser.parse_known_args()[0]
     return args
 
 
-def get_xy_columns(args, df_data, df_user, df_item, user_features, item_features, entity_dim, feature_dim, is_val=False):
+def get_xy_columns(args, df_data, df_user, df_item, user_features, item_features, entity_dim, feature_dim):
     if args.env == "KuaiRand-v0" or args.env == "KuaiEnv-v0":
         feat = [x for x in df_item.columns if x[:4] == "feat"]
         x_columns = [SparseFeatP("user_id", df_data['user_id'].max() + 1, embedding_dim=entity_dim)] + \
@@ -113,12 +107,6 @@ def get_xy_columns(args, df_data, df_user, df_item, user_features, item_features
                     [SparseFeatP(col, df_user[col].max() + 1, embedding_dim=feature_dim) for col in user_features[1:]] + \
                     [SparseFeatP("item_id", df_data['item_id'].max() + 1, embedding_dim=entity_dim)] + \
                     [SparseFeatP(col, df_item[col].max() + 1, embedding_dim=feature_dim) for col in item_features[1:]]
-
-    # TODO: add columns for DICE(user_id_int, item_id_int)
-    if args.use_DICE and not is_val:
-        x_columns += [SparseFeatP("user_id_int", df_data['user_id'].max() + 1, embedding_dim=entity_dim),
-                    SparseFeatP("item_id_int", df_data['item_id'].max() + 1, embedding_dim=entity_dim)]
-
 
     ab_columns = [SparseFeatP("alpha_u", df_data['user_id'].max() + 1, embedding_dim=1)] + \
                  [SparseFeatP("beta_i", df_data['item_id'].max() + 1, embedding_dim=1)]
@@ -147,30 +135,16 @@ def load_dataset_train(args, user_features, item_features, reward_features, tau,
     df_user = df_user[user_features[1:]]
     df_item = df_item[item_features[1:]]
 
-    x_columns, y_columns, ab_columns = get_xy_columns(args, df_train, df_user, df_item, user_features, item_features, entity_dim, feature_dim)
-
-    # if args.env == "CoatEnv-v0":
-    #     from environments.coat.env.Coat import negative_sampling
-    # elif args.env == "KuaiRand-v0":
-    #     from environments.KuaiRand_Pure.env.KuaiRand import negative_sampling
-    # elif args.env == "KuaiEnv-v0":
-    #     from environments.KuaiRec.env.KuaiEnv import negative_sampling
-    # elif args.env == "YahooEnv-v0":
-    #     from environments.YahooR3.env.Yahoo import negative_sampling
-
-
+    x_columns, y_columns, ab_columns = get_xy_columns(args, df_train, df_user, df_item, user_features, item_features,
+                                                      entity_dim, feature_dim)
 
     neg_in_train = True if args.env == "KuaiRand-v0" and reward_features[0] != "watch_ratio_normed" else False
+    neg_in_train = False  # todo: test for kuairand
 
     df_pos, df_neg = negative_sampling(df_train, df_item, df_user, reward_features[0],
-                                              is_rand=True, neg_in_train=neg_in_train, neg_K=args.neg_K)
-
-    # TODO: copy user_id,item_id for DICE
+                                       is_rand=True, neg_in_train=neg_in_train, neg_K=args.neg_K)
 
     df_x = df_pos[user_features + item_features]
-    if args.use_DICE:
-        df_x['user_id_int'] = df_x['user_id']
-        df_x['item_id_int'] = df_x['item_id']
     if reward_features[0] == "hybrid":  # for kuairand
         a = df_pos["long_view"] + df_pos["is_like"] + df_pos["is_click"]
         df_y = a > 0
@@ -180,9 +154,6 @@ def load_dataset_train(args, user_features, item_features, reward_features, tau,
         df_y = df_pos[reward_features]
 
     df_x_neg = df_neg[user_features + item_features]
-    if args.use_DICE:
-        df_x_neg['user_id_int'] = df_x_neg['user_id']
-        df_x_neg['item_id_int'] = df_x_neg['item_id']
     df_x_neg = df_x_neg.rename(columns={k: k + "_neg" for k in df_x_neg.columns.to_numpy()})
 
     df_x_all = pd.concat([df_x, df_x_neg], axis=1)
@@ -193,99 +164,15 @@ def load_dataset_train(args, user_features, item_features, reward_features, tau,
         timestamp = df_pos['timestamp']
         exposure_pos = compute_exposure_effect_kuaiRec(df_x, timestamp, list_feat, tau, MODEL_SAVE_PATH, DATAPATH)
 
-    # TODO: add PD/IPS/DICE scores & "get" function
-
-    score = exposure_pos
-
-    if args.use_PD:
-        if 'timestamp' in df_train.columns:
-            timestamp = df_train['timestamp']
-            all_time = df_pos['timestamp']
-        else:
-            timestamp = None
-            all_time = None
-        score = get_PD_score(df_train, df_x_all, timestamp, all_time, args.PD_gamma)
-
-    if args.use_IPS:
-        score = get_IPS_score(df_train, df_x_all)
-
-    if args.use_DICE:
-        score = get_DICE_score(df_train,df_x_all)
-
     dataset = StaticDataset(x_columns, y_columns, num_workers=4)
-    dataset.compile_dataset(df_x_all, df_y, score)
+    dataset.compile_dataset(df_x_all, df_y, exposure_pos)
 
     return dataset, df_user, df_item, x_columns, y_columns, ab_columns
 
-def get_DICE_score(df_train,df_x_all) -> np.ndarray:
-    counter = collections.Counter(df_train['item_id'])
-    popularity_pos = df_x_all['item_id'].map(lambda x: counter[x])
-    popularity_neg = df_x_all['item_id_neg'].map(lambda x: counter[x])
-    # compute whether pos item is more popular than neg item
-    mask = popularity_pos.to_numpy() > popularity_neg.to_numpy()
-    DICE_score = np.where(mask,1,-1)
-    return DICE_score
-
-def get_PD_score(df_train,df_x_all,timestamp,all_time,gamma,num_bin=5) -> np.ndarray:
-    if timestamp is None:
-        num_bin = 1
-        all_counter = collections.Counter(df_train['item_id'])
-        all_total = sum(all_counter.values())
-        popularity = np.array(df_x_all['item_id'].map(lambda x:all_counter[x]/all_total).to_frame())
-        popularity_neg = np.array(df_x_all['item_id_neg'].map(lambda x:all_counter[x]/all_total).to_frame())
-    else:
-        time_max = timestamp.max()
-        time_min = timestamp.min()
-        print('Time range: [{}] ~ [{}]'.format(time.ctime(time_min),time.ctime(time_max)))
-        interval = (time_max - time_min) / num_bin
-        dict_start = {i: (interval * i + time_min, interval * (i + 1) + time_min) for i in range(num_bin)}
-        dict_index = {}
-        dict_counter = {}
-        dict_total = {}
-
-        # count items for every stage
-        for i in range(num_bin):
-            if i < num_bin - 1:
-                index = (dict_start[i][0] <= timestamp) & (timestamp < dict_start[i][1])
-            else:
-                index = (dict_start[i][0] <= timestamp) & (timestamp <= dict_start[i][1])
-
-            dict_index[i] = index
-            dict_counter[i] = collections.Counter(df_train.loc[index,'item_id'])
-            dict_total[i] = sum(dict_counter[i].values())
-        # get popularity for every interaction
-        popularity = np.zeros([len(df_x_all),1])
-        assert len(df_x_all) == len(all_time)
-        for i in range(num_bin):
-            if i < num_bin - 1:
-                index = (dict_start[i][0] <= all_time) & (all_time < dict_start[i][1])
-            else:
-                index = (dict_start[i][0] <= all_time) & (all_time <= dict_start[i][1])
-
-            popularity[index] = df_x_all.loc[index,'item_id'].map(lambda x: dict_counter[i][x] / dict_total[i]).to_frame()
-        
-        # randomly pick popularity for neg samples
-        index_neg = np.random.choice(num_bin,len(df_x_all), p = np.array(list(dict_total.values()))/sum(list(dict_total.values())))
-
-        popularity_neg = np.array(list(map(lambda i,x: dict_counter[i][x] / dict_total[i], index_neg, df_x_all['item_id_neg'])))
-        popularity_neg = np.expand_dims(popularity_neg,-1)
-    
-    popularity_all = np.concatenate([popularity,popularity_neg],axis=1)
-    PD_score = popularity_all ** gamma
-    return PD_score
-
-def get_IPS_score(df_train,df_x_all) -> np.ndarray:
-    IPS_item = collections.Counter(df_train['item_id'])
-    IPS_data = df_x_all['item_id'].map(lambda x: IPS_item[x])
-    IPS_data[IPS_data==0] = 1
-    IPS_data = 1.0 / IPS_data
-    return IPS_data.to_numpy()
-
 
 def construct_complete_val_x(dataset_val, df_user, df_item, user_features, item_features):
-
-    user_ids = np.unique(dataset_val.x_numpy[:,dataset_val.user_col].astype(int))
-    item_ids = np.unique(dataset_val.x_numpy[:,dataset_val.item_col].astype(int))
+    user_ids = np.unique(dataset_val.x_numpy[:, dataset_val.user_col].astype(int))
+    item_ids = np.unique(dataset_val.x_numpy[:, dataset_val.item_col].astype(int))
 
     df_user_complete = pd.DataFrame(
         df_user.loc[user_ids].reset_index()[user_features].to_numpy().repeat(len(item_ids), axis=0),
@@ -297,24 +184,83 @@ def construct_complete_val_x(dataset_val, df_user, df_item, user_features, item_
     return df_x_complete
 
 
-def compute_normed_reward_for_all(user_model, dataset_val, df_user, df_item, user_features, item_features):
+def get_one_predicted_res(model, df_x_complete, test_loader, steps_per_epoch):
+    mean_all = []
+    var_all = []
+    with torch.no_grad():
+        for _, (x, y) in tqdm(enumerate(test_loader), total=steps_per_epoch, desc="Predicting data..."):
+            x = x.to(model.user_models[0].device).float()
+            mean, var = model.user_models[0].forward(x)
+            y_pred = mean.cpu().data.numpy()  # .squeeze()
+            var_all_cat = var.cpu().data.numpy()
+            mean_all.append(y_pred)
+            var_all.append(var_all_cat)
+    mean_all_cat = np.concatenate(mean_all).astype("float64").reshape([-1])
+    var_all_cat = np.concatenate(var_all).astype("float64").reshape([-1])
+
+    # user_ids = np.sort(df_x_complete["user_id"].unique())
+
+    num_user = len(df_x_complete["user_id"].unique())
+    num_item = len(df_x_complete["item_id"].unique())
+
+    if num_user != df_x_complete["user_id"].max() + 1:
+        assert num_item != df_x_complete["item_id"].max() + 1
+        lbe_user = LabelEncoder()
+        lbe_item = LabelEncoder()
+
+        lbe_user.fit(df_x_complete["user_id"])
+        lbe_item.fit(df_x_complete["item_id"])
+
+        mean_mat = csr_matrix(
+            (mean_all_cat, (lbe_user.transform(df_x_complete["user_id"]), lbe_item.transform(df_x_complete["item_id"]))),
+            shape=(num_user, num_item)).toarray()
+
+        var_mat = csr_matrix(
+            (var_all_cat, (lbe_user.transform(df_x_complete["user_id"]), lbe_item.transform(df_x_complete["item_id"]))),
+            shape=(num_user, num_item)).toarray()
+    else:
+        assert num_item == df_x_complete["item_id"].max() + 1
+        mean_mat = csr_matrix(
+            (mean_all_cat, (df_x_complete["user_id"], df_x_complete["item_id"])),
+            shape=(num_user, num_item)).toarray()
+
+        var_mat = csr_matrix(
+            (var_all_cat, (df_x_complete["user_id"], df_x_complete["item_id"])),
+            shape=(num_user, num_item)).toarray()
+
+    # minn = mean_mat.min()
+    # maxx = mean_mat.max()
+    # normed_mat = (mean_mat - minn) / (maxx - minn)
+    # return normed_mat
+
+    return mean_mat, var_mat
+
+
+def compute_mean_var(ensemble_models, dataset_val, df_user, df_item, user_features, item_features, x_columns,
+                     y_columns):
     df_x_complete = construct_complete_val_x(dataset_val, df_user, df_item, user_features, item_features)
     n_user, n_item = df_x_complete[["user_id", "item_id"]].nunique()
-    user_ids = np.sort(df_x_complete["user_id"].unique())
-    predict_mat = np.zeros((n_user, n_item))
 
-    for i, user in tqdm(enumerate(user_ids), total=n_user, desc="predict all users' rewards on all items"):
-        ui = torch.tensor(df_x_complete[df_x_complete["user_id"] == user].to_numpy(), dtype=torch.float,
-                          device=user_model.device, requires_grad=False)
-        reward_u = user_model.forward(ui).detach().squeeze().cpu().numpy()
-        predict_mat[i] = reward_u
+    print("predict all users' rewards on all items")
 
-    minn = predict_mat.min()
-    maxx = predict_mat.max()
+    dataset_um = StaticDataset(x_columns, y_columns, num_workers=4)
+    dataset_um.compile_dataset(df_x_complete, pd.DataFrame(np.zeros([len(df_x_complete), 1]), columns=["y"]))
 
-    normed_mat = (predict_mat - minn) / (maxx - minn)
+    sample_num = len(dataset_um)
+    batch_size = 10000
+    steps_per_epoch = (sample_num - 1) // batch_size + 1
 
-    return normed_mat
+    test_loader = DataLoader(dataset=dataset_um.get_dataset_eval(), shuffle=False, batch_size=batch_size,
+                             num_workers=dataset_um.num_workers)
+
+    mean_mat_list, var_mat_list = [], []
+    for model in ensemble_models.user_models:
+        mean_mat, var_mat = get_one_predicted_res(model, df_x_complete, test_loader, steps_per_epoch)
+        mean_mat_list.append(mean_mat)
+        var_mat_list.append(var_mat)
+
+    return mean_mat_list, var_mat_list
+
 
 
 def load_dataset_val(args, user_features, item_features, reward_features, entity_dim, feature_dim):
@@ -344,8 +290,9 @@ def load_dataset_val(args, user_features, item_features, reward_features, entity
     else:
         df_y = df_val[reward_features]
 
-    x_columns, y_columns, ab_columns = get_xy_columns(args, df_val, df_user_val, df_item_val, user_features, item_features,
-                                                      entity_dim, feature_dim, is_val=True)
+    x_columns, y_columns, ab_columns = get_xy_columns(args, df_val, df_user_val, df_item_val, user_features,
+                                                      item_features,
+                                                      entity_dim, feature_dim)
 
     dataset_val = StaticDataset(x_columns, y_columns, num_workers=4)
     dataset_val.compile_dataset(df_x, df_y)
@@ -358,7 +305,7 @@ def load_dataset_val(args, user_features, item_features, reward_features, entity
     assert dataset_val.x_columns[len(user_features)].name == "item_id"
     dataset_val.set_item_col(len(user_features))
 
-    if not any(df_y.to_numpy() % 1): # 整数
+    if not any(df_y.to_numpy() % 1):  # 整数
         # make sure the label is binary
 
         df_binary = pd.concat([df_val[["user_id", "item_id"]], df_y], axis=1)
@@ -436,80 +383,65 @@ def setup_world_model(args, x_columns, y_columns, ab_columns, task, task_logit_d
     np.random.seed(args.seed)
     random.seed(args.seed)
 
-    # TODO: add DICE model
-    if args.use_DICE:
-        user_model = UserModel_DICE(x_columns, y_columns, task, task_logit_dim,
-                                    dnn_hidden_units=args.dnn, seed=args.seed, l2_reg_dnn=args.l2_reg_dnn,
-                                    device=device, ab_columns=ab_columns, init_std=0.001)
-    else:
-        user_model = UserModel_Pairwise(x_columns, y_columns, task, task_logit_dim,
-                                    dnn_hidden_units=args.dnn, seed=args.seed, l2_reg_dnn=args.l2_reg_dnn,
-                                    device=device, ab_columns=ab_columns, init_std=0.001)
+    ensemble_models = EnsembleModel(args.n_models, x_columns, y_columns, task, task_logit_dim,
+                                    dnn_hidden_units=args.dnn, dnn_hidden_units_var=args.dnn_var,
+                                    seed=args.seed, l2_reg_dnn=args.l2_reg_dnn,
+                                    device=device, ab_columns=ab_columns,
+                                    dnn_activation=args.dnn_activation, init_std=0.001)
 
-    # TODO add PD/IPS/DICE loss
-    if args.use_PD:
-        if args.loss not in ['pair', 'pointpair', 'pairpoint', 'pp']:
-            raise RuntimeError(f"{args.loss} is not supported using PD!")
-        if args.loss == 'pair':
-            loss_fun = loss_pairwise_PD
-        else:
-            loss_fun = loss_pairpoint_PD
-    elif args.use_IPS:
-        if args.loss == "pair":
-            loss_fun = loss_pairwise_IPS
-        elif args.loss == "point":
-            loss_fun = loss_pointwise_IPS
-        elif args.loss == "pointpair" or args.loss == "pairpoint" or args.loss == "pp":
-            loss_fun = loss_pairpoint_IPS
-        else:
-            raise RuntimeError(f"{args.loss} is not supported using IPS!")
-    elif args.use_DICE:
-        if args.loss not in ['pair', 'pointpair', 'pairpoint', 'pp']:
-            raise RuntimeError(f"{args.loss} is not supported using DICE!")
-        if args.loss == 'pair':
-            loss_fun = loss_pairwise_DICE
-        else:
-            loss_fun = loss_pairpoint_DICE
-    else:
-        if args.loss == "pair":
-            loss_fun = loss_pairwise
-        if args.loss == "point":
-            loss_fun = loss_pointwise
-        if args.loss == "pointneg":
-            loss_fun = loss_pointwise_negative
-        if args.loss == "pointpair" or args.loss == "pairpoint" or args.loss == "pp":
-            loss_fun = loss_pairwise_pointwise
+    if args.loss == "pair":
+        loss_fun = loss_pairwise
+    if args.loss == "point":
+        loss_fun = loss_pointwise
+    if args.loss == "pointneg":
+        loss_fun = loss_pointwise_negative
+    if args.loss == "pointpair" or args.loss == "pairpoint" or args.loss == "pp":
+        loss_fun = loss_pairwise_pointwise
 
-    user_model.compile(optimizer=args.optimizer,
-                       # loss_dict=task_loss_dict,
-                       loss_func=functools.partial(loss_fun, args=args),
-                       metric_fun={
-                           "MAE": lambda y, y_predict: nn.functional.l1_loss(torch.from_numpy(y).type(torch.float),
-                                                                             torch.from_numpy(y_predict)).numpy(),
-                           "MSE": lambda y, y_predict: nn.functional.mse_loss(torch.from_numpy(y).type(torch.float),
-                                                                              torch.from_numpy(y_predict)).numpy(),
-                           "RMSE": lambda y, y_predict: nn.functional.mse_loss(torch.from_numpy(y).type(torch.float),
-                                                                               torch.from_numpy(
-                                                                                   y_predict)).numpy() ** 0.5
-                       },
-                       metric_fun_ranking=
-                       functools.partial(get_ranking_results, K=args.rankingK,
-                                         metrics=["Recall", "Precision", "NDCG", "HT", "MAP", "MRR"]
-                                         ) if is_ranking else None,
-                       metrics=None)
+    ensemble_models.compile(optimizer=args.optimizer,
+                            # loss_dict=task_loss_dict,
+                            loss_func=functools.partial(loss_fun, args=args),
+                            metric_fun={
+                                "MAE": lambda y, y_predict: nn.functional.l1_loss(torch.from_numpy(y).type(torch.float),
+                                                                                  torch.from_numpy(y_predict)).numpy(),
+                                "MSE": lambda y, y_predict: nn.functional.mse_loss(
+                                    torch.from_numpy(y).type(torch.float),
+                                    torch.from_numpy(y_predict)).numpy(),
+                                "RMSE": lambda y, y_predict: nn.functional.mse_loss(
+                                    torch.from_numpy(y).type(torch.float),
+                                    torch.from_numpy(
+                                        y_predict)).numpy() ** 0.5
+                            },
+                            metric_fun_ranking=
+                            functools.partial(get_ranking_results, K=args.rankingK,
+                                              metrics=["Recall", "Precision", "NDCG", "HT", "MAP", "MRR"]
+                                              ) if is_ranking else None,
+                            metrics=None)
 
     # No evaluation step at offline stage
     # model.compile_RL_test(
     #     functools.partial(test_kuaishou, env=env, dataset_val=dataset_val, is_softmax=args.is_softmax,
     #                       epsilon=args.epsilon, is_ucb=args.is_ucb))
 
-    return user_model
+    return ensemble_models
+
+
+
+def get_detailed_path(Path_old, num):
+    path_list = Path_old.split(".")
+    assert len(path_list) >= 2
+    filename = path_list[-2]
+
+    path_list_new = path_list[:-2] + [filename + f"_M{num}"] + path_list[-1:]
+    Path_new = ".".join(path_list_new)
+    return Path_new
 
 
 # %% 6. Save model
-def save_world_model(args, user_model, dataset_train, dataset_val, x_columns, df_user, df_item, df_user_val, df_item_val,
+def save_world_model(args, ensemble_models, dataset_val, x_columns, y_columns, df_user, df_item, df_user_val,
+                     df_item_val,
                      user_features, item_features, model_parameters, MODEL_SAVE_PATH, logger_path):
-    MODEL_MAT_PATH = os.path.join(MODEL_SAVE_PATH, "mats", f"[{args.message}]_mat.pickle")
+    MODEL_MAT_PATH = os.path.join(MODEL_SAVE_PATH, "mats", f"[{args.message}]_mat.pickle") # todo: deprecated
     MODEL_PARAMS_PATH = os.path.join(MODEL_SAVE_PATH, "params", f"[{args.message}]_params.pickle")
     MODEL_PATH = os.path.join(MODEL_SAVE_PATH, "models", f"[{args.message}]_model.pt")
     MODEL_EMBEDDING_PATH = os.path.join(MODEL_SAVE_PATH, "embeddings", f"[{args.message}]_emb.pt")
@@ -519,37 +451,38 @@ def save_world_model(args, user_model, dataset_train, dataset_val, x_columns, df
     ITEM_VAL_EMBEDDING_PATH = os.path.join(MODEL_SAVE_PATH, "embeddings", f"[{args.message}]_emb_item_val.pt")
 
     # (1) Compute and save Mat
-    normed_mat = compute_normed_reward_for_all(user_model, dataset_val, df_user, df_item, user_features, item_features)
-    with open(MODEL_MAT_PATH, "wb") as f:
-        pickle.dump(normed_mat, f)
+    # # todo：暂时不需要
+    # mean_mat_list, var_mat_list = compute_mean_var(ensemble_models, dataset_val, df_user, df_item, user_features, item_features,
+    #                               x_columns, y_columns)
+    # with open(MODEL_MAT_PATH, "wb") as f:
+    #     pickle.dump(normed_mat, f)
 
     # (2) Save params
     with open(MODEL_PARAMS_PATH, "wb") as output_file:
         pickle.dump(model_parameters, output_file)
 
     # (3) Save Model
-    # TODO: save DICE model
     #  To cpu
-    model = user_model.cpu()
-    model.linear_model.device = "cpu"
-    if args.use_DICE:
-        model.linear_main.device= 'cpu'
-        model.linear_ui.device = 'cpu'
-    else:
-        model.linear.device = "cpu"
-    # for linear_model in user_model.linear_model_task:
-    #     linear_model.device = "cpu"
 
-    # model_save_path = os.path.join(MODEL_SAVE_PATH, "{}_{}.pt".format(args.user_model_name, args.message))
-    torch.save(model.state_dict(), MODEL_PATH)
+    # model = user_model.cpu()
+    # model.linear_model.device = "cpu"
+    # model.linear.device = "cpu"
+    #
+    # torch.save(model.state_dict(), MODEL_PATH)
+
+
+    for i, model in enumerate(ensemble_models.user_models):
+        MODEL_PATH_new = get_detailed_path(MODEL_PATH, i)
+
+        model = model.cpu()
+        model.linear_model.device = "cpu"
+        model.linear.device = "cpu"
+        torch.save(model.state_dict(), MODEL_PATH_new)
 
     # (4) Save Embedding
-    if args.use_DICE:
-        # do not save.....
-        exit(0)
-    torch.save(model.embedding_dict.state_dict(), MODEL_EMBEDDING_PATH)
+    # torch.save(model.embedding_dict.state_dict(), MODEL_EMBEDDING_PATH)
 
-    def save_embedding(df_save, columns, SAVEPATH):
+    def save_embedding(model, df_save, columns, SAVEPATH):
         df_save = df_save.reset_index(drop=False)
         df_save = df_save[[column.name for column in columns]]
 
@@ -566,10 +499,16 @@ def save_world_model(args, user_model, dataset_train, dataset_val, x_columns, df
     user_columns = x_columns[:len(user_features)]
     item_columns = x_columns[len(user_features):]
 
-    representation_save1 = save_embedding(df_item, item_columns, ITEM_EMBEDDING_PATH)
-    representation_save2 = save_embedding(df_user, user_columns, USER_EMBEDDING_PATH)
-    representation_save3 = save_embedding(df_item_val, item_columns, ITEM_VAL_EMBEDDING_PATH)
-    representation_save4 = save_embedding(df_user_val, user_columns, USER_VAL_EMBEDDING_PATH)
+    for i, model in enumerate(ensemble_models.user_models):
+        ITEM_EMBEDDING_PATH_new = get_detailed_path(ITEM_EMBEDDING_PATH, i)
+        USER_EMBEDDING_PATH_new = get_detailed_path(USER_EMBEDDING_PATH, i)
+        ITEM_VAL_EMBEDDING_PATH_new = get_detailed_path(ITEM_VAL_EMBEDDING_PATH, i)
+        USER_VAL_EMBEDDING_PATH_new = get_detailed_path(USER_VAL_EMBEDDING_PATH, i)
+
+        representation_save1 = save_embedding(model, df_item, item_columns, ITEM_EMBEDDING_PATH_new)
+        representation_save2 = save_embedding(model, df_user, user_columns, USER_EMBEDDING_PATH_new)
+        representation_save3 = save_embedding(model, df_item_val, item_columns, ITEM_VAL_EMBEDDING_PATH_new)
+        representation_save4 = save_embedding(model, df_user_val, user_columns, USER_VAL_EMBEDDING_PATH_new)
 
     logzero.logger.info(f"user_model and its parameters have been saved in {MODEL_SAVE_PATH}")
 
@@ -597,108 +536,52 @@ def process_logit(y_deepfm_pos, score, alpha_u=None, beta_i=None, args=None):
     return y_weighted, loss_ab
 
 
-def loss_pointwise_negative(y, y_deepfm_pos, y_deepfm_neg, score, alpha_u=None, beta_i=None, args=None):
+def loss_pointwise_negative(y, y_deepfm_pos, y_deepfm_neg, score, alpha_u=None, beta_i=None, args=None, log_var=None):
     y_weighted, loss_ab = process_logit(y_deepfm_pos, score, alpha_u=alpha_u, beta_i=beta_i, args=args)
 
-    loss_y = ((y_weighted - y) ** 2).sum()
+    if log_var is not None:
+        inv_var = torch.exp(-log_var)
+    else:
+        inv_var = 1
+
+    loss_y = (((y_weighted - y) ** 2) * inv_var).sum()
     loss_y_neg = ((y_deepfm_neg - 0) ** 2).sum()
 
     loss = loss_y + loss_y_neg + loss_ab
     return loss
 
 
-def loss_pointwise(y, y_deepfm_pos, y_deepfm_neg, score, alpha_u=None, beta_i=None, args=None):
+def loss_pointwise(y, y_deepfm_pos, y_deepfm_neg, score, alpha_u=None, beta_i=None, args=None, log_var=None):
     y_weighted, loss_ab = process_logit(y_deepfm_pos, score, alpha_u=alpha_u, beta_i=beta_i, args=args)
-    loss_y = ((y_weighted - y) ** 2).sum()
+
+    if log_var is not None:
+        inv_var = torch.exp(-log_var)
+    else:
+        inv_var = 1
+
+    loss_y = (((y_weighted - y) ** 2) * inv_var).sum()
 
     loss = loss_y + loss_ab
     return loss
 
 
-def loss_pairwise(y, y_deepfm_pos, y_deepfm_neg, score, alpha_u=None, beta_i=None, args=None):
+def loss_pairwise(y, y_deepfm_pos, y_deepfm_neg, score, alpha_u=None, beta_i=None, args=None, log_var=None):
     y_weighted, loss_ab = process_logit(y_deepfm_pos, score, alpha_u=alpha_u, beta_i=beta_i, args=args)
     # loss_y = ((y_exposure - y) ** 2).sum()
+
     bpr_click = - sigmoid(y_weighted - y_deepfm_neg).log().sum()
     loss = bpr_click + loss_ab
 
     return loss
 
 
-def loss_pairwise_pointwise(y, y_deepfm_pos, y_deepfm_neg, score, alpha_u=None, beta_i=None, args=None):
+def loss_pairwise_pointwise(y, y_deepfm_pos, y_deepfm_neg, score, alpha_u=None, beta_i=None, args=None, log_var=None):
     y_weighted, loss_ab = process_logit(y_deepfm_pos, score, alpha_u=alpha_u, beta_i=beta_i, args=args)
-
-    loss_y = ((y_weighted - y) ** 2).sum()
+    if log_var is not None:
+        inv_var = torch.exp(-log_var)
+    else:
+        inv_var = 1
+    loss_y = (((y_weighted - y) ** 2) * inv_var).sum()
     bpr_click = - sigmoid(y_weighted - y_deepfm_neg).log().sum()
     loss = loss_y + args.bpr_weight * bpr_click + loss_ab
-    return loss
-
-# TODO: add PD/IPS loss function
-
-
-def loss_pairwise_PD(y, y_deepfm_pos, y_deepfm_neg, score, alpha_u=None, beta_i=None, args=None):
-    score_pos = score[:, 0]
-    score_neg = score[:, 1]
-    bpr_click = - sigmoid(y_deepfm_pos * score_pos -
-                          y_deepfm_neg * score_neg).log().sum()
-    loss = bpr_click
-
-    return loss
-
-
-def loss_pairpoint_PD(y, y_deepfm_pos, y_deepfm_neg, score, alpha_u=None, beta_i=None, args=None):
-    score_pos = score[:, 0]
-    score_neg = score[:, 1]
-    bpr_click = - sigmoid(y_deepfm_pos * score_pos -
-                          y_deepfm_neg * score_neg).log().sum()
-
-    loss_y = ((y_deepfm_pos - y) ** 2).sum()
-
-    loss = loss_y + args.bpr_weight * bpr_click
-
-    return loss
-
-
-def loss_pointwise_IPS(y, y_deepfm_pos, y_deepfm_neg, score, alpha_u=None, beta_i=None, args=None):
-    loss_y = (((y_deepfm_pos - y)**2)*score).mean()
-    loss = loss_y
-    return loss
-
-
-def loss_pairwise_IPS(y, y_deepfm_pos, y_deepfm_neg, score, alpha_u=None, beta_i=None, args=None):
-    loss_bpr = - (sigmoid(y_deepfm_pos - y_deepfm_neg).log() * score).mean()
-    loss = loss_bpr
-    return loss
-
-
-def loss_pairpoint_IPS(y, y_deepfm_pos, y_deepfm_neg, score, alpha_u=None, beta_i=None, args=None):
-    loss_y = (((y_deepfm_pos - y)**2)*score).mean()
-    loss_bpr = - (sigmoid(y_deepfm_pos - y_deepfm_neg).log() * score).mean()
-    loss = loss_y + loss_bpr
-    return loss
-
-def loss_pairwise_DICE(y, y_deepfm_pos, y_deepfm_neg,
-                       y_deepfm_pos_int, y_deepfm_neg_int,
-                       y_deepfm_pos_con, y_deepfm_neg_con, score, args=None):
-    bpr_click = - sigmoid(y_deepfm_pos - y_deepfm_neg).log().mean()
-
-    # score: whether pos is popular than neg
-    mask_con = torch.where(score, torch.ones_like(score), -torch.ones_like(score))
-    mask_int = ~score
-    bpr_con = - (sigmoid(y_deepfm_pos_con - y_deepfm_neg_con).log() * mask_con).mean()
-    bpr_int = - (sigmoid(y_deepfm_pos_int - y_deepfm_neg_int).log() * mask_int).mean()
-    loss = bpr_click + bpr_con + bpr_int
-    return loss
-
-def loss_pairpoint_DICE(y, y_deepfm_pos, y_deepfm_neg,
-                       y_deepfm_pos_int, y_deepfm_neg_int,
-                       y_deepfm_pos_con, y_deepfm_neg_con, score, args=None):
-    loss_y = ((y_deepfm_pos - y) ** 2).mean()
-    bpr_click = - sigmoid(y_deepfm_pos - y_deepfm_neg).log().mean()
-
-    # score: consider popularity, pos > neg => 1, pos < neg => -1
-    mask_con = score
-    mask_int = score < 0
-    bpr_con = - (sigmoid(y_deepfm_pos_con - y_deepfm_neg_con).log() * mask_con).mean()
-    bpr_int = - (sigmoid(y_deepfm_pos_int - y_deepfm_neg_int).log() * mask_int).mean()
-    loss = loss_y + bpr_click + bpr_con + bpr_int
     return loss

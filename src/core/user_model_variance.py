@@ -26,14 +26,13 @@ except ImportError:
 from deepctr_torch.inputs import build_input_features, DenseFeat, VarLenSparseFeat
 from deepctr_torch.callbacks import History
 
-
-class UserModel(nn.Module):
+class UserModel_Variance(nn.Module):
     def __init__(self, feature_columns, y_columns,
                  l2_reg_embedding=1e-5, l2_reg_linear=1e-5,
                  l2_reg_dnn=0, init_std=0.0001, task_dnn_units=None, seed=2022, dnn_dropout=0,
                  dnn_activation='relu', dnn_use_bn=False, device='cpu'):
 
-        super(UserModel, self).__init__()
+        super(UserModel_Variance, self).__init__()
 
         torch.manual_seed(seed)
 
@@ -88,6 +87,7 @@ class UserModel(nn.Module):
     def fit_data(self, dataset_train, dataset_val=None, batch_size=256, epochs=1, verbose=1, initial_epoch=0,
                  callbacks=None, shuffle=True):
 
+        print(batch_size)
         model = self.train()
         # loss_func_dict = self.loss_func_dict
         optim = self.optim
@@ -151,7 +151,7 @@ class UserModel(nn.Module):
                         y = y.to(self.device).float()
                         score = score.to(self.device).float()
 
-                        loss = model.get_loss(x, y, score).squeeze()
+                        loss = model.get_loss(x, y, score, deterministic=False).squeeze()
 
                         optim.zero_grad()
                         # loss = loss_func(y_pred, y.squeeze(), reduction='sum')
@@ -182,16 +182,6 @@ class UserModel(nn.Module):
                             with open(MODEL_SAVE_PATH, "wb") as output_file:
                                 pickle.dump(model_parameters, output_file)
                             raise ("there is nan, please check {}".format(MODEL_SAVE_PATH))
-
-                        # if verbose > 0:
-                        #     for name, metric_fun in self.metrics.items():
-                        #         if name not in train_result:
-                        #             train_result[name] = []
-                        #         train_result[name].append(metric_fun(
-                        #             y.cpu().data.numpy(),
-                        #             y_pred.cpu().data.numpy().astype("float64"),
-                        #             x_user[:, 0].cpu().data.numpy().astype(int)
-                        #         ))
 
 
             except KeyboardInterrupt:
@@ -275,7 +265,8 @@ class UserModel(nn.Module):
         #                         df_item_val.values), 1),
         #         dtype=torch.float, device=self.device, requires_grad=False)
 
-        u_value = self.forward(u_all_item).detach().squeeze() # predicted value
+        mean, var = self.forward(u_all_item)
+        u_value = mean.detach().squeeze() # predicted value
 
         if is_ucb:
             if not hasattr(self, "n_rec"):
@@ -396,7 +387,8 @@ class UserModel(nn.Module):
                 x = x.to(self.device).float()
                 # y = y.to(self.device).float()
 
-                y_pred = model.forward(x).cpu().data.numpy()  # .squeeze()
+                mean, var = model.forward(x)
+                y_pred = mean.cpu().data.numpy()  # .squeeze()
                 pred_ans.append(y_pred)
 
         return np.concatenate(pred_ans).astype("float64")
