@@ -72,8 +72,7 @@ def activation_layer(act_name, hidden_size=None, dice_dim=2):
         elif act_name.lower() == 'relu':
             act_layer = nn.ReLU(inplace=True)
         elif act_name.lower() == 'swish':
-            sigmoid = nn.Sigmoid()
-            act_layer = lambda x: x * sigmoid(x)
+            act_layer = nn.SiLU()
         elif act_name.lower() == 'dice':
             assert dice_dim
             act_layer = Dice(hidden_size, dice_dim)

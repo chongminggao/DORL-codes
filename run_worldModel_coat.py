@@ -25,7 +25,6 @@ def get_args():
 
     parser.add_argument("--env", type=str, default='CoatEnv-v0')
     parser.add_argument("--yfeat", type=str, default='rating')
-    parser.add_argument("--loss", type=str, default='point')
     parser.add_argument('--rating_threshold', default=4, type=float)
 
     parser.add_argument("--feature_dim", type=int, default=8)
@@ -40,6 +39,7 @@ def get_args():
     parser.add_argument('--no_userinfo', dest='is_userinfo', action='store_false')
     parser.set_defaults(is_userinfo=True)
 
+    parser.add_argument("--dnn_activation", type=str, default="prelu")
     parser.add_argument('--leave_threshold', default=10, type=float)
     parser.add_argument('--num_leave_compute', default=3, type=int)
 

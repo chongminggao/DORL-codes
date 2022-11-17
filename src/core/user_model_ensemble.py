@@ -45,7 +45,8 @@ class EnsembleModel():
         logger.info("============ Summarized results =============")
         for hist in history_list:
             logger.info(hist)
-            logger.info("\n")
+            # logger.info("\n")
 
         return history_list
+
 

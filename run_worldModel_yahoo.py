@@ -24,7 +24,6 @@ def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--env", type=str, default='YahooEnv-v0')
     parser.add_argument("--yfeat", type=str, default='rating')
-    parser.add_argument("--loss", type=str, default='point')
     parser.add_argument('--rating_threshold', default=4, type=float)
 
     parser.add_argument("--feature_dim", type=int, default=8)

@@ -37,11 +37,15 @@ class UserModel_Pairwise_Variance(UserModel_Variance):
     def __init__(self, feature_columns, y_columns, task, task_logit_dim,
                  dnn_hidden_units=(128, 128), dnn_hidden_units_var=(),
                  l2_reg_embedding=1e-5, l2_reg_dnn=1e-1, init_std=0.0001, task_dnn_units=None, seed=2022, dnn_dropout=0,
-                 dnn_activation='relu', dnn_use_bn=False, device='cpu', ab_columns=None):
+                 dnn_activation='relu', dnn_use_bn=False, device='cpu', ab_columns=None,
+                 max_logvar=0.5, min_logvar=-10):
 
         super(UserModel_Pairwise_Variance, self).__init__(feature_columns, y_columns,
-                                             l2_reg_embedding=l2_reg_embedding,
-                                             init_std=init_std, seed=seed, device=device)
+                                                          l2_reg_embedding=l2_reg_embedding,
+                                                          init_std=init_std, seed=seed, device=device)
+
+        self.max_logvar = max_logvar
+        self.min_logvar = min_logvar
 
         self.feature_columns = feature_columns
         self.feature_index = self.feature_index
@@ -56,22 +60,22 @@ class UserModel_Pairwise_Variance(UserModel_Variance):
         self.task = task
         self.task_dnn_units = task_dnn_units
 
-
         """
         For DNN Layer.
         """
 
         self.dnn = DNN(compute_input_dim(self.feature_columns), dnn_hidden_units,
-                            activation=dnn_activation, l2_reg=l2_reg_dnn, dropout_rate=dnn_dropout, use_bn=dnn_use_bn,
-                            init_std=init_std, device=device)
+                       activation=dnn_activation, l2_reg=l2_reg_dnn, dropout_rate=dnn_dropout, use_bn=dnn_use_bn,
+                       init_std=init_std, device=device)
         self.last = nn.Linear(dnn_hidden_units[-1], 1, bias=False)
         # self.out = PredictionLayer(task, task_dim=1)
         self.out = PredictionLayer(task)
 
         if len(dnn_hidden_units_var) > 0:
             self.layers_var = DNN(dnn_hidden_units[-1], dnn_hidden_units_var,
-                                activation=dnn_activation, l2_reg=l2_reg_dnn, dropout_rate=dnn_dropout, use_bn=dnn_use_bn,
-                                init_std=init_std, device=device)
+                                  activation=dnn_activation, l2_reg=l2_reg_dnn, dropout_rate=dnn_dropout,
+                                  use_bn=dnn_use_bn,
+                                  init_std=init_std, device=device)
 
             self.last_var = nn.Linear(dnn_hidden_units_var[-1], 1, bias=False)
         else:
@@ -104,7 +108,6 @@ class UserModel_Pairwise_Variance(UserModel_Variance):
 
         self.to(device)
 
-
     def _deepfm(self, X, feature_columns, feature_index):
 
         # sparse_embedding_list, dense_value_list = self.input_from_feature_columns(X, feature_columns,
@@ -115,7 +118,6 @@ class UserModel_Pairwise_Variance(UserModel_Variance):
                                                                              support_dense=True, device=self.device)
 
         dnn_input = combined_dnn_input(sparse_embedding_list, dense_value_list)
-
 
         linear_model = self.linear
         dnn = self.dnn
@@ -148,8 +150,9 @@ class UserModel_Pairwise_Variance(UserModel_Variance):
         log_var = self.last_var(var_output)
 
         # todo: 放缩 【-10, 0.5]
-        # logvar = self.max_logvar - tf.nn.softplus(self.max_logvar - logvar)
-        # logvar = self.min_logvar + tf.nn.softplus(logvar - self.min_logvar)
+        softplus = nn.Softplus()
+        log_var = self.max_logvar - softplus(self.max_logvar - log_var)
+        log_var = self.min_logvar + softplus(log_var - self.min_logvar)
 
         return y_pred, log_var
 
@@ -160,23 +163,20 @@ class UserModel_Pairwise_Variance(UserModel_Variance):
         X_pos = x[:, :num_features]
         X_neg = x[:, num_features:]
 
-
         # y_deepfm_pos = self._deepfm(X_pos, self.feature_columns, self.feature_index)
         # y_deepfm_neg = self._deepfm(X_neg, self.feature_columns, self.feature_index)
         y_deepfm_pos, log_var_pos = self.forward(X_pos)
         y_deepfm_neg, log_var_neg = self.forward(X_neg)
 
-
         if self.ab_columns is None:
             alpha_u, beta_i = None, None
         else:  # CIRS-UserModel-kuaishou.py
-            alpha_u = self.ab_embedding_dict['alpha_u'](x[:,0].long())
-            beta_i = self.ab_embedding_dict['beta_i'](x[:,1].long())
+            alpha_u = self.ab_embedding_dict['alpha_u'](x[:, 0].long())
+            beta_i = self.ab_embedding_dict['beta_i'](x[:, 1].long())
 
         if not deterministic:
-            loss_y = self.loss_func(y, y_deepfm_pos, y_deepfm_neg, score, alpha_u=alpha_u, beta_i=beta_i, log_var=log_var_pos)
-            loss_var = log_var_pos.sum()
-            loss = loss_y + loss_var
+            loss = self.loss_func(y, y_deepfm_pos, y_deepfm_neg, score, alpha_u=alpha_u, beta_i=beta_i,
+                                  log_var=log_var_pos, log_var_neg=log_var_neg)
         else:
             loss = self.loss_func(y, y_deepfm_pos, y_deepfm_neg, score, alpha_u=alpha_u, beta_i=beta_i, log_var=None)
 

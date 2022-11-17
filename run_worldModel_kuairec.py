@@ -30,8 +30,7 @@ def get_args():
     parser.add_argument("--env", type=str, default='KuaiEnv-v0')
     parser.add_argument("--yfeat", type=str, default='watch_ratio_normed')
     parser.add_argument("--optimizer", type=str, default='adam')
-    parser.add_argument("--loss", type=str, default='point')
-    parser.add_argument('--neg_K', default=1, type=int)
+    parser.add_argument('--neg_K', default=3, type=int)
 
     parser.add_argument("--feature_dim", type=int, default=8)
     parser.add_argument("--entity_dim", type=int, default=8)
@@ -45,6 +44,7 @@ def get_args():
     parser.add_argument('--no_userinfo', dest='is_userinfo', action='store_false')
     parser.set_defaults(is_userinfo=False)
 
+    parser.add_argument("--dnn_activation", type=str, default="swish")
     parser.add_argument('--leave_threshold', default=0, type=int) # todo
     parser.add_argument('--num_leave_compute', default=1, type=int) # todo
 

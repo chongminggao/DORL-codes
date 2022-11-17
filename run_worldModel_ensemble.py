@@ -22,9 +22,10 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from environments.KuaiRec.env.KuaiEnv import compute_exposure_effect_kuaiRec
-from core.user_model_ensemble import EnsembleModel
+
 
 sys.path.extend(["./src", "./src/DeepCTR-Torch"])
+from core.user_model_ensemble import EnsembleModel
 from core.evaluation.metrics import get_ranking_results
 from core.inputs import SparseFeatP, input_from_feature_columns
 from core.static_dataset import StaticDataset
@@ -44,12 +45,14 @@ def get_args_all():
     parser.add_argument('--neg_K', default=5, type=int)
     parser.add_argument('--n_models', default=5, type=int)
 
+
     # recommendation related:
     # parser.add_argument('--not_softmax', action="store_false")
     parser.add_argument('--is_softmax', dest='is_softmax', action='store_true')
     parser.add_argument('--no_softmax', dest='is_softmax', action='store_false')
     parser.set_defaults(is_softmax=False)
 
+    parser.add_argument("--loss", type=str, default='pointneg')
     parser.add_argument('--rankingK', default=(20, 10, 5), type=int, nargs="+")
     parser.add_argument('--max_turn', default=30, type=int)
 
@@ -72,7 +75,7 @@ def get_args_all():
     parser.add_argument('--dnn', default=(128, 128), type=int, nargs="+")
     parser.add_argument('--dnn_var', default=(), type=int, nargs="+")
     parser.add_argument('--batch_size', default=256, type=int)
-    parser.add_argument('--epoch', default=20, type=int)
+    parser.add_argument('--epoch', default=30, type=int)
     parser.add_argument('--cuda', default=0, type=int)
 
     # exposure parameters:
@@ -536,36 +539,47 @@ def process_logit(y_deepfm_pos, score, alpha_u=None, beta_i=None, args=None):
     return y_weighted, loss_ab
 
 
-def loss_pointwise_negative(y, y_deepfm_pos, y_deepfm_neg, score, alpha_u=None, beta_i=None, args=None, log_var=None):
+def loss_pointwise_negative(y, y_deepfm_pos, y_deepfm_neg, score, alpha_u=None, beta_i=None, args=None, log_var=None, log_var_neg=None):
+    y_weighted, loss_ab = process_logit(y_deepfm_pos, score, alpha_u=alpha_u, beta_i=beta_i, args=args)
+
+
+    if log_var is not None:
+        inv_var = torch.exp(-log_var)
+        inv_var_neg = torch.exp(-log_var_neg)
+        loss_var_pos = log_var.sum()
+        loss_var_neg = log_var_neg.sum()
+    else:
+        inv_var = 1
+        inv_var_neg = 1
+        loss_var_pos = 0
+        loss_var_neg = 0
+
+
+    loss_y = (((y_weighted - y) ** 2) * inv_var).sum()
+    loss_y_neg = (((y_deepfm_neg - 0) ** 2) * inv_var_neg).sum()
+
+    loss = loss_y + loss_y_neg + loss_ab + loss_var_pos + loss_var_neg
+    return loss
+
+
+def loss_pointwise(y, y_deepfm_pos, y_deepfm_neg, score, alpha_u=None, beta_i=None, args=None, log_var=None, log_var_neg=None):
     y_weighted, loss_ab = process_logit(y_deepfm_pos, score, alpha_u=alpha_u, beta_i=beta_i, args=args)
 
     if log_var is not None:
         inv_var = torch.exp(-log_var)
+        loss_var_pos = log_var.sum()
     else:
         inv_var = 1
-
-    loss_y = (((y_weighted - y) ** 2) * inv_var).sum()
-    loss_y_neg = ((y_deepfm_neg - 0) ** 2).sum()
-
-    loss = loss_y + loss_y_neg + loss_ab
-    return loss
-
-
-def loss_pointwise(y, y_deepfm_pos, y_deepfm_neg, score, alpha_u=None, beta_i=None, args=None, log_var=None):
-    y_weighted, loss_ab = process_logit(y_deepfm_pos, score, alpha_u=alpha_u, beta_i=beta_i, args=args)
-
-    if log_var is not None:
-        inv_var = torch.exp(-log_var)
-    else:
-        inv_var = 1
+        loss_var_pos = 0
 
     loss_y = (((y_weighted - y) ** 2) * inv_var).sum()
 
-    loss = loss_y + loss_ab
+    loss = loss_y + loss_ab + loss_var_pos
+
     return loss
 
 
-def loss_pairwise(y, y_deepfm_pos, y_deepfm_neg, score, alpha_u=None, beta_i=None, args=None, log_var=None):
+def loss_pairwise(y, y_deepfm_pos, y_deepfm_neg, score, alpha_u=None, beta_i=None, args=None, log_var=None, log_var_neg=None):
     y_weighted, loss_ab = process_logit(y_deepfm_pos, score, alpha_u=alpha_u, beta_i=beta_i, args=args)
     # loss_y = ((y_exposure - y) ** 2).sum()
 
@@ -575,13 +589,15 @@ def loss_pairwise(y, y_deepfm_pos, y_deepfm_neg, score, alpha_u=None, beta_i=Non
     return loss
 
 
-def loss_pairwise_pointwise(y, y_deepfm_pos, y_deepfm_neg, score, alpha_u=None, beta_i=None, args=None, log_var=None):
+def loss_pairwise_pointwise(y, y_deepfm_pos, y_deepfm_neg, score, alpha_u=None, beta_i=None, args=None, log_var=None, log_var_neg=None):
     y_weighted, loss_ab = process_logit(y_deepfm_pos, score, alpha_u=alpha_u, beta_i=beta_i, args=args)
     if log_var is not None:
         inv_var = torch.exp(-log_var)
+        loss_var_pos = log_var.sum()
     else:
         inv_var = 1
+        loss_var_pos = 0
     loss_y = (((y_weighted - y) ** 2) * inv_var).sum()
     bpr_click = - sigmoid(y_weighted - y_deepfm_neg).log().sum()
-    loss = loss_y + args.bpr_weight * bpr_click + loss_ab
+    loss = loss_y + args.bpr_weight * bpr_click + loss_ab + loss_var_pos
     return loss
