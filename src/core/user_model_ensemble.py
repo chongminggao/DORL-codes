@@ -4,7 +4,7 @@
 # @FileName: user_model_ensemble.py
 import os
 import pickle
-from collections import Counter
+from collections import Counter, defaultdict
 from functools import partial
 from multiprocessing import Pool, Process
 
@@ -178,8 +178,50 @@ class EnsembleModel():
             savepath = os.path.join(self.Entropy_PATH, "user_entropy.csv")
             entropy_user.to_csv(savepath, index=True)
 
-        else:
-            pass
+        if len(set(args.entropy_window) - set([0])):
+
+            df_uit = df_train[["user_id", "item_id", "timestamp"]].sort_values(["user_id", "timestamp"])
+
+            map_hist_count = defaultdict(lambda: defaultdict(int))
+            lastuser = int(-1)
+
+            def update_map(map_hist_count, hist_tra, item, require_len):
+                if len(hist_tra) < require_len:
+                    return
+                # if require_len == 0:
+                #     map_hist_count[tuple()][item] += 1
+                # else:
+                map_hist_count[tuple(sorted(hist_tra[-require_len:]))][item] += 1
+
+            hist_tra = []
+            for k, (user, item, time) in tqdm(df_uit.iterrows()):
+                user = int(user)
+                item = int(item)
+
+                if user != lastuser:
+                    lastuser = user
+                    hist_tra = []
+
+                for require_len in set(args.entropy_window) - set([0]):
+                    update_map(map_hist_count, hist_tra, item, require_len)
+                hist_tra.append(item)
+
+            print(map_hist_count)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
         return entropy_user
 

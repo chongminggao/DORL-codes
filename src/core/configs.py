@@ -76,12 +76,14 @@ def get_common_args(args):
         args.is_binarize = True
         args.need_transform = False
         # args.entropy_on_user = False
+        args.entropy_window = [0, 1, 2]
         args.rating_threshold = 1
     elif env == "KuaiEnv-v0":
         args.is_userinfo = False
         args.is_binarize = False
         args.need_transform = True
         # args.entropy_on_user = False
+        args.entropy_window = [0,1,2]
     elif env == "YahooEnv-v0":
         args.is_userinfo = True
         args.is_binarize = True
