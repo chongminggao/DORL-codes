@@ -7,6 +7,7 @@ import torch
 from deepctr_torch.inputs import combined_dnn_input, build_input_features
 from deepctr_torch.layers import DNN, PredictionLayer, FM
 from torch import nn
+import inspect
 
 from core.inputs import input_from_feature_columns
 from core.layers import Linear, create_embedding_matrix
@@ -39,6 +40,12 @@ class UserModel_Pairwise_Variance(UserModel_Variance):
                  l2_reg_embedding=1e-5, l2_reg_dnn=1e-1, init_std=0.0001, task_dnn_units=None, seed=2022, dnn_dropout=0,
                  dnn_activation='relu', dnn_use_bn=False, device='cpu', ab_columns=None,
                  max_logvar=0.5, min_logvar=-10):
+
+
+        frame = inspect.currentframe()
+        args, _, _, values = inspect.getargvalues(frame)
+
+        self.model_param = {key: values[key] for key in args[1:]}
 
         super(UserModel_Pairwise_Variance, self).__init__(feature_columns, y_columns,
                                                           l2_reg_embedding=l2_reg_embedding,

@@ -7,7 +7,6 @@ import datetime
 import functools
 import json
 import os
-import pickle
 import random
 import sys
 import time
@@ -15,22 +14,18 @@ import logzero
 import numpy as np
 import pandas as pd
 import torch
-from scipy.sparse import csr_matrix
-from sklearn.preprocessing import LabelEncoder
 from torch import nn
-from torch.utils.data import DataLoader
-from tqdm import tqdm
 
 from environments.KuaiRec.env.KuaiEnv import compute_exposure_effect_kuaiRec
 
-
 sys.path.extend(["./src", "./src/DeepCTR-Torch"])
+from core.configs import get_training_data, get_val_data
 from core.user_model_ensemble import EnsembleModel
 from core.evaluation.metrics import get_ranking_results
-from core.inputs import SparseFeatP, input_from_feature_columns
+from core.inputs import SparseFeatP
 from core.static_dataset import StaticDataset
 from core.util import negative_sampling
-from deepctr_torch.inputs import DenseFeat, build_input_features, combined_dnn_input
+from deepctr_torch.inputs import DenseFeat
 
 from util.utils import create_dir
 
@@ -51,6 +46,10 @@ def get_args_all():
     parser.add_argument('--is_softmax', dest='is_softmax', action='store_true')
     parser.add_argument('--no_softmax', dest='is_softmax', action='store_false')
     parser.set_defaults(is_softmax=False)
+
+    parser.add_argument('--is_deterministic', dest='deterministic', action='store_true')
+    parser.add_argument('--no_deterministic', dest='deterministic', action='store_false')
+    parser.set_defaults(deterministic=True)
 
     parser.add_argument("--loss", type=str, default='pointneg')
     parser.add_argument('--rankingK', default=(20, 10, 5), type=int, nargs="+")
@@ -120,18 +119,7 @@ def get_xy_columns(args, df_data, df_user, df_item, user_features, item_features
 
 def load_dataset_train(args, user_features, item_features, reward_features, tau, entity_dim, feature_dim,
                        MODEL_SAVE_PATH, DATAPATH):
-    if args.env == "CoatEnv-v0":
-        from environments.coat.env.Coat import CoatEnv
-        df_train, df_user, df_item, list_feat = CoatEnv.get_df_coat("train.ascii")
-    elif args.env == "KuaiRand-v0":
-        from environments.KuaiRand_Pure.env.KuaiRand import KuaiRandEnv
-        df_train, df_user, df_item, list_feat = KuaiRandEnv.get_df_kuairand("train_processed.csv")
-    elif args.env == "KuaiEnv-v0":
-        from environments.KuaiRec.env.KuaiEnv import KuaiEnv
-        df_train, df_user, df_item, list_feat = KuaiEnv.get_df_kuairec("big_matrix_processed.csv")
-    elif args.env == "YahooEnv-v0":
-        from environments.YahooR3.env.Yahoo import YahooEnv
-        df_train, df_user, df_item, list_feat = YahooEnv.get_df_yahoo("ydata-ymusic-rating-study-v1_0-train.txt")
+    df_train, df_user, df_item, list_feat = get_training_data(args.env)
 
     assert user_features[0] == "user_id"
     assert item_features[0] == "item_id"
@@ -186,99 +174,9 @@ def construct_complete_val_x(dataset_val, df_user, df_item, user_features, item_
     df_x_complete = pd.concat([df_user_complete, df_item_complete], axis=1)
     return df_x_complete
 
-
-def get_one_predicted_res(model, df_x_complete, test_loader, steps_per_epoch):
-    mean_all = []
-    var_all = []
-    with torch.no_grad():
-        for _, (x, y) in tqdm(enumerate(test_loader), total=steps_per_epoch, desc="Predicting data..."):
-            x = x.to(model.user_models[0].device).float()
-            mean, var = model.user_models[0].forward(x)
-            y_pred = mean.cpu().data.numpy()  # .squeeze()
-            var_all_cat = var.cpu().data.numpy()
-            mean_all.append(y_pred)
-            var_all.append(var_all_cat)
-    mean_all_cat = np.concatenate(mean_all).astype("float64").reshape([-1])
-    var_all_cat = np.concatenate(var_all).astype("float64").reshape([-1])
-
-    # user_ids = np.sort(df_x_complete["user_id"].unique())
-
-    num_user = len(df_x_complete["user_id"].unique())
-    num_item = len(df_x_complete["item_id"].unique())
-
-    if num_user != df_x_complete["user_id"].max() + 1:
-        assert num_item != df_x_complete["item_id"].max() + 1
-        lbe_user = LabelEncoder()
-        lbe_item = LabelEncoder()
-
-        lbe_user.fit(df_x_complete["user_id"])
-        lbe_item.fit(df_x_complete["item_id"])
-
-        mean_mat = csr_matrix(
-            (mean_all_cat, (lbe_user.transform(df_x_complete["user_id"]), lbe_item.transform(df_x_complete["item_id"]))),
-            shape=(num_user, num_item)).toarray()
-
-        var_mat = csr_matrix(
-            (var_all_cat, (lbe_user.transform(df_x_complete["user_id"]), lbe_item.transform(df_x_complete["item_id"]))),
-            shape=(num_user, num_item)).toarray()
-    else:
-        assert num_item == df_x_complete["item_id"].max() + 1
-        mean_mat = csr_matrix(
-            (mean_all_cat, (df_x_complete["user_id"], df_x_complete["item_id"])),
-            shape=(num_user, num_item)).toarray()
-
-        var_mat = csr_matrix(
-            (var_all_cat, (df_x_complete["user_id"], df_x_complete["item_id"])),
-            shape=(num_user, num_item)).toarray()
-
-    # minn = mean_mat.min()
-    # maxx = mean_mat.max()
-    # normed_mat = (mean_mat - minn) / (maxx - minn)
-    # return normed_mat
-
-    return mean_mat, var_mat
-
-
-def compute_mean_var(ensemble_models, dataset_val, df_user, df_item, user_features, item_features, x_columns,
-                     y_columns):
-    df_x_complete = construct_complete_val_x(dataset_val, df_user, df_item, user_features, item_features)
-    n_user, n_item = df_x_complete[["user_id", "item_id"]].nunique()
-
-    print("predict all users' rewards on all items")
-
-    dataset_um = StaticDataset(x_columns, y_columns, num_workers=4)
-    dataset_um.compile_dataset(df_x_complete, pd.DataFrame(np.zeros([len(df_x_complete), 1]), columns=["y"]))
-
-    sample_num = len(dataset_um)
-    batch_size = 10000
-    steps_per_epoch = (sample_num - 1) // batch_size + 1
-
-    test_loader = DataLoader(dataset=dataset_um.get_dataset_eval(), shuffle=False, batch_size=batch_size,
-                             num_workers=dataset_um.num_workers)
-
-    mean_mat_list, var_mat_list = [], []
-    for model in ensemble_models.user_models:
-        mean_mat, var_mat = get_one_predicted_res(model, df_x_complete, test_loader, steps_per_epoch)
-        mean_mat_list.append(mean_mat)
-        var_mat_list.append(var_mat)
-
-    return mean_mat_list, var_mat_list
-
-
-
 def load_dataset_val(args, user_features, item_features, reward_features, entity_dim, feature_dim):
-    if args.env == "CoatEnv-v0":
-        from environments.coat.env.Coat import CoatEnv
-        df_val, df_user_val, df_item_val, list_feat = CoatEnv.get_df_coat("test.ascii")
-    elif args.env == "KuaiRand-v0":
-        from environments.KuaiRand_Pure.env.KuaiRand import KuaiRandEnv
-        df_val, df_user_val, df_item_val, list_feat = KuaiRandEnv.get_df_kuairand("test_processed.csv")
-    elif args.env == "KuaiEnv-v0":
-        from environments.KuaiRec.env.KuaiEnv import KuaiEnv
-        df_val, df_user_val, df_item_val, list_feat = KuaiEnv.get_df_kuairec("small_matrix_processed.csv")
-    elif args.env == "YahooEnv-v0":
-        from environments.YahooR3.env.Yahoo import YahooEnv
-        df_val, df_user_val, df_item_val, list_feat = YahooEnv.get_df_yahoo("ydata-ymusic-rating-study-v1_0-test.txt")
+
+    df_val, df_user_val, df_item_val, list_feat = get_val_data(args.env)
 
     assert user_features[0] == "user_id"
     assert item_features[0] == "item_id"
@@ -346,7 +244,6 @@ def load_dataset_val(args, user_features, item_features, reward_features, entity
 
     return dataset_val, df_user_val, df_item_val
 
-
 def prepare_dir_log(args):
     args.entity_dim = args.feature_dim
     # %% 1. Create dirs
@@ -356,7 +253,9 @@ def prepare_dir_log(args):
                    os.path.join(".", "saved_models", args.env),
                    MODEL_SAVE_PATH,
                    os.path.join(MODEL_SAVE_PATH, "logs"),
-                   os.path.join(MODEL_SAVE_PATH, "mats"),
+                   os.path.join(MODEL_SAVE_PATH, "matsPre"),
+                   os.path.join(MODEL_SAVE_PATH, "matsVar"),
+                   os.path.join(MODEL_SAVE_PATH, "entropy"),
                    os.path.join(MODEL_SAVE_PATH, "embeddings"),
                    os.path.join(MODEL_SAVE_PATH, "params"),
                    os.path.join(MODEL_SAVE_PATH, "models")]
@@ -381,12 +280,12 @@ def prepare_dataset(args, user_features, item_features, reward_features, MODEL_S
     return dataset_train, dataset_val, df_user, df_item, df_user_val, df_item_val, x_columns, y_columns, ab_columns
 
 
-def setup_world_model(args, x_columns, y_columns, ab_columns, task, task_logit_dim, is_ranking=False):
+def setup_world_model(args, x_columns, y_columns, ab_columns, task, task_logit_dim, is_ranking, MODEL_SAVE_PATH):
     device = torch.device("cuda:{}".format(args.cuda) if torch.cuda.is_available() else "cpu")
     np.random.seed(args.seed)
     random.seed(args.seed)
 
-    ensemble_models = EnsembleModel(args.n_models, x_columns, y_columns, task, task_logit_dim,
+    ensemble_models = EnsembleModel(args.n_models, args.message, MODEL_SAVE_PATH, x_columns, y_columns, task, task_logit_dim,
                                     dnn_hidden_units=args.dnn, dnn_hidden_units_var=args.dnn_var,
                                     seed=args.seed, l2_reg_dnn=args.l2_reg_dnn,
                                     device=device, ab_columns=ab_columns,
@@ -430,98 +329,98 @@ def setup_world_model(args, x_columns, y_columns, ab_columns, task, task_logit_d
 
 
 
-def get_detailed_path(Path_old, num):
-    path_list = Path_old.split(".")
-    assert len(path_list) >= 2
-    filename = path_list[-2]
-
-    path_list_new = path_list[:-2] + [filename + f"_M{num}"] + path_list[-1:]
-    Path_new = ".".join(path_list_new)
-    return Path_new
+# def get_detailed_path(Path_old, num):
+#     path_list = Path_old.split(".")
+#     assert len(path_list) >= 2
+#     filename = path_list[-2]
+#
+#     path_list_new = path_list[:-2] + [filename + f"_M{num}"] + path_list[-1:]
+#     Path_new = ".".join(path_list_new)
+#     return Path_new
 
 
 # %% 6. Save model
-def save_world_model(args, ensemble_models, dataset_val, x_columns, y_columns, df_user, df_item, df_user_val,
-                     df_item_val,
-                     user_features, item_features, model_parameters, MODEL_SAVE_PATH, logger_path):
-    MODEL_MAT_PATH = os.path.join(MODEL_SAVE_PATH, "mats", f"[{args.message}]_mat.pickle") # todo: deprecated
-    MODEL_PARAMS_PATH = os.path.join(MODEL_SAVE_PATH, "params", f"[{args.message}]_params.pickle")
-    MODEL_PATH = os.path.join(MODEL_SAVE_PATH, "models", f"[{args.message}]_model.pt")
-    MODEL_EMBEDDING_PATH = os.path.join(MODEL_SAVE_PATH, "embeddings", f"[{args.message}]_emb.pt")
-    USER_EMBEDDING_PATH = os.path.join(MODEL_SAVE_PATH, "embeddings", f"[{args.message}]_emb_user.pt")
-    ITEM_EMBEDDING_PATH = os.path.join(MODEL_SAVE_PATH, "embeddings", f"[{args.message}]_emb_item.pt")
-    USER_VAL_EMBEDDING_PATH = os.path.join(MODEL_SAVE_PATH, "embeddings", f"[{args.message}]_emb_user_val.pt")
-    ITEM_VAL_EMBEDDING_PATH = os.path.join(MODEL_SAVE_PATH, "embeddings", f"[{args.message}]_emb_item_val.pt")
-
-    # (1) Compute and save Mat
-    # # todo：暂时不需要
-    # mean_mat_list, var_mat_list = compute_mean_var(ensemble_models, dataset_val, df_user, df_item, user_features, item_features,
-    #                               x_columns, y_columns)
-    # with open(MODEL_MAT_PATH, "wb") as f:
-    #     pickle.dump(normed_mat, f)
-
-    # (2) Save params
-    with open(MODEL_PARAMS_PATH, "wb") as output_file:
-        pickle.dump(model_parameters, output_file)
-
-    # (3) Save Model
-    #  To cpu
-
-    # model = user_model.cpu()
-    # model.linear_model.device = "cpu"
-    # model.linear.device = "cpu"
-    #
-    # torch.save(model.state_dict(), MODEL_PATH)
-
-
-    for i, model in enumerate(ensemble_models.user_models):
-        MODEL_PATH_new = get_detailed_path(MODEL_PATH, i)
-
-        model = model.cpu()
-        model.linear_model.device = "cpu"
-        model.linear.device = "cpu"
-        torch.save(model.state_dict(), MODEL_PATH_new)
-
-    # (4) Save Embedding
-    # torch.save(model.embedding_dict.state_dict(), MODEL_EMBEDDING_PATH)
-
-    def save_embedding(model, df_save, columns, SAVEPATH):
-        df_save = df_save.reset_index(drop=False)
-        df_save = df_save[[column.name for column in columns]]
-
-        feature_index = build_input_features(columns)
-        tensor_save = torch.FloatTensor(df_save.to_numpy())
-        sparse_embedding_list, dense_value_list = input_from_feature_columns(tensor_save, columns,
-                                                                             model.embedding_dict,
-                                                                             feature_index=feature_index,
-                                                                             support_dense=True, device='cpu')
-        representation_save = combined_dnn_input(sparse_embedding_list, dense_value_list)
-        torch.save(representation_save, SAVEPATH)
-        return representation_save
-
-    user_columns = x_columns[:len(user_features)]
-    item_columns = x_columns[len(user_features):]
-
-    for i, model in enumerate(ensemble_models.user_models):
-        ITEM_EMBEDDING_PATH_new = get_detailed_path(ITEM_EMBEDDING_PATH, i)
-        USER_EMBEDDING_PATH_new = get_detailed_path(USER_EMBEDDING_PATH, i)
-        ITEM_VAL_EMBEDDING_PATH_new = get_detailed_path(ITEM_VAL_EMBEDDING_PATH, i)
-        USER_VAL_EMBEDDING_PATH_new = get_detailed_path(USER_VAL_EMBEDDING_PATH, i)
-
-        representation_save1 = save_embedding(model, df_item, item_columns, ITEM_EMBEDDING_PATH_new)
-        representation_save2 = save_embedding(model, df_user, user_columns, USER_EMBEDDING_PATH_new)
-        representation_save3 = save_embedding(model, df_item_val, item_columns, ITEM_VAL_EMBEDDING_PATH_new)
-        representation_save4 = save_embedding(model, df_user_val, user_columns, USER_VAL_EMBEDDING_PATH_new)
-
-    logzero.logger.info(f"user_model and its parameters have been saved in {MODEL_SAVE_PATH}")
-
-    # %% 7. Upload logs
-
-    REMOTE_ROOT = "/root/Counterfactual_IRS"
-    LOCAL_PATH = logger_path
-    REMOTE_PATH = os.path.join(REMOTE_ROOT, os.path.dirname(LOCAL_PATH))
-
-    # my_upload(LOCAL_PATH, REMOTE_PATH, REMOTE_ROOT)
+# def save_world_model(args, ensemble_models, dataset_val, x_columns, y_columns, df_user, df_item, df_user_val,
+#                      df_item_val,
+#                      user_features, item_features, model_parameters, MODEL_SAVE_PATH, logger_path):
+#     MODEL_MAT_PATH = os.path.join(MODEL_SAVE_PATH, "mats", f"[{args.message}]_mat.pickle") # todo: deprecated
+#     MODEL_PARAMS_PATH = os.path.join(MODEL_SAVE_PATH, "params", f"[{args.message}]_params.pickle")
+#     MODEL_PATH = os.path.join(MODEL_SAVE_PATH, "models", f"[{args.message}]_model.pt")
+#     MODEL_EMBEDDING_PATH = os.path.join(MODEL_SAVE_PATH, "embeddings", f"[{args.message}]_emb.pt")
+#     USER_EMBEDDING_PATH = os.path.join(MODEL_SAVE_PATH, "embeddings", f"[{args.message}]_emb_user.pt")
+#     ITEM_EMBEDDING_PATH = os.path.join(MODEL_SAVE_PATH, "embeddings", f"[{args.message}]_emb_item.pt")
+#     USER_VAL_EMBEDDING_PATH = os.path.join(MODEL_SAVE_PATH, "embeddings", f"[{args.message}]_emb_user_val.pt")
+#     ITEM_VAL_EMBEDDING_PATH = os.path.join(MODEL_SAVE_PATH, "embeddings", f"[{args.message}]_emb_item_val.pt")
+#
+#     # (1) Compute and save Mat
+#     # # todo：暂时不需要
+#     # mean_mat_list, var_mat_list = compute_mean_var(ensemble_models, dataset_val, df_user, df_item, user_features, item_features,
+#     #                               x_columns, y_columns)
+#     # with open(MODEL_MAT_PATH, "wb") as f:
+#     #     pickle.dump(normed_mat, f)
+#
+#     # (2) Save params
+#     with open(MODEL_PARAMS_PATH, "wb") as output_file:
+#         pickle.dump(model_parameters, output_file)
+#
+#     # (3) Save Model
+#     #  To cpu
+#
+#     # model = user_model.cpu()
+#     # model.linear_model.device = "cpu"
+#     # model.linear.device = "cpu"
+#     #
+#     # torch.save(model.state_dict(), MODEL_PATH)
+#
+#
+#     for i, model in enumerate(ensemble_models.user_models):
+#         MODEL_PATH_new = get_detailed_path(MODEL_PATH, i)
+#
+#         model = model.cpu()
+#         model.linear_model.device = "cpu"
+#         model.linear.device = "cpu"
+#         torch.save(model.state_dict(), MODEL_PATH_new)
+#
+#     # (4) Save Embedding
+#     # torch.save(model.embedding_dict.state_dict(), MODEL_EMBEDDING_PATH)
+#
+#     def save_embedding(model, df_save, columns, SAVEPATH):
+#         df_save = df_save.reset_index(drop=False)
+#         df_save = df_save[[column.name for column in columns]]
+#
+#         feature_index = build_input_features(columns)
+#         tensor_save = torch.FloatTensor(df_save.to_numpy())
+#         sparse_embedding_list, dense_value_list = input_from_feature_columns(tensor_save, columns,
+#                                                                              model.embedding_dict,
+#                                                                              feature_index=feature_index,
+#                                                                              support_dense=True, device='cpu')
+#         representation_save = combined_dnn_input(sparse_embedding_list, dense_value_list)
+#         torch.save(representation_save, SAVEPATH)
+#         return representation_save
+#
+#     user_columns = x_columns[:len(user_features)]
+#     item_columns = x_columns[len(user_features):]
+#
+#     for i, model in enumerate(ensemble_models.user_models):
+#         ITEM_EMBEDDING_PATH_new = get_detailed_path(ITEM_EMBEDDING_PATH, i)
+#         USER_EMBEDDING_PATH_new = get_detailed_path(USER_EMBEDDING_PATH, i)
+#         ITEM_VAL_EMBEDDING_PATH_new = get_detailed_path(ITEM_VAL_EMBEDDING_PATH, i)
+#         USER_VAL_EMBEDDING_PATH_new = get_detailed_path(USER_VAL_EMBEDDING_PATH, i)
+#
+#         representation_save1 = save_embedding(model, df_item, item_columns, ITEM_EMBEDDING_PATH_new)
+#         representation_save2 = save_embedding(model, df_user, user_columns, USER_EMBEDDING_PATH_new)
+#         representation_save3 = save_embedding(model, df_item_val, item_columns, ITEM_VAL_EMBEDDING_PATH_new)
+#         representation_save4 = save_embedding(model, df_user_val, user_columns, USER_VAL_EMBEDDING_PATH_new)
+#
+#     logzero.logger.info(f"user_model and its parameters have been saved in {MODEL_SAVE_PATH}")
+#
+#     # %% 7. Upload logs
+#
+#     REMOTE_ROOT = "/root/Counterfactual_IRS"
+#     LOCAL_PATH = logger_path
+#     REMOTE_PATH = os.path.join(REMOTE_ROOT, os.path.dirname(LOCAL_PATH))
+#
+#     # my_upload(LOCAL_PATH, REMOTE_PATH, REMOTE_ROOT)
 
 
 sigmoid = nn.Sigmoid()

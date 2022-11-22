@@ -11,7 +11,8 @@ sys.path.extend(["./src", "./src/DeepCTR-Torch"])
 
 from core.evaluation.evaluator import test_static_model_in_RL_env
 from environments.KuaiRand_Pure.env.KuaiRand import KuaiRandEnv
-from run_worldModel_ensemble import save_world_model, setup_world_model, prepare_dataset, prepare_dir_log, get_args_all
+from run_worldModel_ensemble import setup_world_model, prepare_dataset, prepare_dir_log, get_args_all
+from core.configs import get_features, get_common_args
 
 from logzero import logger
 
@@ -25,19 +26,19 @@ def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--env", type=str, default='KuaiRand-v0')
     parser.add_argument("--yfeat", type=str, default='is_click')
-    parser.add_argument('--rating_threshold', default=1, type=float)
+    # parser.add_argument('--rating_threshold', default=1, type=float)
 
     parser.add_argument("--feature_dim", type=int, default=4)
     parser.add_argument("--entity_dim", type=int, default=4)
     parser.add_argument('--batch_size', default=4096, type=int)
 
-    parser.add_argument('--is_binarize', dest='is_binarize', action='store_true')
-    parser.add_argument('--no_binarize', dest='is_binarize', action='store_false')
-    parser.set_defaults(is_binarize=True)
-
-    parser.add_argument('--is_userinfo', dest='is_userinfo', action='store_true')
-    parser.add_argument('--no_userinfo', dest='is_userinfo', action='store_false')
-    parser.set_defaults(is_userinfo=False)
+    # parser.add_argument('--is_binarize', dest='is_binarize', action='store_true')
+    # parser.add_argument('--no_binarize', dest='is_binarize', action='store_false')
+    # parser.set_defaults(is_binarize=True)
+    #
+    # parser.add_argument('--is_userinfo', dest='is_userinfo', action='store_true')
+    # parser.add_argument('--no_userinfo', dest='is_userinfo', action='store_false')
+    # parser.set_defaults(is_userinfo=False)
 
     parser.add_argument('--leave_threshold', default=10, type=float)
     parser.add_argument('--num_leave_compute', default=3, type=int)
@@ -48,16 +49,12 @@ def get_args():
 
 def main(args):
     # %% 1. Prepare dir
+    args = get_common_args(args)
     MODEL_SAVE_PATH, logger_path = prepare_dir_log(args)
 
     # %% 2. Prepare dataset
-    user_features = ["user_id", 'user_active_degree', 'is_live_streamer', 'is_video_author', 'follow_user_num_range',
-                     'fans_user_num_range', 'friend_user_num_range', 'register_days_range'] \
-                    + [f'onehot_feat{x}' for x in range(18)]
-    if not args.is_userinfo:
-        user_features = ["user_id"]  # TODO!!!!
-    item_features = ["item_id"] + ["feat" + str(i) for i in range(3)] + ["duration_normed"]
-    reward_features = [args.yfeat]
+    user_features, item_features, reward_features = get_features(args.env, args.is_userinfo)
+
     dataset_train, dataset_val, df_user, df_item, df_user_val, df_item_val, x_columns, y_columns, ab_columns = \
         prepare_dataset(args, user_features, item_features, reward_features, MODEL_SAVE_PATH, DATAPATH)
 
@@ -65,7 +62,7 @@ def main(args):
     task = "regression" if args.yfeat == "watch_ratio_normed" else "binary"
     task_logit_dim = 1
     is_ranking = True
-    ensemble_models = setup_world_model(args, x_columns, y_columns, ab_columns, task, task_logit_dim, is_ranking)
+    ensemble_models = setup_world_model(args, x_columns, y_columns, ab_columns, task, task_logit_dim, is_ranking, MODEL_SAVE_PATH)
 
     # %% 4. Setup RL environment
 
@@ -81,22 +78,17 @@ def main(args):
 
     ensemble_models.compile_RL_test(
         functools.partial(test_static_model_in_RL_env, env=env, dataset_val=dataset_val, is_softmax=args.is_softmax,
-                          epsilon=args.epsilon, is_ucb=args.is_ucb, need_transform=False))
+                          epsilon=args.epsilon, is_ucb=args.is_ucb, need_transform=args.need_transform))
 
     # %% 5. Learn and evaluate model
-    history = ensemble_models.fit_data(dataset_train, dataset_val,
-                                       batch_size=args.batch_size, epochs=args.epoch, shuffle=True,
-                                       callbacks=[[LoggerCallback_Update(logger_path)]])
+    # history = ensemble_models.fit_data(dataset_train, dataset_val,
+    #                                    batch_size=args.batch_size, epochs=args.epoch, shuffle=True,
+    #                                    callbacks=[[LoggerCallback_Update(logger_path)]])
 
     # %% 6. Save model
-    model_parameters = {"feature_columns": x_columns, "y_columns": y_columns, "task": task,
-                        "task_logit_dim": task_logit_dim, "dnn_hidden_units": args.dnn, "seed": args.seed,
-                        "device": "cpu",
-                        "ab_columns": ab_columns}
-
-    save_world_model(args, ensemble_models, dataset_val, x_columns, y_columns, df_user, df_item, df_user_val,
-                     df_item_val,
-                     user_features, item_features, model_parameters, MODEL_SAVE_PATH, logger_path)
+    ensemble_models.get_save_entropy_mat(args)
+    ensemble_models.save_all_models(dataset_val, x_columns, y_columns, df_user, df_item, df_user_val, df_item_val,
+                                    user_features, item_features, args.deterministic)
 
 
 if __name__ == '__main__':

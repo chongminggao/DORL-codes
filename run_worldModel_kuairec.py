@@ -11,12 +11,13 @@ import os
 import sys
 import traceback
 
-from run_worldModel_ensemble import prepare_dir_log, prepare_dataset, setup_world_model, save_world_model, get_args_all
+from run_worldModel_ensemble import prepare_dir_log, prepare_dataset, setup_world_model, get_args_all
+
 
 sys.path.extend(["./src","./src/DeepCTR-Torch"])
 
 from logzero import logger
-
+from core.configs import get_features, get_common_args
 from environments.KuaiRec.env.KuaiEnv import KuaiEnv
 from core.evaluation.evaluator import test_static_model_in_RL_env
 from util.utils import create_dir, LoggerCallback_Update
@@ -36,13 +37,13 @@ def get_args():
     parser.add_argument("--entity_dim", type=int, default=8)
     parser.add_argument('--batch_size', default=4096, type=int)
 
-    parser.add_argument('--is_binarize', dest='is_binarize', action='store_true')
-    parser.add_argument('--no_binarize', dest='is_binarize', action='store_false')
-    parser.set_defaults(is_binarize=False)
-
-    parser.add_argument('--is_userinfo', dest='is_userinfo', action='store_true')
-    parser.add_argument('--no_userinfo', dest='is_userinfo', action='store_false')
-    parser.set_defaults(is_userinfo=False)
+    # parser.add_argument('--is_binarize', dest='is_binarize', action='store_true')
+    # parser.add_argument('--no_binarize', dest='is_binarize', action='store_false')
+    # parser.set_defaults(is_binarize=False)
+    #
+    # parser.add_argument('--is_userinfo', dest='is_userinfo', action='store_true')
+    # parser.add_argument('--no_userinfo', dest='is_userinfo', action='store_false')
+    # parser.set_defaults(is_userinfo=False)
 
     parser.add_argument("--dnn_activation", type=str, default="swish")
     parser.add_argument('--leave_threshold', default=0, type=int) # todo
@@ -53,12 +54,12 @@ def get_args():
 
 def main(args):
     # %% 1. Prepare dir
+    args = get_common_args(args)
     MODEL_SAVE_PATH, logger_path = prepare_dir_log(args)
 
     # %% 2. Prepare dataset
-    user_features = ["user_id"]
-    item_features = ["item_id"] + ["feat" + str(i) for i in range(4)] + ["duration_normed"]
-    reward_features = [args.yfeat]
+    user_features, item_features, reward_features = get_features(args.env, args.is_userinfo)
+
     dataset_train, dataset_val, df_user, df_item, df_user_val, df_item_val, x_columns, y_columns, ab_columns = \
         prepare_dataset(args, user_features, item_features, reward_features, MODEL_SAVE_PATH, DATAPATH)
 
@@ -66,7 +67,7 @@ def main(args):
     task = "regression"
     task_logit_dim = 1
     is_ranking = False
-    ensemble_models = setup_world_model(args, x_columns, y_columns, ab_columns, task, task_logit_dim, is_ranking)
+    ensemble_models = setup_world_model(args, x_columns, y_columns, ab_columns, task, task_logit_dim, is_ranking, MODEL_SAVE_PATH)
 
     # %% 4. Prepare Envs
     mat, lbe_user, lbe_item, list_feat, df_video_env, df_dist_small = KuaiEnv.load_mat()
@@ -82,23 +83,18 @@ def main(args):
     env = KuaiEnv(**kwargs)
     ensemble_models.compile_RL_test(
         functools.partial(test_static_model_in_RL_env, env=env, dataset_val=dataset_val, is_softmax=args.is_softmax,
-                          epsilon=args.epsilon, is_ucb=args.is_ucb, need_transform=True))
+                          epsilon=args.epsilon, is_ucb=args.is_ucb, need_transform=args.need_transform))
 
     # %% 5. Learn model
-    history = ensemble_models.fit_data(dataset_train, dataset_val,
-                                  batch_size=args.batch_size, epochs=args.epoch, shuffle=True,
-                                  callbacks=[[LoggerCallback_Update(logger_path)]])
+    # history = ensemble_models.fit_data(dataset_train, dataset_val,
+    #                               batch_size=args.batch_size, epochs=args.epoch, shuffle=True,
+    #                               callbacks=[[LoggerCallback_Update(logger_path)]])
     # logger.info(history.history)
 
     # %% 6. Save model
-    model_parameters = {"feature_columns": x_columns, "y_columns": y_columns, "task": task,
-                        "task_logit_dim": task_logit_dim, "dnn_hidden_units": args.dnn, "seed": args.seed,
-                        "device": "cpu",
-                        "ab_columns": ab_columns}
-
-    save_world_model(args, ensemble_models, dataset_val, x_columns, y_columns, df_user, df_item, df_user_val, df_item_val,
-                     user_features, item_features, model_parameters, MODEL_SAVE_PATH, logger_path)
-
+    ensemble_models.get_save_entropy_mat(args)
+    ensemble_models.save_all_models(dataset_val, x_columns, y_columns, df_user, df_item, df_user_val, df_item_val,
+                                    user_features, item_features, args.deterministic)
 
 if __name__ == '__main__':
     args_all = get_args_all()

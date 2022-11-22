@@ -18,12 +18,19 @@ from environments.VirtualTaobao.virtualTB.utils import *
 
 class SimulatedEnv(gym.Env):
 
-    def __init__(self, env_task_class, user_model, task_env_param: dict, task_name: str, version: str = "v1", tau: float = 1.0,
-                 use_exposure_intervention=True,
+    def __init__(self, ensemble_models,
+                 # dataset_val, need_transform,
+                 env_task_class, task_env_param: dict, task_name: str, version: str = "v1", tau: float = 1.0,
+                 use_exposure_intervention=False,
                  alpha_u=None, beta_i=None,
-                 predicted_mat=None,
+                 predicted_mat=None, maxvar_mat=None, entropy_dict=None,
+                 entropy_window=None,
                  gamma_exposure=1):
-        self.user_model = user_model.eval()
+
+        self.ensemble_models = ensemble_models.eval()
+        # self.dataset_val = dataset_val
+        # self.need_transform = need_transform
+        # self.user_model = user_model.eval()
 
         # if task_name == "KuaiEnv-v0":
         #     from environments.KuaiRec.env.KuaiEnv import KuaiEnv
@@ -41,9 +48,20 @@ class SimulatedEnv(gym.Env):
         self.alpha_u = alpha_u
         self.beta_i = beta_i
         self.predicted_mat = predicted_mat
-        self.gamma_exposure = gamma_exposure
+        self.maxvar_mat = maxvar_mat
+        self.entropy_dict = entropy_dict
+        self.entropy_window = entropy_window
 
+        self.gamma_exposure = gamma_exposure
         self._reset_history()
+
+        if 0 in self.entropy_window:
+            entropy_min = self.entropy_dict["on_user"].min()
+
+        self.normed_term = predicted_mat.min() - maxvar_mat.max() + entropy_min
+
+
+
 
 
 
@@ -52,12 +70,7 @@ class SimulatedEnv(gym.Env):
     #     self.env_list = DummyVectorEnv([lambda: gym.make(self.env_task) for _ in range(num_env)])
 
     def _construct_state(self, reward):
-
-        if self.env_name == "VirtualTB-v0":
-            res = np.concatenate((self.action, np.array([reward, 0.0, self.total_turn])), axis=-1)  # [29,9,100]
-        else: # elif self.env_name == "KuaiEnv-v0":
-            res = self.env_task.state
-
+        res = self.env_task.state
         return res
 
     def seed(self, sd=0):
@@ -92,14 +105,48 @@ class SimulatedEnv(gym.Env):
             if pred_reward > 10:
                 pred_reward = 10
         else: # elif self.env_name == "KuaiEnv-v0":
-            pred_reward = self.predicted_mat[self.cur_user[0], action]
+
+            pred_reward = self.predicted_mat[self.cur_user[0], action] # todo
+            max_var = self.maxvar_mat[self.cur_user[0], action]  # todo
+            if 0 in self.entropy_window:
+                entropy = self.entropy_dict["on_user"][self.cur_user[0]]
+            penalized_reward = pred_reward - max_var + entropy - self.normed_term
+
+            # pred_reward = 1
+
+            # if self.need_transform:
+            #     user = self.env_task.lbe_user.inverse_transform(self.cur_user)[0]
+            # else:
+            #     user = self.cur_user[0]
+            #
+            # df_user_val = self.dataset_val.df_user_val
+            # df_item_val = self.dataset_val.df_item_val
+            #
+            # ui_pair = torch.tensor(
+            #     np.concatenate(([user], df_user_val.loc[user].to_numpy(),
+            #                     [action], df_item_val.loc[action].to_numpy())),
+            #     dtype=torch.float, requires_grad=False)
+            # ui_pair = torch.reshape(ui_pair, [-1, len(ui_pair)])
+            #
+            # assert ui_pair.shape[1] == len(self.dataset_val.x_columns)
+            #
+            # means = np.zeros([len(self.ensemble_models)])
+            # vars = np.zeros([len(self.ensemble_models)])
+            #
+            # for k, user_model in enumerate(self.ensemble_models):
+            #     # user_model.forward()
+            #     mean, log_var = user_model.forward(ui_pair)
+            #     means[k] = mean.detach().squeeze()
+            #     vars[k] = np.exp(log_var.detach().squeeze())
+            #
+            # pred_reward = means.mean() - vars.max()
 
         if self.version == "v1":
             # version 1
-            final_reward = clip0(pred_reward) / (1.0 + exposure_effect)
+            final_reward = clip0(penalized_reward) / (1.0 + exposure_effect)
         else:
             # version 2
-            final_reward = clip0(pred_reward - exposure_effect)
+            final_reward = clip0(penalized_reward - exposure_effect)
 
         return final_reward
 

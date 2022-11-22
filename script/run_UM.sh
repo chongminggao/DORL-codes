@@ -2,71 +2,23 @@
 #python run_worldModel_coat.py --tau 0  --cuda 1  --message "point"  --loss "point" &
 #python run_worldModel_coat.py --tau 0  --cuda 2  --message "pair"  --loss "pair" &
 #python run_worldModel_coat.py --tau 0  --cuda 3  --message "pp"  --loss "pp" &
-#python run_worldModel_coat.py --tau 0  --cuda 4  --message "pointneg"  --loss "pointneg" &
-#
-#python run_worldModel_coat.py --tau 0  --cuda 5  --message "point_swish"  --loss "point" --dnn_activation "swish" &
-#python run_worldModel_coat.py --tau 0  --cuda 6  --message "pair_swish"  --loss "pair" --dnn_activation "swish" &
-#python run_worldModel_coat.py --tau 0  --cuda 7  --message "pp_swish"  --loss "pp" --dnn_activation "swish" &
-#python run_worldModel_coat.py --tau 0  --cuda 1  --message "pointneg_swish"  --loss "pointneg" --dnn_activation "swish" &
-#
-#python run_worldModel_coat.py --tau 0  --cuda 1  --message "point_prelu"  --loss "point" --dnn_activation "prelu" &
-#python run_worldModel_coat.py --tau 0  --cuda 1  --message "pair_prelu"  --loss "pair" --dnn_activation "prelu" &
-#python run_worldModel_coat.py --tau 0  --cuda 0  --message "pp_prelu"  --loss "pp" --dnn_activation "prelu" &
-#python run_worldModel_coat.py --tau 0  --cuda 0  --message "pointneg_prelu"  --loss "pointneg" --dnn_activation "prelu" &
+#python run_worldModel_coat.py --tau 0  --cuda 3  --message "pointneg"  --loss "pointneg" &
 
-
-#
 #python run_worldModel_yahoo.py --tau 0 --cuda 0   --message "point"  --loss "point" &
 #python run_worldModel_yahoo.py --tau 0 --cuda 0   --message "pair"  --loss "pair" &
 #python run_worldModel_yahoo.py --tau 0 --cuda 2   --message "pp"  --loss "pp" &
-#python run_worldModel_yahoo.py --tau 0 --cuda 2   --message "pointneg"  --loss "pointneg" &
-#
-#python run_worldModel_yahoo.py --tau 0 --cuda 2   --message "point_swish"  --loss "point" --dnn_activation "swish" &
-#python run_worldModel_yahoo.py --tau 0 --cuda 2   --message "pair_swish"  --loss "pair" --dnn_activation "swish" &
-#python run_worldModel_yahoo.py --tau 0 --cuda 2   --message "pp_swish"  --loss "pp" --dnn_activation "swish" &
-#python run_worldModel_yahoo.py --tau 0 --cuda 3   --message "pointneg_swish"  --loss "pointneg" --dnn_activation "swish" &
-#
-#python run_worldModel_yahoo.py --tau 0 --cuda 4   --message "point_prelu"  --loss "point" --dnn_activation "prelu" &
-#python run_worldModel_yahoo.py --tau 0 --cuda 5   --message "pair_prelu"  --loss "pair" --dnn_activation "prelu" &
-#python run_worldModel_yahoo.py --tau 0 --cuda 6   --message "pp_prelu"  --loss "pp" --dnn_activation "prelu" &
-#python run_worldModel_yahoo.py --tau 0 --cuda 7   --message "pointneg_prelu"  --loss "pointneg" --dnn_activation "prelu" &
+python run_worldModel_yahoo.py --tau 0 --cuda 3   --message "pointneg"  --loss "pointneg" &
 #
 # # lab9 ================================
-python run_worldModel_kuairand.py --tau 0  --cuda 6   --message "point"  --loss "point" &
-python run_worldModel_kuairand.py --tau 0  --cuda 4   --message "pair"  --loss "pair" &
-python run_worldModel_kuairand.py --tau 0  --cuda 5   --message "pp"  --loss "pp" &
-python run_worldModel_kuairand.py --tau 0  --cuda 7   --message "pointneg"  --loss "pointneg" &
-
-python run_worldModel_kuairand.py --tau 0  --cuda 6   --message "point_swish"  --loss "point" --dnn_activation "swish" &
-python run_worldModel_kuairand.py --tau 0  --cuda 4   --message "pair_swish"  --loss "pair" --dnn_activation "swish" &
-python run_worldModel_kuairand.py --tau 0  --cuda 5   --message "pp_swish"  --loss "pp" --dnn_activation "swish" &
-python run_worldModel_kuairand.py --tau 0  --cuda 7   --message "pointneg_swish"  --loss "pointneg" --dnn_activation "swish" &
-
-python run_worldModel_kuairand.py --tau 0  --cuda 6   --message "point_prelu"  --loss "point" --dnn_activation "prelu" &
-python run_worldModel_kuairand.py --tau 0  --cuda 4   --message "pair_prelu"  --loss "pair" --dnn_activation "prelu" &
-python run_worldModel_kuairand.py --tau 0  --cuda 5   --message "pp_prelu"  --loss "pp" --dnn_activation "prelu" &
-python run_worldModel_kuairand.py --tau 0  --cuda 7   --message "pointneg_prelu"  --loss "pointneg" --dnn_activation "prelu" &
+#python run_worldModel_kuairand.py --tau 0  --cuda 6   --message "point"  --loss "point" &
+#python run_worldModel_kuairand.py --tau 0  --cuda 4   --message "pair"  --loss "pair" &
+#python run_worldModel_kuairand.py --tau 0  --cuda 5   --message "pp"  --loss "pp" &
+#python run_worldModel_kuairand.py --tau 0  --cuda 3   --message "pointneg"  --loss "pointneg" &
 
 #python run_worldModel_kuairec.py  --tau 0  --cuda 3   --message "point"  --loss "point" &
 #python run_worldModel_kuairec.py  --tau 0  --cuda 4   --message "pair"  --loss "pair" &
 #python run_worldModel_kuairec.py  --tau 0  --cuda 5   --message "pp"  --loss "pp" &
-#python run_worldModel_kuairec.py  --tau 0  --cuda 7   --message "pointneg"  --loss "pointneg" &
-#
-#python run_worldModel_kuairec.py  --tau 0  --cuda 3   --message "point_swish"  --loss "point" --dnn_activation "swish" &
-#python run_worldModel_kuairec.py  --tau 0  --cuda 4   --message "pair_swish"  --loss "pair" --dnn_activation "swish" &
-#python run_worldModel_kuairec.py  --tau 0  --cuda 5   --message "pp_swish"  --loss "pp" --dnn_activation "swish" &
-#python run_worldModel_kuairec.py  --tau 0  --cuda 7   --message "pointneg_swish"  --loss "pointneg" --dnn_activation "swish" &
-#
-#python run_worldModel_kuairec.py  --tau 0  --cuda 3   --message "point_prelu"  --loss "point" --dnn_activation "prelu" &
-#python run_worldModel_kuairec.py  --tau 0  --cuda 4   --message "pair_prelu"  --loss "pair" --dnn_activation "prelu" &
-#python run_worldModel_kuairec.py  --tau 0  --cuda 5   --message "pp_prelu"  --loss "pp" --dnn_activation "prelu" &
-#python run_worldModel_kuairec.py  --tau 0  --cuda 7   --message "pointneg_prelu"  --loss "pointneg" --dnn_activation "prelu" &
-
-
-
-
-
-
+#python run_worldModel_kuairec.py  --tau 0  --cuda 4   --message "pointneg"  --loss "pointneg" &
 
 
 
