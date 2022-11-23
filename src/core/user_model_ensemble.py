@@ -163,17 +163,25 @@ class EnsembleModel():
 
         num_item = df_train["item_id"].nunique()
 
-        if 0 in args.entropy_window:
-            def get_entropy(mylist, num_item):
+        if not "timestamp" in df_train.columns:
+            df_train.rename(columns={"time_ms": "timestamp"}, inplace=True)
+
+        def get_entropy(mylist, need_count=True):
+            if need_count:
                 cnt_dict = Counter(mylist)
-                prob = np.array(list(cnt_dict.values()))/num_item
-                log_prob = np.log2(prob)
-                entropy = - np.sum(log_prob * prob)
-                return entropy
+            else:
+                cnt_dict = mylist
+            prob = np.array(list(cnt_dict.values())) / sum(cnt_dict.values())
+            log_prob = np.log2(prob)
+            entropy = - np.sum(log_prob * prob) / np.log2(len(cnt_dict) + 1)
+            return entropy
+
+        if 0 in args.entropy_window:
+
 
             df_train = df_train.sort_values("user_id")
             interaction_list = df_train[["user_id", "item_id"]].groupby("user_id").agg(list)
-            entropy_user = interaction_list["item_id"].map(partial(get_entropy, num_item=num_item))
+            entropy_user = interaction_list["item_id"].map(partial(get_entropy))
 
             savepath = os.path.join(self.Entropy_PATH, "user_entropy.csv")
             entropy_user.to_csv(savepath, index=True)
@@ -194,7 +202,8 @@ class EnsembleModel():
                 map_hist_count[tuple(sorted(hist_tra[-require_len:]))][item] += 1
 
             hist_tra = []
-            for k, (user, item, time) in tqdm(df_uit.iterrows()):
+            # for k, (user, item, time) in tqdm(df_uit.iterrows(), total=len(df_uit), desc="count frequency..."):
+            for (user, item, time) in tqdm(df_uit.to_numpy(), total=len(df_uit), desc="count frequency..."):
                 user = int(user)
                 item = int(item)
 
@@ -205,6 +214,20 @@ class EnsembleModel():
                 for require_len in set(args.entropy_window) - set([0]):
                     update_map(map_hist_count, hist_tra, item, require_len)
                 hist_tra.append(item)
+
+            map_entropy = {}
+            for k, v in tqdm(map_hist_count.items(), total=len(map_hist_count), desc="compute entropy..."):
+                map_entropy[k] = get_entropy(v, need_count=False)
+
+
+            a = 1
+            for k,v in tqdm(map_entropy.items(), total=len(map_entropy)):
+                a = map_entropy[k]
+
+            savepath = os.path.join(self.Entropy_PATH, "map_entropy.pickle")
+            pickle.dump(map_entropy, open(savepath, 'wb'))
+
+
 
             print(map_hist_count)
 

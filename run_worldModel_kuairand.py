@@ -81,9 +81,9 @@ def main(args):
                           epsilon=args.epsilon, is_ucb=args.is_ucb, need_transform=args.need_transform))
 
     # %% 5. Learn and evaluate model
-    # history = ensemble_models.fit_data(dataset_train, dataset_val,
-    #                                    batch_size=args.batch_size, epochs=args.epoch, shuffle=True,
-    #                                    callbacks=[[LoggerCallback_Update(logger_path)]])
+    history = ensemble_models.fit_data(dataset_train, dataset_val,
+                                       batch_size=args.batch_size, epochs=args.epoch, shuffle=True,
+                                       callbacks=[[LoggerCallback_Update(logger_path)]])
 
     # %% 6. Save model
     ensemble_models.get_save_entropy_mat(args)

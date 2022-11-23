@@ -75,7 +75,7 @@ def update_map(map_hist_count, hist_tra, item, require_len):
         map_hist_count[tuple(sorted(hist_tra[-require_len:]))][item] += 1
 
 hist_tra = []
-for k, (user, item, time) in df_uit.head(10).iterrows():
+for (user, item, time) in df_uit.to_numpy():
     user = int(user)
     item = int(item)
 
