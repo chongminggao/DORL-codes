@@ -19,14 +19,14 @@ from core.user_model import build_input_features, compute_input_dim
 FLOAT = torch.FloatTensor
 
 
-class StateTrackerBase(nn.Module):
+class StateTrackerBase2(nn.Module):
     def __init__(self, user_columns, action_columns, feedback_columns,
                  have_user_embedding=True, have_action_embedding=True, have_feedback_embedding=False,
                  use_pretrained_embedding=False, saved_embedding=None,
                  dataset="VirtualTB-v0",
                  device='cpu', seed=2021,
                  init_std=0.0001, MAX_TURN=100):
-        super(StateTrackerBase, self).__init__()
+        super(StateTrackerBase2, self).__init__()
         torch.manual_seed(seed)
 
         self.dataset = dataset
@@ -107,10 +107,10 @@ class StateTrackerBase(nn.Module):
         return {}
 
 
-class StateTrackerAvg(nn.Module):
+class StateTrackerAvg2(nn.Module):
     def __init__(self, user_columns, action_columns, feedback_columns, dim_model, saved_embedding, device,
                  use_userEmbedding=False, window=10, MAX_TURN=100):
-        super(StateTrackerAvg, self).__init__()
+        super(StateTrackerAvg2, self).__init__()
         self.user_columns = user_columns
         self.action_columns = action_columns
         self.feedback_columns = feedback_columns
@@ -152,6 +152,75 @@ class StateTrackerAvg(nn.Module):
 
         return new_X
 
+
+    def get_trans_representation(self, obs, is_user, rew=None):
+        if is_user:
+            assert not obs is None
+            e_i = torch.ones(obs.shape[0], self.dim_item, device=self.device)
+            nn.init.normal_(e_i, mean=0, std=0.0001)
+
+            if self.use_userEmbedding:
+                self.e_u = self.get_embedding(obs, "user")
+                # s0 = self.ffn_user(e_u)
+                s0 = torch.cat([self.e_u, e_i], dim=-1)
+            else:
+                s0 = e_i
+            return s0
+
+        else:
+
+
+
+
+
+
+    def forward(self, obs=None,
+                    buffer=None,
+                    env_id=None,
+                    obs_next=None,
+                    rew=None,
+                    done=None,
+                    info=None,
+                    policy=None,
+                    dim_batch=None,
+                    reset=False):
+        if reset: # get user embedding
+
+            s0 = self.get_trans_representation(obs, is_user=True)
+            return s0
+        else:
+            a_t = self.get_embedding(obs, "action")
+            # self.len_data[env_id] += 1
+            # length = int(self.len_data[env_id[0]])
+
+            # turn = obs_next[:, -1]
+            # assert all(self.len_data[env_id].numpy() == turn + 1)
+
+            rew_matrix = rew.reshape((-1, 1))
+            r_t = self.get_embedding(rew_matrix, "feedback")
+
+            if self.use_userEmbedding:
+                e_s = torch.cat([self.e_u[env_id], a_t], dim=-1)
+            else:
+                e_s = a_t
+
+            index = buffer.last_index
+            last buffer[index]
+            while any(buffer.prev(index) != index):
+
+
+
+
+
+            # self.data[length - 1, env_id, :] = e_s * r_t
+            # if length <= self.window:
+            #     s_t = self.data[:length, env_id].mean(dim=0)
+            # else:
+            #     # if self.use_userEmbedding:
+            #     #     self.data[length - self.window, env_id] = self.data[0, env_id]  # Copy operation!
+            #     s_t = self.data[length - self.window:length, env_id].mean(dim=0)
+
+
     def build_state(self, obs=None,
                     env_id=None,
                     obs_next=None,
@@ -169,14 +238,9 @@ class StateTrackerAvg(nn.Module):
         res = {}
 
         if obs is not None:  # 1. initialize the state vectors
-            # if self.use_userEmbedding:
-            #     e_u = self.get_embedding(obs, "user")
-            #     s0 = self.ffn_user(e_u)
-            # else:
-            #     s0 = torch.ones(obs.shape[0], self.dim_model, device=self.device)
-            #     s0 = nn.init.normal_(s0, mean=0, std=0.0001)
 
-            e_i = torch.zeros(obs.shape[0], self.dim_item, device=self.device)
+
+            e_i = torch.ones(obs.shape[0], self.dim_item, device=self.device)
             nn.init.normal_(e_i, mean=0, std=0.0001)
 
             if self.use_userEmbedding:
@@ -236,7 +300,7 @@ class StateTrackerAvg(nn.Module):
         #         "done": done, "info": info, "policy": policy}
 
 
-class StateTrackerTransformer(StateTrackerBase):
+class StateTrackerTransformer2(StateTrackerBase2):
     def __init__(self, user_columns, action_columns, feedback_columns,
                  dim_model, dim_state, dim_max_batch, dropout=0.1,
                  dataset="VirtualTB-v0",
@@ -246,7 +310,7 @@ class StateTrackerTransformer(StateTrackerBase):
                  device='cpu', seed=2021,
                  init_std=0.0001, padding_idx=None, MAX_TURN=100):
 
-        super(StateTrackerTransformer, self).__init__(user_columns, action_columns, feedback_columns,
+        super(StateTrackerTransformer2, self).__init__(user_columns, action_columns, feedback_columns,
                                                       have_user_embedding=have_user_embedding,
                                                       have_action_embedding=have_action_embedding,
                                                       have_feedback_embedding=have_feedback_embedding,
@@ -393,16 +457,6 @@ class PositionalEncoding(nn.Module):
         """
         x = x + self.pe[:x.size(0)]
         return self.dropout(x)
-
-
-class StateTrackerGRU(StateTrackerBase):
-    def __init__(self):
-        pass
-
-
-class StateTrackerLSTM(StateTrackerBase):
-    def __init__(self):
-        pass
 
 
 if __name__ == '__main__':
