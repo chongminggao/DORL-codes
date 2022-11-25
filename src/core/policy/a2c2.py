@@ -82,7 +82,9 @@ class A2CPolicy2(A2CPolicy):
         v_s, v_s_ = [], []
         with torch.no_grad():
             for minibatch in batch.split(self._batch, shuffle=False, merge_last=True):
+                obs_emb = self.get_emb(buffer, indices, is_obs=True)
                 v_s.append(self.critic(minibatch.obs))
+                obs_next_emb = self.get_emb(buffer, indices, is_obs=False)
                 v_s_.append(self.critic(minibatch.obs_next))
         batch.v_s = torch.cat(v_s, dim=0).flatten()  # old value
         v_s = batch.v_s.cpu().numpy()
@@ -113,6 +115,22 @@ class A2CPolicy2(A2CPolicy):
         batch.adv = to_torch_as(advantages, batch.v_s)
         return batch
 
+    def get_emb(self, buffer, indices=None, is_obs=None, obs=None):
+        if len(buffer) == 0:
+            obs_emb = self.state_tracker.forward(obs=obs, reset=True)
+        else:
+            if indices is None:
+                indices = buffer.last_index[~buffer[buffer.last_index].done]
+                is_obs = False
+
+            if is_obs:
+                obs_emb = self.state_tracker.forward(buffer=buffer, indices=indices, reset=False, is_obs=is_obs)
+            else:
+                obs_emb = self.state_tracker.forward(buffer=buffer, indices=indices, reset=False, is_obs=is_obs)
+
+
+        return obs_emb
+
     def forward(
         self,
         batch: Batch,
@@ -134,10 +152,8 @@ class A2CPolicy2(A2CPolicy):
             Please refer to :meth:`~tianshou.policy.BasePolicy.forward` for
             more detailed explanation.
         """
-        if len(buffer) == 0:
-            obs_emb = self.state_tracker.forward(obs=batch.obs, reset=True)
-        else:
-            obs_emb = self.state_tracker.forward(obs=batch.obs, rew=batch.rew, buffer=buffer, reset=False)
+
+        obs_emb = self.get_emb(buffer, obs=batch.obs)
 
         logits, hidden = self.actor(obs_emb, state=state)
 

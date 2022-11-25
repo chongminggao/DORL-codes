@@ -106,8 +106,8 @@ class EnsembleModel():
         user_embedding = torch.load(get_detailed_path(self.USER_VAL_EMBEDDING_PATH, model_i))
         item_embedding = torch.load(get_detailed_path(self.ITEM_VAL_EMBEDDING_PATH, model_i))
         saved_embedding = torch.nn.ModuleDict(
-            {"feat_user": torch.nn.Embedding.from_pretrained(user_embedding, freeze=True),
-             "feat_item": torch.nn.Embedding.from_pretrained(item_embedding, freeze=True)})
+            {"feat_user": torch.nn.Embedding.from_pretrained(user_embedding, freeze=False),
+             "feat_item": torch.nn.Embedding.from_pretrained(item_embedding, freeze=False)})
         return saved_embedding
 
     def compute_mean_var(self, dataset_val, df_user, df_item, user_features, item_features, x_columns, y_columns):

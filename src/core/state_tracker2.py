@@ -4,6 +4,7 @@
 # @FileName: state_tracker.py
 import math
 
+import numpy as np
 import torch
 
 from core.inputs import SparseFeatP, input_from_feature_columns, create_embedding_matrix
@@ -152,10 +153,10 @@ class StateTrackerAvg2(nn.Module):
 
         return new_X
 
+    def forward(self, buffer=None, indices=None, obs=None,
+                reset=None, is_obs=None):
 
-    def get_trans_representation(self, obs, is_user, rew=None):
-        if is_user:
-            assert not obs is None
+        if reset: # get user embedding
             e_i = torch.ones(obs.shape[0], self.dim_item, device=self.device)
             nn.init.normal_(e_i, mean=0, std=0.0001)
 
@@ -165,60 +166,57 @@ class StateTrackerAvg2(nn.Module):
                 s0 = torch.cat([self.e_u, e_i], dim=-1)
             else:
                 s0 = e_i
+
             return s0
 
         else:
 
+            index = indices
+
+            if is_obs:
+                index_start = buffer.prev(index) == index
+
+                if self.use_userEmbedding:
+                    self.e_u = self.get_embedding(buffer[index[index_start]].obs, "user")
+
+                index[index_start] =
+
+            obs_all = buffer[index].obs_next
+            rew_all = buffer[index].rew
+
+            # obs_all = np.concatenate([obs, obs_prev])
+            # rew_all = np.concatenate([rew, rew_prev])
 
 
 
 
 
-    def forward(self, obs=None,
-                    buffer=None,
-                    env_id=None,
-                    obs_next=None,
-                    rew=None,
-                    done=None,
-                    info=None,
-                    policy=None,
-                    dim_batch=None,
-                    reset=False):
-        if reset: # get user embedding
+            while any(buffer.prev(index) != index):
+                index = buffer.prev(index)
 
-            s0 = self.get_trans_representation(obs, is_user=True)
-            return s0
-        else:
-            a_t = self.get_embedding(obs, "action")
-            # self.len_data[env_id] += 1
-            # length = int(self.len_data[env_id[0]])
+                obs_prev = buffer[index].obs_next
+                rew_prev = buffer[index].rew
 
-            # turn = obs_next[:, -1]
-            # assert all(self.len_data[env_id].numpy() == turn + 1)
+                obs_all = np.concatenate([obs_all, obs_prev])
+                rew_all = np.concatenate([rew_all, rew_prev])
 
-            rew_matrix = rew.reshape((-1, 1))
-            r_t = self.get_embedding(rew_matrix, "feedback")
+
+            obs_emb = self.get_embedding(obs_all, "action")
+
+            rew_matrix = rew_all.reshape((-1, 1))
+            rew_emb = self.get_embedding(rew_matrix, "feedback")
+
+            state_flat = obs_emb * rew_emb
+            state_cube = state_flat.reshape((-1, len(index), state_flat.shape[-1]))
+
+            state_final = state_cube.mean(dim=0)
 
             if self.use_userEmbedding:
-                e_s = torch.cat([self.e_u[env_id], a_t], dim=-1)
-            else:
-                e_s = a_t
+                # self.e_u = self.get_embedding(obs, "user")
+                # s0 = self.ffn_user(e_u)
+                state_final = torch.cat([self.e_u, state_final], dim=-1)
 
-            index = buffer.last_index
-            last buffer[index]
-            while any(buffer.prev(index) != index):
-
-
-
-
-
-            # self.data[length - 1, env_id, :] = e_s * r_t
-            # if length <= self.window:
-            #     s_t = self.data[:length, env_id].mean(dim=0)
-            # else:
-            #     # if self.use_userEmbedding:
-            #     #     self.data[length - self.window, env_id] = self.data[0, env_id]  # Copy operation!
-            #     s_t = self.data[length - self.window:length, env_id].mean(dim=0)
+            return state_final
 
 
     def build_state(self, obs=None,
