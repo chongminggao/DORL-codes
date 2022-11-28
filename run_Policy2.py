@@ -86,6 +86,10 @@ def get_args_all():
     parser.add_argument('--no_all_item_ranking', dest='is_all_item_ranking', action='store_false')
     parser.set_defaults(all_item_ranking=False)
 
+    parser.add_argument('--is_freeze_emb', dest='is_freeze_emb', action='store_true')
+    parser.add_argument('--no_freeze_emb', dest='is_freeze_emb', action='store_false')
+    parser.set_defaults(freeze_emb=False)
+
     # Env
     parser.add_argument("--version", type=str, default="v1")
     parser.add_argument('--tau', default=100, type=float)
@@ -274,14 +278,14 @@ def prepare_envs(args, ensemble_models, alpha_u, beta_i):
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     train_envs.seed(args.seed)
-    test_envs.seed(args.seed)
+    # test_envs.seed(args.seed)
 
     return env, train_envs, test_envs
 
 
     # %% 4. Setup model
 def setup_policy_model(args, ensemble_models, env, train_envs, test_envs):
-    saved_embedding = ensemble_models.load_val_user_item_embedding()
+    saved_embedding = ensemble_models.load_val_user_item_embedding(freeze_emb=args.freeze_emb)
 
     user_columns, action_columns, feedback_columns, \
     have_user_embedding, have_action_embedding, have_feedback_embedding = \
@@ -341,15 +345,17 @@ def setup_policy_model(args, ensemble_models, env, train_envs, test_envs):
     train_collector = Collector(
         policy, train_envs,
         VectorReplayBuffer(args.buffer_size, len(train_envs)),
-        # preprocess_fn=state_tracker.build_state,
+        preprocess_fn=state_tracker.build_state,
         exploration_noise=args.exploration_noise
     )
     test_collector = Collector(
         policy, test_envs,
         VectorReplayBuffer(args.buffer_size, len(test_envs)),
-        # preprocess_fn=state_tracker.build_state,
+        preprocess_fn=state_tracker.build_state,
         exploration_noise=args.exploration_noise
     )
+    policy.set_collector(train_collector)
+
     return policy, train_collector, test_collector, state_tracker, optim
 
 def learn_policy(args, policy, train_collector, test_collector, state_tracker, optim, MODEL_SAVE_PATH, logger_path):

@@ -68,6 +68,8 @@ class A2CPolicy2(A2CPolicy):
                          gae_lambda=gae_lambda, max_batchsize=max_batchsize, **kwargs)
         self.state_tracker = state_tracker
 
+    def set_collector(self, train_collector):
+        self.train_collector = train_collector
 
     def process_fn(
         self, batch: Batch, buffer: ReplayBuffer, indices: np.ndarray
@@ -81,11 +83,14 @@ class A2CPolicy2(A2CPolicy):
     ) -> Batch:
         v_s, v_s_ = [], []
         with torch.no_grad():
+            batch.indices = indices
             for minibatch in batch.split(self._batch, shuffle=False, merge_last=True):
-                obs_emb = self.get_emb(buffer, indices, is_obs=True)
-                v_s.append(self.critic(minibatch.obs))
-                obs_next_emb = self.get_emb(buffer, indices, is_obs=False)
-                v_s_.append(self.critic(minibatch.obs_next))
+                obs_emb = self.get_emb(buffer, minibatch.indices, is_obs=True)
+                # v_s.append(self.critic(minibatch.obs))
+                v_s.append(self.critic(obs_emb))
+                obs_next_emb = self.get_emb(buffer, minibatch.indices, is_obs=False)
+                # v_s_.append(self.critic(minibatch.obs_next))
+                v_s_.append(self.critic(obs_next_emb))
         batch.v_s = torch.cat(v_s, dim=0).flatten()  # old value
         v_s = batch.v_s.cpu().numpy()
         v_s_ = torch.cat(v_s_, dim=0).flatten().cpu().numpy()
@@ -122,7 +127,6 @@ class A2CPolicy2(A2CPolicy):
             if indices is None:
                 indices = buffer.last_index[~buffer[buffer.last_index].done]
                 is_obs = False
-
             if is_obs:
                 obs_emb = self.state_tracker.forward(buffer=buffer, indices=indices, reset=False, is_obs=is_obs)
             else:
@@ -135,6 +139,8 @@ class A2CPolicy2(A2CPolicy):
         self,
         batch: Batch,
         buffer: ReplayBuffer,
+        indices: np.ndarray = None,
+        is_obs = None,
         state: Optional[Union[dict, Batch, np.ndarray]] = None,
         **kwargs: Any,
     ) -> Batch:
@@ -153,7 +159,7 @@ class A2CPolicy2(A2CPolicy):
             more detailed explanation.
         """
 
-        obs_emb = self.get_emb(buffer, obs=batch.obs)
+        obs_emb = self.get_emb(buffer, indices=indices, obs=batch.obs, is_obs=is_obs)
 
         logits, hidden = self.actor(obs_emb, state=state)
 
@@ -181,12 +187,18 @@ class A2CPolicy2(A2CPolicy):
 
             for minibatch in batch.split(batch_size, merge_last=True):
                 # calculate loss for actor
-                dist = self(minibatch).dist
+
+                # dist = self(minibatch).dist
+                dist = self.forward(minibatch, self.train_collector.buffer, indices=minibatch.indices, is_obs=True).dist
+
+
                 log_prob = dist.log_prob(minibatch.act)
                 log_prob = log_prob.reshape(len(minibatch.adv), -1).transpose(0, 1)
                 actor_loss = -(log_prob * minibatch.adv).mean()
                 # calculate loss for critic
-                value = self.critic(minibatch.obs).flatten()
+
+                obs_emb = self.get_emb(self.train_collector.buffer, minibatch.indices, is_obs=True)
+                value = self.critic(obs_emb).flatten()
                 vf_loss = F.mse_loss(minibatch.returns, value)
                 # calculate regularization and overall loss
                 ent_loss = dist.entropy().mean()

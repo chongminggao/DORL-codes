@@ -210,7 +210,7 @@ class SimulatedEnv(gym.Env):
             # self.history_action = np.empty([0, self.action_space.shape[0]])
             self.history_action = np.zeros([self.env_task.max_turn, self.env_task.action_space.shape[0]])
         else: # elif self.env_name == "KuaiEnv-v0":
-            self.history_action = np.zeros(self.env_task.max_turn, dtype=np.int)
+            self.history_action = np.zeros(self.env_task.max_turn, dtype=int)
         self.history_exposure = {}
         self.max_history = 0
 

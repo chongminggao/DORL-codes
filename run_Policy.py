@@ -274,7 +274,7 @@ def prepare_envs(args, ensemble_models, alpha_u, beta_i):
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     train_envs.seed(args.seed)
-    test_envs.seed(args.seed)
+    # test_envs.seed(args.seed)
 
     return env, train_envs, test_envs
 

@@ -223,9 +223,9 @@ class Collector(object):
                 if no_grad:
                     with torch.no_grad():  # faster than retain_grad version
                         # self.data.obs will be used by agent to get result
-                        result = self.policy(self.data, self.buffer, last_state) # todo: altered by gcm
+                        result = self.policy(self.data, self.buffer, state=last_state) # todo: altered by gcm
                 else:
-                    result = self.policy(self.data, self.buffer, last_state) # todo: altered by gcm
+                    result = self.policy(self.data, self.buffer, state=last_state) # todo: altered by gcm
                 # update state / act / policy into self.data
                 policy = result.get("policy", Batch())  # Todo: 这里在pg下是空的！
                 assert isinstance(policy, Batch)

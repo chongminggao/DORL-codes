@@ -146,75 +146,205 @@ class StateTrackerAvg2(nn.Module):
             feat_columns = self.feedback_columns
             feat_index = self.feedback_index
 
-        sparse_embedding_list, dense_value_list = input_from_feature_columns(FLOAT(X).to(self.device), feat_columns,
-                                                                             self.embedding_dict, feat_index,
-                                                                             support_dense=True, device=self.device)
-        new_X = combined_dnn_input(sparse_embedding_list, dense_value_list)
+        # X[-1][0] = np.nan
+        # ind_nan = np.isnan(X)
+        ind_nan = X == -1
 
-        return new_X
+        if any(ind_nan):
+            X_normal = np.expand_dims(X[~ind_nan],-1)
+            dim_res = sum([column.embedding_dim for column in feat_columns])
+
+            X_res = torch.zeros([len(X), dim_res], device=self.device)
+            nn.init.normal_(X_res, mean=0, std=0.0001)
+
+            # self.embedding_dict.feat_item.weight.requires_grad
+            sparse_embedding_list, dense_value_list = input_from_feature_columns(FLOAT(X_normal).to(self.device), feat_columns,
+                                                                                 self.embedding_dict, feat_index,
+                                                                                 support_dense=True, device=self.device)
+            new_X = combined_dnn_input(sparse_embedding_list, dense_value_list)
+
+            X_res[~ind_nan.squeeze()] = new_X
+        else:
+            X_normal = X
+            sparse_embedding_list, dense_value_list = input_from_feature_columns(FLOAT(X_normal).to(self.device),
+                                                                                 feat_columns,
+                                                                                 self.embedding_dict, feat_index,
+                                                                                 support_dense=True, device=self.device)
+            new_X = combined_dnn_input(sparse_embedding_list, dense_value_list)
+            X_res = new_X
+
+        return X_res
 
     def forward(self, buffer=None, indices=None, obs=None,
                 reset=None, is_obs=None):
 
         if reset: # get user embedding
-            e_i = torch.ones(obs.shape[0], self.dim_item, device=self.device)
-            nn.init.normal_(e_i, mean=0, std=0.0001)
+
+            users = np.expand_dims(obs[:,0],-1)
+            items = np.expand_dims(obs[:,1],-1)
+
+            # e_i = torch.ones(obs.shape[0], self.dim_item, device=self.device)
+            # nn.init.normal_(e_i, mean=0, std=0.0001)
+
+            e_i = self.get_embedding(items, "action")
 
             if self.use_userEmbedding:
-                self.e_u = self.get_embedding(obs, "user")
+                e_u = self.get_embedding(users, "user")
                 # s0 = self.ffn_user(e_u)
-                s0 = torch.cat([self.e_u, e_i], dim=-1)
+                s0 = torch.cat([e_u, e_i], dim=-1)
             else:
                 s0 = e_i
 
             return s0
 
         else:
-
             index = indices
+            flag_has_init = np.zeros_like(index, dtype=bool)
+            #
+            # if is_obs:
+            #     live_id_now = buffer.prev(index) != index
+            #     index = buffer.prev(index)
+            # else:
+            #     live_id_now = np.ones_like(index, dtype=bool)
 
-            if is_obs:
-                index_start = buffer.prev(index) == index
-
-                if self.use_userEmbedding:
-                    self.e_u = self.get_embedding(buffer[index[index_start]].obs, "user")
-
-                index[index_start] =
-
-            obs_all = buffer[index].obs_next
-            rew_all = buffer[index].rew
-
-            # obs_all = np.concatenate([obs, obs_prev])
-            # rew_all = np.concatenate([rew, rew_prev])
-
+            # ind_init = ~live_id_now & ~flag_has_init
+            # obs_all = buffer[index].obs_next
+            # rew_all = buffer[index].rew
+            obs_all = np.zeros([0,2], dtype=int)
+            rew_all = np.zeros([0])
 
 
+            # obs_all[ind_init, 1] = -1
+            # rew_all[ind_init] = 1
+            # flag_has_init[ind_init] = True
+            # live_id_now[ind_init] = True
+
+            # live_mat = np.expand_dims(live_id_now, 0)
+            live_mat = np.zeros([0,len(index)], dtype=bool)
+
+            # live_id_prev = buffer.prev(index) != index
 
 
-            while any(buffer.prev(index) != index):
-                index = buffer.prev(index)
+            first_flag = True
+            while not all(flag_has_init) and len(live_mat) < self.window:
+                if is_obs or not first_flag:
+                    live_id_prev = buffer.prev(index) != index
+                    index = buffer.prev(index)
+                else:
+                    live_id_prev = np.ones_like(index, dtype=bool)
 
+                first_flag = False
+                # live_id_prev = buffer.prev(index) != index
+
+                ind_init = ~live_id_prev & ~flag_has_init
                 obs_prev = buffer[index].obs_next
                 rew_prev = buffer[index].rew
+
+                obs_prev[ind_init, 1] = -1
+                rew_prev[ind_init] = 1
+                flag_has_init[ind_init] = True
+                live_id_prev[ind_init] = True
+
+                live_mat = np.vstack([live_mat, live_id_prev])
 
                 obs_all = np.concatenate([obs_all, obs_prev])
                 rew_all = np.concatenate([rew_all, rew_prev])
 
+            user_all = np.expand_dims(obs_all[:, 0], -1)
+            item_all = np.expand_dims(obs_all[:, 1], -1)
 
-            obs_emb = self.get_embedding(obs_all, "action")
+            e_i = self.get_embedding(item_all, "action")
 
             rew_matrix = rew_all.reshape((-1, 1))
-            rew_emb = self.get_embedding(rew_matrix, "feedback")
-
-            state_flat = obs_emb * rew_emb
-            state_cube = state_flat.reshape((-1, len(index), state_flat.shape[-1]))
-
-            state_final = state_cube.mean(dim=0)
+            e_r = self.get_embedding(rew_matrix, "feedback")
 
             if self.use_userEmbedding:
-                # self.e_u = self.get_embedding(obs, "user")
-                # s0 = self.ffn_user(e_u)
-                state_final = torch.cat([self.e_u, state_final], dim=-1)
+                e_u = self.get_embedding(user_all, "user")
+                s_t = torch.cat([e_u, e_i], dim=-1)
+            else:
+                s_t = e_i
+
+            state_flat = s_t * e_r
+            state_cube = state_flat.reshape((-1, len(index), state_flat.shape[-1]))
+
+            mask = torch.from_numpy(np.expand_dims(live_mat, -1)).to(self.device)
+            state_masked = state_cube * mask
+
+            state_sum = state_masked.sum(dim=0)
+            state_final = state_sum / torch.from_numpy(np.expand_dims(live_mat.sum(0), -1)).to(self.device)
+
+
+
+            # BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB
+
+            # index = indices
+            # flag_has_init = np.zeros_like(index, dtype=bool)
+            #
+            # if is_obs:
+            #     live_id_now = buffer.prev(index) != index
+            #     index = buffer.prev(index)
+            # else:
+            #     live_id_now = np.ones_like(index, dtype=bool)
+            #
+            # ind_init = ~live_id_now & ~flag_has_init
+            # obs_all = buffer[index].obs_next
+            # rew_all = buffer[index].rew
+            #
+            # obs_all[ind_init, 1] = -1
+            # rew_all[ind_init] = 1
+            # flag_has_init[ind_init] = True
+            # live_id_now[ind_init] = True
+            #
+            # live_mat2 = np.expand_dims(live_id_now,0)
+            # live_id_prev = buffer.prev(index) != index
+            #
+            #
+            # while not all(flag_has_init):
+            #
+            #     index = buffer.prev(index)
+            #
+            #     ind_init = ~live_id_prev & ~flag_has_init
+            #     obs_prev = buffer[index].obs_next
+            #     rew_prev = buffer[index].rew
+            #
+            #     obs_prev[ind_init, 1] = -1
+            #     rew_prev[ind_init] = 1
+            #     flag_has_init[ind_init] = True
+            #     live_id_prev[ind_init] = True
+            #
+            #     live_mat2 = np.vstack([live_mat2, live_id_prev])
+            #
+            #     obs_all = np.concatenate([obs_all, obs_prev])
+            #     rew_all = np.concatenate([rew_all, rew_prev])
+            #
+            #     live_id_prev = buffer.prev(index) != index
+            #
+            # user_all2 = np.expand_dims(obs_all[:, 0], -1)
+            # item_all2 = np.expand_dims(obs_all[:, 1], -1)
+            #
+            # e_i = self.get_embedding(item_all2, "action")
+            #
+            # rew_matrix = rew_all.reshape((-1, 1))
+            # e_r = self.get_embedding(rew_matrix, "feedback")
+            #
+            # if self.use_userEmbedding:
+            #     e_u = self.get_embedding(user_all2, "user")
+            #     s_t = torch.cat([e_u, e_i], dim=-1)
+            # else:
+            #     s_t = e_i
+            #
+            # state_flat = s_t * e_r
+            # state_cube = state_flat.reshape((-1, len(index), state_flat.shape[-1]))
+            #
+            # mask = np.expand_dims(live_mat2, -1)
+            # state_masked = state_cube * mask
+            #
+            # state_sum = state_masked.sum(dim=0)
+            # state_final2 = state_sum / np.expand_dims(live_mat2.sum(0), -1)
+            #
+            # assert all(item_all2 == item_all)
+            # assert all(user_all2 == user_all)
+            # assert all(live_mat2.reshape(-1) == live_mat.reshape(-1))
 
             return state_final
 
@@ -228,75 +358,24 @@ class StateTrackerAvg2(nn.Module):
                     policy=None,
                     dim_batch=None,
                     reset=False):
-        if reset and dim_batch:
-            self.data = torch.zeros(self.MAX_TURN, dim_batch, self.dim_model,
-                                    device=self.device)  # (Length, Batch, Dim)
-            self.len_data = torch.zeros(dim_batch, dtype=torch.int64)
+        if reset:
+            self.user = None
             return
-        res = {}
 
         if obs is not None:  # 1. initialize the state vectors
-
-
-            e_i = torch.ones(obs.shape[0], self.dim_item, device=self.device)
-            nn.init.normal_(e_i, mean=0, std=0.0001)
-
-            if self.use_userEmbedding:
-                self.e_u = self.get_embedding(obs, "user")
-                # s0 = self.ffn_user(e_u)
-                s0 = torch.cat([self.e_u, e_i], dim=-1)
-            else:
-                s0 = e_i
-
-            self.data[0, env_id, :] = s0
-            self.len_data[env_id] = 1
-            res = {"obs": s0}
+            self.user = obs
+            # item = np.ones_like(obs) * np.nan
+            item = np.ones_like(obs) * -1
+            ui_pair = np.hstack([self.user, item])
+            res = {"obs": ui_pair}
 
         elif obs_next is not None:  # 2. add action autoregressively
-            # item = obs_next[~done]
-            # user = obs_next[done]
-            # if len(user):
-            #     a_item = self.get_embedding(item, "action")
-            #     print(user)
-            #     a_user = self.get_embedding(user, "user")
-            #
-            #     a_t = torch.zeros([obs_next.shape[0], a_item.shape[1]])
-            #     a_t = a_t.to(self.device)
-            #
-            #     a_t[done] = a_user.to(self.device)
-            #     a_t[~done] = a_item
-            #     a_t = a_t.to(self.device)
-            # else:
-            #     a_t = self.get_embedding(obs_next, "action")
-
-            a_t = self.get_embedding(obs_next, "action")
-
-            self.len_data[env_id] += 1
-            length = int(self.len_data[env_id[0]])
-
-            # turn = obs_next[:, -1]
-            # assert all(self.len_data[env_id].numpy() == turn + 1)
-            rew_matrix = rew.reshape((-1, 1))
-            r_t = self.get_embedding(rew_matrix, "feedback")
-
-            if self.use_userEmbedding:
-                e_s = torch.cat([self.e_u[env_id], a_t], dim=-1)
-            else:
-                e_s = a_t
-            self.data[length - 1, env_id, :] = e_s * r_t
-            if length <= self.window:
-                s_t = self.data[:length, env_id].mean(dim=0)
-            else:
-                # if self.use_userEmbedding:
-                #     self.data[length - self.window, env_id] = self.data[0, env_id]  # Copy operation!
-                s_t = self.data[length - self.window:length, env_id].mean(dim=0)
-
-            res = {"obs_next": s_t}
+            item = obs_next
+            user = self.user[env_id]
+            ui_pair = np.hstack([user, item])
+            res = {"obs_next": ui_pair}
 
         return res
-        # return {"obs": obs, "env_id": env_id, "obs_next": obs_next, "rew": rew,
-        #         "done": done, "info": info, "policy": policy}
-
 
 class StateTrackerTransformer2(StateTrackerBase2):
     def __init__(self, user_columns, action_columns, feedback_columns,
