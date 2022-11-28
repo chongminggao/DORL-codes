@@ -95,6 +95,9 @@ def get_args_all():
     parser.add_argument('--tau', default=100, type=float)
     parser.add_argument('--gamma_exposure', default=10, type=float)
 
+    parser.add_argument('--lambda_variance', default=1, type=float)
+    parser.add_argument('--lambda_entropy', default=1, type=float)
+
     parser.add_argument('--is_exposure_intervention', dest='use_exposure_intervention', action='store_true')
     parser.add_argument('--no_exposure_intervention', dest='use_exposure_intervention', action='store_false')
     parser.set_defaults(use_exposure_intervention=False)
@@ -211,6 +214,44 @@ def prepare_envs(args, ensemble_models, alpha_u, beta_i):
                      "max_turn": args.max_turn}
         env = CoatEnv(**kwargs_um)
         env_task_class = CoatEnv
+    elif args.env == "YahooEnv-v0":
+        from environments.YahooR3.env.Yahoo import YahooEnv
+        mat, mat_distance = YahooEnv.load_mat()
+        kwargs_um = {"mat": mat,
+                     "mat_distance": mat_distance,
+                     "num_leave_compute": args.num_leave_compute,
+                     "leave_threshold": args.leave_threshold,
+                     "max_turn": args.max_turn}
+
+        env = YahooEnv(**kwargs_um)
+        env_task_class = YahooEnv
+    elif args.env == "KuaiRand-v0":
+        from environments.KuaiRand_Pure.env.KuaiRand import KuaiRandEnv
+        mat, df_item, mat_distance = KuaiRandEnv.load_mat(args.yfeat)
+        kwargs_um = {"yname": args.yfeat,
+                     "mat": mat,
+                     "df_item": df_item,
+                     "mat_distance": mat_distance,
+                     "num_leave_compute": args.num_leave_compute,
+                     "leave_threshold": args.leave_threshold,
+                     "max_turn": args.max_turn}
+        env = KuaiRandEnv(**kwargs_um)
+        env_task_class = KuaiRandEnv
+    elif args.env == "KuaiEnv-v0":
+        from environments.KuaiRec.env.KuaiEnv import KuaiEnv
+        mat, lbe_user, lbe_video, list_feat, df_video_env, df_dist_small = KuaiEnv.load_mat()
+        kwargs_um = {"mat": mat,
+                     "lbe_user": lbe_user,
+                     "lbe_video": lbe_video,
+                     "num_leave_compute": args.num_leave_compute,
+                     "leave_threshold": args.leave_threshold,
+                     "max_turn": args.max_turn,
+                     "list_feat": list_feat,
+                     "df_video_env": df_video_env,
+                     "df_dist_small": df_dist_small}
+        env = KuaiEnv(**kwargs_um)
+        env_task_class = KuaiEnv
+
 
     elif args.env == "KuaiRand-v0":
         from environments.KuaiRand_Pure.env.KuaiRand import KuaiRandEnv
@@ -260,6 +301,8 @@ def prepare_envs(args, ensemble_models, alpha_u, beta_i):
         "tau": args.tau,
         "alpha_u": alpha_u,
         "beta_i": beta_i,
+        "lambda_entropy": args.lambda_entropy,
+        "lambda_variance": args.lambda_variance,
         "predicted_mat":predicted_mat,
         "maxvar_mat":maxvar_mat,
         "entropy_dict": entropy_dict,
@@ -272,7 +315,7 @@ def prepare_envs(args, ensemble_models, alpha_u, beta_i):
         [lambda: SimulatedEnv(**kwargs) for _ in range(args.training_num)])
     # test_envs = gym.make(args.task)
     test_envs = DummyVectorEnv(
-        [lambda: CoatEnv(**kwargs_um) for _ in range(args.test_num)])
+        [lambda: env_task_class(**kwargs_um) for _ in range(args.test_num)])
 
     random.seed(args.seed)
     np.random.seed(args.seed)

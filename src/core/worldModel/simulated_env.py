@@ -22,6 +22,7 @@ class SimulatedEnv(gym.Env):
                  # dataset_val, need_transform,
                  env_task_class, task_env_param: dict, task_name: str, version: str = "v1", tau: float = 1.0,
                  use_exposure_intervention=False,
+                 lambda_variance=1, lambda_entropy=1,
                  alpha_u=None, beta_i=None,
                  predicted_mat=None, maxvar_mat=None, entropy_dict=None,
                  entropy_window=None,
@@ -58,13 +59,9 @@ class SimulatedEnv(gym.Env):
         if 0 in self.entropy_window:
             entropy_min = self.entropy_dict["on_user"].min()
 
-        self.normed_term = predicted_mat.min() - maxvar_mat.max() + entropy_min
-
-
-
-
-
-
+        self.lambda_variance = lambda_variance
+        self.lambda_entropy = lambda_entropy
+        self.normed_term = predicted_mat.min() - lambda_variance * maxvar_mat.max() + lambda_entropy * entropy_min
 
     # def compile(self, num_env=1):
     #     self.env_list = DummyVectorEnv([lambda: gym.make(self.env_task) for _ in range(num_env)])
@@ -110,7 +107,8 @@ class SimulatedEnv(gym.Env):
             max_var = self.maxvar_mat[self.cur_user[0], action]  # todo
             if 0 in self.entropy_window:
                 entropy = self.entropy_dict["on_user"][self.cur_user[0]]
-            penalized_reward = pred_reward - max_var + entropy - self.normed_term
+            penalized_reward = pred_reward - self.lambda_variance * max_var + \
+                               self.lambda_entropy * entropy - self.normed_term
 
             # pred_reward = 1
 
