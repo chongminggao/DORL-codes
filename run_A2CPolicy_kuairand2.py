@@ -22,7 +22,7 @@ except ImportError:
 def get_args():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--env", type=str, default="KuaiRandEnv-v0")
+    parser.add_argument("--env", type=str, default="KuaiRand-v0")
 
     parser.add_argument('--leave_threshold', default=10, type=float)
     parser.add_argument('--num_leave_compute', default=3, type=int)

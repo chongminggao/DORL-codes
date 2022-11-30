@@ -78,6 +78,7 @@ def get_common_args(args):
         # args.entropy_on_user = False
         args.entropy_window = [0, 1, 2]
         args.rating_threshold = 1
+        args.yfeat = "is_click"
     elif env == "KuaiEnv-v0":
         args.is_userinfo = False
         args.is_binarize = False

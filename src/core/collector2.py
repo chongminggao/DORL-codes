@@ -18,6 +18,28 @@ from tianshou.data import (
 
 
 class Collector(object):
+    def __init__(
+            self,
+            policy: BasePolicy,
+            env: Union[gym.Env, BaseVectorEnv],
+            buffer: Optional[ReplayBuffer] = None,
+            preprocess_fn: Optional[Callable[..., Batch]] = None,
+            exploration_noise: bool = False,
+    ) -> None:
+        super().__init__()
+        if isinstance(env, gym.Env) and not hasattr(env, "__len__"):
+            warnings.warn("Single environment detected, wrap to DummyVectorEnv.")
+            env = DummyVectorEnv([lambda: env])
+        self.env = env
+        self.env_num = len(env)
+        self.exploration_noise = exploration_noise
+        self._assign_buffer(buffer)
+        self.policy = policy
+        self.preprocess_fn = preprocess_fn
+        self._action_space = env.action_space
+        # avoid creating attribute outside __init__
+        self.reset()
+
     """Revised tianshou.data.collector class.
 
     :param policy: an instance of the :class:`~tianshou.policy.BasePolicy` class.
@@ -44,28 +66,6 @@ class Collector(object):
         Please make sure the given environment has a time limitation if using n_episode
         collect option.
     """
-
-    def __init__(
-            self,
-            policy: BasePolicy,
-            env: Union[gym.Env, BaseVectorEnv],
-            buffer: Optional[ReplayBuffer] = None,
-            preprocess_fn: Optional[Callable[..., Batch]] = None,
-            exploration_noise: bool = False,
-    ) -> None:
-        super().__init__()
-        if isinstance(env, gym.Env) and not hasattr(env, "__len__"):
-            warnings.warn("Single environment detected, wrap to DummyVectorEnv.")
-            env = DummyVectorEnv([lambda: env])
-        self.env = env
-        self.env_num = len(env)
-        self.exploration_noise = exploration_noise
-        self._assign_buffer(buffer)
-        self.policy = policy
-        self.preprocess_fn = preprocess_fn
-        self._action_space = env.action_space
-        # avoid creating attribute outside __init__
-        self.reset()
 
     def _assign_buffer(self, buffer: Optional[ReplayBuffer]) -> None:
         """Check if the buffer matches the constraint."""
@@ -109,11 +109,12 @@ class Collector(object):
         """Reset the data buffer."""
 
         ## Chongming
-        maxsize = self.buffer.maxsize
-        buffer_num = self.buffer.buffer_num
-        buffer = VectorReplayBuffer(maxsize, buffer_num)
-        self._assign_buffer(buffer)
-        # self.buffer.reset(keep_statistics=keep_statistics)
+        # maxsize = self.buffer.maxsize
+        # buffer_num = self.buffer.buffer_num
+        # buffer = VectorReplayBuffer(maxsize, buffer_num)
+        # self._assign_buffer(buffer)
+
+        self.buffer.reset(keep_statistics=keep_statistics)
 
     def reset_env(self) -> None:
         """Reset all of the environments."""
@@ -239,7 +240,25 @@ class Collector(object):
 
             # get bounded and remapped actions first (not saved into buffer)
             action_remap = self.policy.map_action(self.data.act)
-            # step in env
+
+            # if len(self.buffer) and self.step_n_actions > 1:
+            #     now_ind = self.buffer.last_index[ready_env_ids]
+            #     action_k = np.vstack([action_remap, self.buffer[now_ind].act])
+            #
+            #     for i in range(self.step_n_actions-2):
+            #         prev_ind = self.buffer.prev(now_ind)
+            #         if all(prev_ind == now_ind):
+            #             break
+            #         assert all(prev_ind != now_ind)
+            #         now_ind = prev_ind
+            #         action_k = np.vstack([action_k, self.buffer[now_ind].act])
+            #     action_k = action_k.T
+            #
+            # else:
+            #     action_k = action_remap
+            #
+            # obs_next, rew, done, info = self.env.step(action_k, ready_env_ids) # type: ignore
+
             obs_next, rew, done, info = self.env.step(
                 action_remap, ready_env_ids)  # type: ignore
 

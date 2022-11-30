@@ -183,8 +183,6 @@ class A2CPolicy2(A2CPolicy):
 
         optim_RL, optim_state = self.optim
         for _ in range(repeat):
-            optim_state.zero_grad()
-
             for minibatch in batch.split(batch_size, merge_last=True):
                 # calculate loss for actor
 
@@ -205,17 +203,20 @@ class A2CPolicy2(A2CPolicy):
                 loss = actor_loss + self._weight_vf * vf_loss \
                     - self._weight_ent * ent_loss
                 optim_RL.zero_grad()
+                optim_state.zero_grad()
                 loss.backward()
                 if self._grad_norm:  # clip large gradient
                     nn.utils.clip_grad_norm_(
                         self._actor_critic.parameters(), max_norm=self._grad_norm
                     )
                 optim_RL.step()
+                optim_state.step()
+
                 actor_losses.append(actor_loss.item())
                 vf_losses.append(vf_loss.item())
                 ent_losses.append(ent_loss.item())
                 losses.append(loss.item())
-        optim_state.step()
+
 
         return {
             "loss": losses,

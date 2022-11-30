@@ -186,7 +186,6 @@ def prepare_user_model_and_env(args):
     n_models = model_params["n_models"]
     model_params.pop('n_models')
 
-
     ensemble_models = EnsembleModel(n_models, args.read_message, UM_SAVE_PATH, **model_params)
     ensemble_models.load_all_models()
 
@@ -239,10 +238,10 @@ def prepare_envs(args, ensemble_models, alpha_u, beta_i):
         env_task_class = KuaiRandEnv
     elif args.env == "KuaiEnv-v0":
         from environments.KuaiRec.env.KuaiEnv import KuaiEnv
-        mat, lbe_user, lbe_video, list_feat, df_video_env, df_dist_small = KuaiEnv.load_mat()
+        mat, lbe_user, lbe_item, list_feat, df_video_env, df_dist_small = KuaiEnv.load_mat()
         kwargs_um = {"mat": mat,
                      "lbe_user": lbe_user,
-                     "lbe_video": lbe_video,
+                     "lbe_item": lbe_item,
                      "num_leave_compute": args.num_leave_compute,
                      "leave_threshold": args.leave_threshold,
                      "max_turn": args.max_turn,
@@ -253,33 +252,26 @@ def prepare_envs(args, ensemble_models, alpha_u, beta_i):
         env_task_class = KuaiEnv
 
 
-    elif args.env == "KuaiRand-v0":
-        from environments.KuaiRand_Pure.env.KuaiRand import KuaiRandEnv
-
-    elif args.env == "KuaiEnv-v0":
-        from environments.KuaiRec.env.KuaiEnv import KuaiEnv
-
-    elif args.env == "YahooEnv-v0":
-        from environments.YahooR3.env.Yahoo import YahooEnv
-
-
     user_features, item_features, reward_features = get_features(args.env, args.is_userinfo)
-    embedding_dim_set = set([column.embedding_dim for column in ensemble_models.user_models[0].feature_columns])
-    assert len(embedding_dim_set) == 1
-    embedding_dim = list(embedding_dim_set)[0]
+    # embedding_dim_set = set([column.embedding_dim for column in ensemble_models.user_models[0].feature_columns])
+    # assert len(embedding_dim_set) == 1
+    # embedding_dim = list(embedding_dim_set)[0]
+    embedding_dim = ensemble_models.user_models[0].feature_columns[0].embedding_dim
 
     dataset_val, df_user_val, df_item_val = load_dataset_val(args, user_features, item_features, reward_features, embedding_dim, embedding_dim)
 
+    entropy_dict = dict()
     if 0 in args.entropy_window:
         entropy_path = os.path.join(ensemble_models.Entropy_PATH, "user_entropy.csv")
         entropy = pd.read_csv(entropy_path)
         entropy.set_index("user_id", inplace=True)
         entropy_mat_0 = entropy.to_numpy().reshape([-1])
-        entropy_dict = {"on_user": entropy_mat_0}
+        entropy_dict.update({"on_user": entropy_mat_0})
 
-    else:
-        # with open(ensemble_models.Entropy_PATH, "rb") as file:
-        pass
+    if len(set(args.entropy_window) - set([0])):
+        savepath = os.path.join(ensemble_models.Entropy_PATH, "map_entropy.pickle")
+        map_entropy = pickle.load(open(savepath, 'rb'))
+        entropy_dict.update({"map": map_entropy})
 
     with open(ensemble_models.PREDICTION_MAT_PATH, "rb") as file:
         predicted_mat = pickle.load(file)
@@ -307,7 +299,8 @@ def prepare_envs(args, ensemble_models, alpha_u, beta_i):
         "maxvar_mat":maxvar_mat,
         "entropy_dict": entropy_dict,
         "entropy_window": args.entropy_window,
-        "gamma_exposure": args.gamma_exposure}
+        "gamma_exposure": args.gamma_exposure,
+        "step_n_actions": max(args.entropy_window)}
 
     simulatedEnv = SimulatedEnv(**kwargs)
 
@@ -389,13 +382,13 @@ def setup_policy_model(args, ensemble_models, env, train_envs, test_envs):
         policy, train_envs,
         VectorReplayBuffer(args.buffer_size, len(train_envs)),
         preprocess_fn=state_tracker.build_state,
-        exploration_noise=args.exploration_noise
+        exploration_noise=args.exploration_noise,
     )
     test_collector = Collector(
         policy, test_envs,
         VectorReplayBuffer(args.buffer_size, len(test_envs)),
         preprocess_fn=state_tracker.build_state,
-        exploration_noise=args.exploration_noise
+        exploration_noise=args.exploration_noise,
     )
     policy.set_collector(train_collector)
 

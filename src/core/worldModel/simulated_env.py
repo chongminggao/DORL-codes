@@ -26,7 +26,8 @@ class SimulatedEnv(gym.Env):
                  alpha_u=None, beta_i=None,
                  predicted_mat=None, maxvar_mat=None, entropy_dict=None,
                  entropy_window=None,
-                 gamma_exposure=1):
+                 gamma_exposure=1,
+                 step_n_actions=1):
 
         self.ensemble_models = ensemble_models.eval()
         # self.dataset_val = dataset_val
@@ -52,12 +53,19 @@ class SimulatedEnv(gym.Env):
         self.maxvar_mat = maxvar_mat
         self.entropy_dict = entropy_dict
         self.entropy_window = entropy_window
+        self.step_n_actions = step_n_actions
 
         self.gamma_exposure = gamma_exposure
         self._reset_history()
 
+        entropy_min = 0
         if 0 in self.entropy_window:
             entropy_min = self.entropy_dict["on_user"].min()
+
+        # entropy_set = set(self.entropy_window) - set([0])
+        # if len(entropy_set):
+        #     for entropy_term in entropy_set:
+        #         entropy_min += min([v for k, v in self.entropy_dict["map"].items() if len(k) == entropy_term])
 
         self.lambda_variance = lambda_variance
         self.lambda_entropy = lambda_entropy
@@ -103,41 +111,31 @@ class SimulatedEnv(gym.Env):
                 pred_reward = 10
         else: # elif self.env_name == "KuaiEnv-v0":
 
+            # get prediction
             pred_reward = self.predicted_mat[self.cur_user[0], action] # todo
+            # get variance
             max_var = self.maxvar_mat[self.cur_user[0], action]  # todo
+            # get entropy
             if 0 in self.entropy_window:
-                entropy = self.entropy_dict["on_user"][self.cur_user[0]]
+                entropy_u = self.entropy_dict["on_user"][self.cur_user[0]]
+
+            entropy = 0
+            entropy_set = set(self.entropy_window) - {0}
+            if len(entropy_set):
+                action_k = self.history_action[max(0, self.total_turn - self.step_n_actions + 1):self.total_turn+1]
+                if hasattr(self.env_task, "lbe_item") and self.env_task.lbe_item:
+                    action_trans = self.env_task.lbe_item.inverse_transform(action_k)
+                else:
+                    action_trans = action_k
+                action_reverse = action_trans[::-1]
+                for k in range(len(action_reverse)):
+                    action_set = tuple(sorted(action_reverse[:k+1]))
+                    # print(action_set)
+                    if action_set in self.entropy_dict["map"]:
+                        entropy += self.entropy_dict["map"][action_set]
+
             penalized_reward = pred_reward - self.lambda_variance * max_var + \
-                               self.lambda_entropy * entropy - self.normed_term
-
-            # pred_reward = 1
-
-            # if self.need_transform:
-            #     user = self.env_task.lbe_user.inverse_transform(self.cur_user)[0]
-            # else:
-            #     user = self.cur_user[0]
-            #
-            # df_user_val = self.dataset_val.df_user_val
-            # df_item_val = self.dataset_val.df_item_val
-            #
-            # ui_pair = torch.tensor(
-            #     np.concatenate(([user], df_user_val.loc[user].to_numpy(),
-            #                     [action], df_item_val.loc[action].to_numpy())),
-            #     dtype=torch.float, requires_grad=False)
-            # ui_pair = torch.reshape(ui_pair, [-1, len(ui_pair)])
-            #
-            # assert ui_pair.shape[1] == len(self.dataset_val.x_columns)
-            #
-            # means = np.zeros([len(self.ensemble_models)])
-            # vars = np.zeros([len(self.ensemble_models)])
-            #
-            # for k, user_model in enumerate(self.ensemble_models):
-            #     # user_model.forward()
-            #     mean, log_var = user_model.forward(ui_pair)
-            #     means[k] = mean.detach().squeeze()
-            #     vars[k] = np.exp(log_var.detach().squeeze())
-            #
-            # pred_reward = means.mean() - vars.max()
+                               self.lambda_entropy * (entropy_u + entropy) - self.normed_term
 
         if self.version == "v1":
             # version 1
@@ -191,7 +189,7 @@ class SimulatedEnv(gym.Env):
 
         if self.alpha_u is not None:
             u_id = self.env_task.lbe_user.inverse_transform(self.cur_user)[0]
-            p_id = self.env_task.lbe_video.inverse_transform([action])[0]
+            p_id = self.env_task.lbe_item.inverse_transform([action])[0]
             a_u = self.alpha_u[u_id]
             b_i = self.beta_i[p_id]
             exposure_effect_new = float(exposure_effect * a_u * b_i)
