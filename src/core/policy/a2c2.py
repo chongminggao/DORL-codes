@@ -10,7 +10,7 @@ from tianshou.policy import A2CPolicy
 from tianshou.utils.net.common import ActorCritic
 
 
-class A2CPolicy2(A2CPolicy):
+class A2CPolicy_withEmbedding(A2CPolicy):
     """Implementation of Synchronous Advantage Actor-Critic. arXiv:1602.01783.
 
     :param torch.nn.Module actor: the actor network following the rules in
@@ -71,12 +71,12 @@ class A2CPolicy2(A2CPolicy):
     def set_collector(self, train_collector):
         self.train_collector = train_collector
 
-    def process_fn(
-        self, batch: Batch, buffer: ReplayBuffer, indices: np.ndarray
-    ) -> Batch:
-        batch = self._compute_returns(batch, buffer, indices)
-        batch.act = to_torch_as(batch.act, batch.v_s)
-        return batch
+    # def process_fn(
+    #     self, batch: Batch, buffer: ReplayBuffer, indices: np.ndarray
+    # ) -> Batch:
+    #     batch = self._compute_returns(batch, buffer, indices)
+    #     batch.act = to_torch_as(batch.act, batch.v_s)
+    #     return batch
 
     def _compute_returns(
         self, batch: Batch, buffer: ReplayBuffer, indices: np.ndarray

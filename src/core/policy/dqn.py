@@ -129,7 +129,11 @@ class DQNPolicy_with_Embedding(DQNPolicy):
     def learn(self, batch: Batch, **kwargs: Any) -> Dict[str, float]:
         if self._target and self._iter % self._freq == 0:
             self.sync_weight()
-        self.optim.zero_grad()
+
+        optim_RL, optim_state = self.optim
+        optim_RL.zero_grad()
+        optim_state.zero_grad()
+
         weight = batch.pop("weight", 1.0)
         q = self(batch).logits
         q = q[np.arange(len(q)), batch.act]
@@ -146,5 +150,7 @@ class DQNPolicy_with_Embedding(DQNPolicy):
         batch.weight = td_error  # prio-buffer
         loss.backward()
         self.optim.step()
+        self.optim.step()
+
         self._iter += 1
         return {"loss": loss.item()}

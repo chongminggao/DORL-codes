@@ -27,7 +27,7 @@ from core.user_model_ensemble import EnsembleModel
 from core.configs import get_features
 from core.collector2 import Collector
 from core.inputs import get_dataset_columns
-from core.policy.a2c2 import A2CPolicy2
+from core.policy.a2c2 import A2CPolicy_withEmbedding
 from core.state_tracker2 import StateTrackerAvg2
 from core.trainer.onpolicy import onpolicy_trainer
 from core.worldModel.simulated_env import SimulatedEnv
@@ -359,7 +359,7 @@ def setup_policy_model(args, ensemble_models, env, train_envs, test_envs):
     optim = [optim_RL, optim_state]
 
     dist = torch.distributions.Categorical
-    policy = A2CPolicy2(
+    policy = A2CPolicy_withEmbedding(
         actor,
         critic,
         optim,
