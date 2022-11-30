@@ -149,8 +149,8 @@ class DQNPolicy_with_Embedding(DQNPolicy):
 
         batch.weight = td_error  # prio-buffer
         loss.backward()
-        self.optim.step()
-        self.optim.step()
+        optim_RL.step()
+        optim_state.step()
 
         self._iter += 1
         return {"loss": loss.item()}

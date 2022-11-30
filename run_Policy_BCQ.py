@@ -170,7 +170,7 @@ def prepare_dir_log(args):
 
     return MODEL_SAVE_PATH, logger_path
 
-def prepare_user_model_and_env(args):
+def prepare_buffer_via_offline_data(args):
     args.device = torch.device("cuda:{}".format(args.cuda) if torch.cuda.is_available() else "cpu")
     np.random.seed(args.seed)
     random.seed(args.seed)

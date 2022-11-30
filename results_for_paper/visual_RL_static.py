@@ -17,7 +17,7 @@ from util.utils import create_dir
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--result_dir", type=str, default="./saved_models/KuaiEnv-v0/A2C_with_emb/logs")
+    parser.add_argument("--result_dir", type=str, default="/Users/chongming/Downloads/explore")
     # parser.add_argument("--result_dir", type=str, default="../saved_models/PPO_realEnv/logs")
 
 
@@ -80,7 +80,11 @@ def loaddata(dirpath, filenames):
 
 
 def visual(df_all, save_fig_dir):
-    visual_cols = ['RL_val_trajectory_reward', 'RL_val_trajectory_len', 'RL_val_CTR']
+    # visual_cols = ['RL_val_trajectory_reward', 'RL_val_trajectory_len', 'RL_val_CTR']
+    # visual_cols = ['R_tra', 'len_tra', 'ctr']
+
+    visual_cols = list(set([metric for (metric, name) in df_all.columns]))
+    exps = sorted(list(set([name for (metric, name) in df_all.columns])))
 
     df_all = df_all[visual_cols]
 
@@ -97,7 +101,8 @@ def visual(df_all, save_fig_dir):
         mydash = LINE_STYLES * (len(df.columns)//2) + LINE_STYLES[:len(df.columns) % 2]
         # gca = sns.lineplot(data=df, palette=sns.color_palette("tab20", df.columns.__len__()),
         #                    dashes=mydash)
-        gca = sns.lineplot(data=df, palette="tab20", dashes=mydash)
+        # gca = sns.lineplot(data=df, palette="tab20", dashes=mydash)
+        gca = sns.lineplot(data=df, palette="tab20")
 
         # for i, line in enumerate(gca.lines):
         #     line.set_linestyle(LINE_STYLES[i % len(LINE_STYLES)])
@@ -116,6 +121,7 @@ def main(args):
 
     realpath = os.path.dirname(__file__)
     save_fig_dir = os.path.join(realpath, "figures")
+    save_fig_dir = result_dir
 
     create_dirs = [save_fig_dir]
     create_dir(create_dirs)
