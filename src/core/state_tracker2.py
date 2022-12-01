@@ -155,7 +155,7 @@ class StateTrackerAvg2(nn.Module):
             dim_res = sum([column.embedding_dim for column in feat_columns])
 
             X_res = torch.zeros([len(X), dim_res], device=self.device)
-            nn.init.normal_(X_res, mean=0, std=0.0001)
+            nn.init.normal_(X_res, mean=0, std=0.00001)
 
             # self.embedding_dict.feat_item.weight.requires_grad
             sparse_embedding_list, dense_value_list = input_from_feature_columns(FLOAT(X_normal).to(self.device), feat_columns,

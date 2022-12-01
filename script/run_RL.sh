@@ -90,12 +90,12 @@
 #python run_A2CPolicy_coat2.py --cuda 7  --lambda_variance 0.8 --read_message "pointneg" --window 3 --message "var0.8_win3_user" --is_use_userEmbedding &
 
 
-python run_A2CPolicy_coat2.py --cuda 1  --read_message "pointneg" --window 1 --message "freeze_v2win1" --is_freeze_emb &
-python run_A2CPolicy_coat2.py --cuda 2  --read_message "pointneg" --window 2 --message "freeze_v2win2" --is_freeze_emb &
-python run_A2CPolicy_coat2.py --cuda 3  --read_message "pointneg" --window 3 --message "freeze_v2win3" --is_freeze_emb &
-python run_A2CPolicy_coat2.py --cuda 4  --read_message "pointneg" --window 1 --message "freeze_v2win1_user" --is_use_userEmbedding --is_freeze_emb &
-python run_A2CPolicy_coat2.py --cuda 5  --read_message "pointneg" --window 2 --message "freeze_v2win2_user" --is_use_userEmbedding --is_freeze_emb &
-python run_A2CPolicy_coat2.py --cuda 7  --read_message "pointneg" --window 3 --message "freeze_v2win3_user" --is_use_userEmbedding --is_freeze_emb &
+#python run_A2CPolicy_coat2.py --cuda 1  --read_message "pointneg" --window 1 --message "freeze_v2win1" --is_freeze_emb &
+#python run_A2CPolicy_coat2.py --cuda 2  --read_message "pointneg" --window 2 --message "freeze_v2win2" --is_freeze_emb &
+#python run_A2CPolicy_coat2.py --cuda 3  --read_message "pointneg" --window 3 --message "freeze_v2win3" --is_freeze_emb &
+#python run_A2CPolicy_coat2.py --cuda 4  --read_message "pointneg" --window 1 --message "freeze_v2win1_user" --is_use_userEmbedding --is_freeze_emb &
+#python run_A2CPolicy_coat2.py --cuda 5  --read_message "pointneg" --window 2 --message "freeze_v2win2_user" --is_use_userEmbedding --is_freeze_emb &
+#python run_A2CPolicy_coat2.py --cuda 7  --read_message "pointneg" --window 3 --message "freeze_v2win3_user" --is_use_userEmbedding --is_freeze_emb &
 
 
 #python run_A2CPolicy_coat2.py --cuda 1  --read_message "pointneg" --window 1 --message "nofreeze_v2win1" --no_freeze_emb &
@@ -104,3 +104,29 @@ python run_A2CPolicy_coat2.py --cuda 7  --read_message "pointneg" --window 3 --m
 #python run_A2CPolicy_coat2.py --cuda 4  --read_message "pointneg" --window 1 --message "nofreeze_v2win1_user" --is_use_userEmbedding --no_freeze_emb &
 #python run_A2CPolicy_coat2.py --cuda 5  --read_message "pointneg" --window 2 --message "nofreeze_v2win2_user" --is_use_userEmbedding --no_freeze_emb &
 #python run_A2CPolicy_coat2.py --cuda 7  --read_message "pointneg" --window 3 --message "nofreeze_v2win3_user" --is_use_userEmbedding --no_freeze_emb &
+
+
+#python run_A2CPolicy_coat2.py --cuda 1  --read_message "pointneg" --window 4 --message "freeze_v2win4" --is_freeze_emb &
+#python run_A2CPolicy_coat2.py --cuda 2  --read_message "pointneg" --window 4 --message "freeze_v2win4_user" --is_use_userEmbedding --is_freeze_emb &
+#python run_A2CPolicy_coat2.py --cuda 3  --read_message "pointneg" --window 4 --message "nofreeze_v2win4" --no_freeze_emb &
+#python run_A2CPolicy_coat2.py --cuda 4  --read_message "pointneg" --window 4 --message "nofreeze_v2win4_user" --is_use_userEmbedding --no_freeze_emb &
+#python run_A2CPolicy_coat2.py --cuda 1  --read_message "pointneg" --window 5 --message "freeze_v2win5" --is_freeze_emb &
+#python run_A2CPolicy_coat2.py --cuda 2  --read_message "pointneg" --window 5 --message "freeze_v2win5_user" --is_use_userEmbedding --is_freeze_emb &
+#python run_A2CPolicy_coat2.py --cuda 3  --read_message "pointneg" --window 5 --message "nofreeze_v2win5" --no_freeze_emb &
+#python run_A2CPolicy_coat2.py --cuda 4  --read_message "pointneg" --window 5 --message "nofreeze_v2win5_user" --is_use_userEmbedding --no_freeze_emb &
+
+
+
+
+python run_A2CPolicy_coat2.py --cuda 1  --lambda_variance 0.1 --read_message "pointneg" --window 3 --message "var0.1_win3_nofreeze" --no_freeze_emb &
+python run_A2CPolicy_coat2.py --cuda 2  --lambda_variance 0.5 --read_message "pointneg" --window 3 --message "var0.5_win3_nofreeze" --no_freeze_emb &
+python run_A2CPolicy_coat2.py --cuda 3  --lambda_variance 1 --read_message "pointneg" --window 3 --message "var1_win3_nofreeze" --no_freeze_emb &
+python run_A2CPolicy_coat2.py --cuda 4  --lambda_variance 5 --read_message "pointneg" --window 3 --message "var5_win3_nofreeze" --no_freeze_emb &
+python run_A2CPolicy_coat2.py --cuda 5  --lambda_variance 10 --read_message "pointneg" --window 3 --message "var10_win3_nofreeze" --no_freeze_emb &
+
+
+python run_A2CPolicy_coat2.py --cuda 6  --lambda_variance 0.1 --read_message "pointneg" --window 3 --message "var0.1_win3_isfreeze" --is_freeze_emb &
+python run_A2CPolicy_coat2.py --cuda 7  --lambda_variance 0.5 --read_message "pointneg" --window 3 --message "var0.5_win3_isfreeze" --is_freeze_emb &
+python run_A2CPolicy_coat2.py --cuda 5  --lambda_variance 1 --read_message "pointneg" --window 3 --message "var1_win3_isfreeze" --is_freeze_emb &
+python run_A2CPolicy_coat2.py --cuda 6  --lambda_variance 5 --read_message "pointneg" --window 3 --message "var5_win3_isfreeze" --is_freeze_emb &
+python run_A2CPolicy_coat2.py --cuda 7  --lambda_variance 10 --read_message "pointneg" --window 3 --message "var10_win3_isfreeze" --is_freeze_emb &

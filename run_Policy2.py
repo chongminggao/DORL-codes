@@ -114,7 +114,7 @@ def get_args_all():
     parser.add_argument('--window', default=2, type=int)
 
     # tianshou
-    parser.add_argument('--buffer-size', type=int, default=11000)
+    parser.add_argument('--buffer-size', type=int, default=100000)
     parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--epoch', type=int, default=200)
     # parser.add_argument('--step-per-epoch', type=int, default=15000)

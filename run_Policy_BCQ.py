@@ -24,7 +24,7 @@ os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
 sys.path.extend(["./src", "./src/DeepCTR-Torch", "./src/tianshou"])
 from core.user_model_ensemble import EnsembleModel
-from core.configs import get_features
+from core.configs import get_features, get_training_data
 from core.collector2 import Collector
 from core.inputs import get_dataset_columns
 from core.policy.a2c2 import A2CPolicy_withEmbedding
@@ -114,7 +114,7 @@ def get_args_all():
     parser.add_argument('--window', default=2, type=int)
 
     # tianshou
-    parser.add_argument('--buffer-size', type=int, default=11000)
+    parser.add_argument('--buffer-size', type=int, default=100000)
     parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--epoch', type=int, default=200)
     # parser.add_argument('--step-per-epoch', type=int, default=15000)
@@ -171,6 +171,27 @@ def prepare_dir_log(args):
     return MODEL_SAVE_PATH, logger_path
 
 def prepare_buffer_via_offline_data(args):
+    df_train, df_user, df_item, list_feat = get_training_data(args.env)
+    df_train = df_train.head(10000)
+    if "time_ms" in df_train.columns:
+        df_train.rename(columns={"time_ms": "timestamp"}, inplace=True)
+    df_train = df_train.sort_values(["user_id", "timestamp"])
+
+    df_train[["user_id", "item_id"]].to_numpy()
+    df_user_items = df_train[["user_id", "item_id"]].groupby("user_id").agg(list)
+
+    bins = np.zeros([args.test_num])
+
+
+
+    buffer = VectorReplayBuffer(args.buffer_size, args.test_num)
+
+
+    ptr, ep_rew, ep_len, ep_idx = buffer.add(data, buffer_ids=ready_env_ids)
+
+
+
+
     args.device = torch.device("cuda:{}".format(args.cuda) if torch.cuda.is_available() else "cpu")
     np.random.seed(args.seed)
     random.seed(args.seed)

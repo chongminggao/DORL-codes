@@ -17,7 +17,7 @@ from util.utils import create_dir
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--result_dir", type=str, default="/Users/chongming/Downloads/explore")
+    parser.add_argument("--result_dir", type=str, default="/Users/gaochongming/fsdownload/explore")
     # parser.add_argument("--result_dir", type=str, default="../saved_models/PPO_realEnv/logs")
 
 
@@ -45,11 +45,16 @@ def loaddata(dirpath, filenames):
     dfs = {}
     df = pd.DataFrame()
     for filename in filenames:
+        if filename[0] == '.' or filename[0] == '_':
+            continue
         df = pd.DataFrame()
         message = "None"
         filepath = os.path.join(dirpath, filename)
         with open(filepath, "r") as file:
-            lines = file.readlines()
+            try:
+                lines = file.readlines()
+            except Exception:
+                raise "problem"
             for i, line in enumerate(lines):
 
                 res = re.search(pattern_epoch, line)
