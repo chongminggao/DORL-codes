@@ -7,6 +7,7 @@ import pickle
 import pprint
 import random
 import time
+from collections import defaultdict
 
 import gym
 import numpy as np
@@ -24,7 +25,7 @@ os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
 sys.path.extend(["./src", "./src/DeepCTR-Torch", "./src/tianshou"])
 from core.user_model_ensemble import EnsembleModel
-from core.configs import get_features, get_training_data
+from core.configs import get_features, get_training_data, get_true_env, get_val_data
 from core.collector2 import Collector
 from core.inputs import get_dataset_columns
 from core.policy.a2c2 import A2CPolicy_withEmbedding
@@ -32,7 +33,7 @@ from core.state_tracker2 import StateTrackerAvg2
 from core.trainer.onpolicy import onpolicy_trainer
 from core.worldModel.simulated_env import SimulatedEnv
 
-from tianshou.data import VectorReplayBuffer
+from tianshou.data import VectorReplayBuffer, Batch
 from tianshou.env import DummyVectorEnv
 
 from tianshou.utils import TensorboardLogger
@@ -170,8 +171,60 @@ def prepare_dir_log(args):
 
     return MODEL_SAVE_PATH, logger_path
 
+def get_buffer_size(args, df_train):
+    num_bins = args.test_num
+
+    df_user_num = df_train[["user_id", "item_id"]].groupby("user_id").agg(len)
+    df_user_num["item_id"] += 1
+
+    df_user_num_sorted = df_user_num.sort_values("item_id", ascending=False)
+
+    bins = np.zeros([num_bins])
+    bins_ind = defaultdict(set)
+    for user, num in df_user_num_sorted.reset_index().to_numpy():
+        ind = bins.argmin()
+        bins_ind[ind].add(user)
+        bins[ind] += num
+        np.zeros([num_bins])
+
+    max_size = max(bins)
+    buffer = VectorReplayBuffer(max_size, num_bins)
+
+    env, env_task_class = get_true_env(args)
+
+
+
+
+    df_user_items = df_train[["user_id", "item_id", args.yfeat]].groupby("user_id").agg(list)
+    for indices, users in bins_ind.items():
+        for user in users:
+            items = [-1] + df_user_items.loc[user][0]
+            rewards = df_user_items.loc[user][1]
+            np_ui_pair = np.vstack([np.ones_like(items) * user, items]).T
+
+            env._reset_history()
+            env.cur_user = user
+            for item in items[1:]:
+                obs_next, rew, done, info = env.step(item)
+                print(obs_next, rew, done, info)
+
+
+
+
+
+            batch = Batch(obs=np_ui_pair[:-1], obs_next=np_ui_pair[1:], act=items[1:],
+                          policy={}, info={}, rew=rewards)
+
+
+            ptr, ep_rew, ep_len, ep_idx = buffer.add(batch, buffer_ids=np.ones([len(batch)]) * indices)
+
+    return bins, bins_ind
+
+
+
 def prepare_buffer_via_offline_data(args):
     df_train, df_user, df_item, list_feat = get_training_data(args.env)
+    df_val, df_user_val, df_item_val, list_feat = get_val_data(args.env)
     df_train = df_train.head(10000)
     if "time_ms" in df_train.columns:
         df_train.rename(columns={"time_ms": "timestamp"}, inplace=True)
@@ -180,14 +233,12 @@ def prepare_buffer_via_offline_data(args):
     df_train[["user_id", "item_id"]].to_numpy()
     df_user_items = df_train[["user_id", "item_id"]].groupby("user_id").agg(list)
 
-    bins = np.zeros([args.test_num])
 
 
 
-    buffer = VectorReplayBuffer(args.buffer_size, args.test_num)
 
 
-    ptr, ep_rew, ep_len, ep_idx = buffer.add(data, buffer_ids=ready_env_ids)
+
 
 
 

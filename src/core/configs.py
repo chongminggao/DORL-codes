@@ -58,10 +58,6 @@ def get_val_data(env):
 
     return df_val, df_user_val, df_item_val, list_feat
 
-
-
-
-
 def get_common_args(args):
     env = args.env
     if env == "CoatEnv-v0":
@@ -93,3 +89,54 @@ def get_common_args(args):
         args.entropy_window = [0]
         args.rating_threshold = 4
     return args
+
+def get_true_env(args):
+    if args.env == "CoatEnv-v0":
+        from environments.coat.env.Coat import CoatEnv
+        mat, df_item, mat_distance = CoatEnv.load_mat()
+        kwargs_um = {"mat": mat,
+                     "df_item": df_item,
+                     "mat_distance": mat_distance,
+                     "num_leave_compute": args.num_leave_compute,
+                     "leave_threshold": args.leave_threshold,
+                     "max_turn": args.max_turn}
+        env = CoatEnv(**kwargs_um)
+        env_task_class = CoatEnv
+    elif args.env == "YahooEnv-v0":
+        from environments.YahooR3.env.Yahoo import YahooEnv
+        mat, mat_distance = YahooEnv.load_mat()
+        kwargs_um = {"mat": mat,
+                     "mat_distance": mat_distance,
+                     "num_leave_compute": args.num_leave_compute,
+                     "leave_threshold": args.leave_threshold,
+                     "max_turn": args.max_turn}
+
+        env = YahooEnv(**kwargs_um)
+        env_task_class = YahooEnv
+    elif args.env == "KuaiRand-v0":
+        from environments.KuaiRand_Pure.env.KuaiRand import KuaiRandEnv
+        mat, df_item, mat_distance = KuaiRandEnv.load_mat(args.yfeat)
+        kwargs_um = {"yname": args.yfeat,
+                     "mat": mat,
+                     "df_item": df_item,
+                     "mat_distance": mat_distance,
+                     "num_leave_compute": args.num_leave_compute,
+                     "leave_threshold": args.leave_threshold,
+                     "max_turn": args.max_turn}
+        env = KuaiRandEnv(**kwargs_um)
+        env_task_class = KuaiRandEnv
+    elif args.env == "KuaiEnv-v0":
+        from environments.KuaiRec.env.KuaiEnv import KuaiEnv
+        mat, lbe_user, lbe_item, list_feat, df_video_env, df_dist_small = KuaiEnv.load_mat()
+        kwargs_um = {"mat": mat,
+                     "lbe_user": lbe_user,
+                     "lbe_item": lbe_item,
+                     "num_leave_compute": args.num_leave_compute,
+                     "leave_threshold": args.leave_threshold,
+                     "max_turn": args.max_turn,
+                     "list_feat": list_feat,
+                     "df_video_env": df_video_env,
+                     "df_dist_small": df_dist_small}
+        env = KuaiEnv(**kwargs_um)
+        env_task_class = KuaiEnv
+    return env, env_task_class

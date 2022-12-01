@@ -24,7 +24,7 @@ os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
 sys.path.extend(["./src", "./src/DeepCTR-Torch", "./src/tianshou"])
 from core.user_model_ensemble import EnsembleModel
-from core.configs import get_features
+from core.configs import get_features, get_true_env
 from core.collector2 import Collector
 from core.inputs import get_dataset_columns
 from core.policy.a2c2 import A2CPolicy_withEmbedding
@@ -202,55 +202,7 @@ def prepare_user_model_and_env(args):
 
     # %% 3. prepare envs
 def prepare_envs(args, ensemble_models, alpha_u, beta_i):
-    if args.env == "CoatEnv-v0":
-        from environments.coat.env.Coat import CoatEnv
-        mat, df_item, mat_distance = CoatEnv.load_mat()
-        kwargs_um = {"mat": mat,
-                     "df_item": df_item,
-                     "mat_distance": mat_distance,
-                     "num_leave_compute": args.num_leave_compute,
-                     "leave_threshold": args.leave_threshold,
-                     "max_turn": args.max_turn}
-        env = CoatEnv(**kwargs_um)
-        env_task_class = CoatEnv
-    elif args.env == "YahooEnv-v0":
-        from environments.YahooR3.env.Yahoo import YahooEnv
-        mat, mat_distance = YahooEnv.load_mat()
-        kwargs_um = {"mat": mat,
-                     "mat_distance": mat_distance,
-                     "num_leave_compute": args.num_leave_compute,
-                     "leave_threshold": args.leave_threshold,
-                     "max_turn": args.max_turn}
-
-        env = YahooEnv(**kwargs_um)
-        env_task_class = YahooEnv
-    elif args.env == "KuaiRand-v0":
-        from environments.KuaiRand_Pure.env.KuaiRand import KuaiRandEnv
-        mat, df_item, mat_distance = KuaiRandEnv.load_mat(args.yfeat)
-        kwargs_um = {"yname": args.yfeat,
-                     "mat": mat,
-                     "df_item": df_item,
-                     "mat_distance": mat_distance,
-                     "num_leave_compute": args.num_leave_compute,
-                     "leave_threshold": args.leave_threshold,
-                     "max_turn": args.max_turn}
-        env = KuaiRandEnv(**kwargs_um)
-        env_task_class = KuaiRandEnv
-    elif args.env == "KuaiEnv-v0":
-        from environments.KuaiRec.env.KuaiEnv import KuaiEnv
-        mat, lbe_user, lbe_item, list_feat, df_video_env, df_dist_small = KuaiEnv.load_mat()
-        kwargs_um = {"mat": mat,
-                     "lbe_user": lbe_user,
-                     "lbe_item": lbe_item,
-                     "num_leave_compute": args.num_leave_compute,
-                     "leave_threshold": args.leave_threshold,
-                     "max_turn": args.max_turn,
-                     "list_feat": list_feat,
-                     "df_video_env": df_video_env,
-                     "df_dist_small": df_dist_small}
-        env = KuaiEnv(**kwargs_um)
-        env_task_class = KuaiEnv
-
+    env, env_task_class = get_true_env(args)
 
     user_features, item_features, reward_features = get_features(args.env, args.is_userinfo)
     # embedding_dim_set = set([column.embedding_dim for column in ensemble_models.user_models[0].feature_columns])
