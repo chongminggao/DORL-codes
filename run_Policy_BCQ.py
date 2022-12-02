@@ -191,6 +191,7 @@ def get_buffer_size(args, df_train):
     buffer = VectorReplayBuffer(max_size, num_bins)
 
     env, env_task_class = get_true_env(args)
+    env.max_turn = max_size + 1  # Not done at the last index
 
 
 
@@ -202,21 +203,25 @@ def get_buffer_size(args, df_train):
             rewards = df_user_items.loc[user][1]
             np_ui_pair = np.vstack([np.ones_like(items) * user, items]).T
 
-            env._reset_history()
+            env.reset()
             env.cur_user = user
-            for item in items[1:]:
+            dones = np.zeros(len(rewards), dtype=bool)
+
+            for k, item in enumerate(items[1:]):
                 obs_next, rew, done, info = env.step(item)
-                print(obs_next, rew, done, info)
-
-
+                if done:
+                    env.reset()
+                    env.cur_user = user
+                dones[k] = done
+                print(env.cur_user, obs_next, rew, done, info)
 
 
 
             batch = Batch(obs=np_ui_pair[:-1], obs_next=np_ui_pair[1:], act=items[1:],
-                          policy={}, info={}, rew=rewards)
+                          policy={}, info={}, rew=rewards, done=dones)
 
 
-            ptr, ep_rew, ep_len, ep_idx = buffer.add(batch, buffer_ids=np.ones([len(batch)]) * indices)
+            ptr, ep_rew, ep_len, ep_idx = buffer.add(batch, buffer_ids=np.ones([len(batch)], dtype=int) * indices)
 
     return bins, bins_ind
 
@@ -228,10 +233,13 @@ def prepare_buffer_via_offline_data(args):
     df_train = df_train.head(10000)
     if "time_ms" in df_train.columns:
         df_train.rename(columns={"time_ms": "timestamp"}, inplace=True)
-    df_train = df_train.sort_values(["user_id", "timestamp"])
+        df_train = df_train.sort_values(["user_id", "timestamp"])
+    if not "timestamp" in df_train.columns:
+        df_train = df_train.sort_values(["user_id"])
 
     df_train[["user_id", "item_id"]].to_numpy()
-    df_user_items = df_train[["user_id", "item_id"]].groupby("user_id").agg(list)
+
+    get_buffer_size(args, df_train)
 
 
 

@@ -29,7 +29,6 @@ DATAPATH = os.path.join(CODEPATH, "environments", "KuaiRec", "data")
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--env", type=str, default='KuaiEnv-v0')
-    parser.add_argument("--yfeat", type=str, default='watch_ratio_normed')
     parser.add_argument("--optimizer", type=str, default='adam')
     parser.add_argument('--neg_K', default=3, type=int)
 

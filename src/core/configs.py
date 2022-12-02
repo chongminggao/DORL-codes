@@ -67,6 +67,7 @@ def get_common_args(args):
         # args.entropy_on_user = True
         args.entropy_window = [0]
         args.rating_threshold = 4
+        args.yfeat = "rating"
     elif env == "KuaiRand-v0":
         args.is_userinfo = False
         args.is_binarize = True
@@ -81,6 +82,7 @@ def get_common_args(args):
         args.need_transform = True
         # args.entropy_on_user = False
         args.entropy_window = [0,1,2]
+        args.yfeat = "watch_ratio_normed"
     elif env == "YahooEnv-v0":
         args.is_userinfo = True
         args.is_binarize = True
@@ -88,9 +90,10 @@ def get_common_args(args):
         # args.entropy_on_user = True
         args.entropy_window = [0]
         args.rating_threshold = 4
+        args.yfeat = "rating"
     return args
 
-def get_true_env(args):
+def get_true_env(args, read_user=None):
     if args.env == "CoatEnv-v0":
         from environments.coat.env.Coat import CoatEnv
         mat, df_item, mat_distance = CoatEnv.load_mat()
@@ -115,7 +118,7 @@ def get_true_env(args):
         env_task_class = YahooEnv
     elif args.env == "KuaiRand-v0":
         from environments.KuaiRand_Pure.env.KuaiRand import KuaiRandEnv
-        mat, df_item, mat_distance = KuaiRandEnv.load_mat(args.yfeat)
+        mat, df_item, mat_distance = KuaiRandEnv.load_mat(args.yfeat, read_user=read_user)
         kwargs_um = {"yname": args.yfeat,
                      "mat": mat,
                      "df_item": df_item,
