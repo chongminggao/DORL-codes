@@ -142,4 +142,4 @@ def get_true_env(args, read_user=None):
                      "df_dist_small": df_dist_small}
         env = KuaiEnv(**kwargs_um)
         env_task_class = KuaiEnv
-    return env, env_task_class
+    return env, env_task_class, kwargs_um

@@ -18,8 +18,13 @@ from torch.utils.tensorboard import SummaryWriter
 
 import sys
 
+from tqdm import tqdm
 
+from core.trainer.offline import offline_trainer
+from run_Policy2 import prepare_user_model_and_env
 from run_worldModel_ensemble import load_dataset_val
+from tianshou.policy import BCQPolicy
+from tianshou.utils.net.continuous import Perturbation, VAE
 
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
@@ -37,7 +42,7 @@ from tianshou.data import VectorReplayBuffer, Batch
 from tianshou.env import DummyVectorEnv
 
 from tianshou.utils import TensorboardLogger
-from tianshou.utils.net.common import ActorCritic, Net
+from tianshou.utils.net.common import ActorCritic, Net, MLP
 from tianshou.utils.net.discrete import Actor, Critic
 
 # from util.upload import my_upload
@@ -128,7 +133,6 @@ def get_args_all():
     parser.add_argument('--test-num', type=int, default=100)
 
     parser.add_argument('--render', type=float, default=0)
-    parser.add_argument('--task', type=str, default='CartPole-v0')
     parser.add_argument('--reward-threshold', type=float, default=None)
     parser.add_argument('--gamma', type=float, default=0.9)
     parser.add_argument('--step-per-epoch', type=int, default=50000)
@@ -141,12 +145,38 @@ def get_args_all():
     #     '--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu'
     # )
 
-    # a2c special
-    parser.add_argument('--vf-coef', type=float, default=0.5)
-    parser.add_argument('--ent-coef', type=float, default=0.0)
-    parser.add_argument('--max-grad-norm', type=float, default=None)
-    parser.add_argument('--gae-lambda', type=float, default=1.)
-    parser.add_argument('--rew-norm', action="store_true", default=False)
+
+
+    parser.add_argument('--actor-lr', type=float, default=1e-3)
+    parser.add_argument('--critic-lr', type=float, default=1e-3)
+    parser.add_argument('--epoch', type=int, default=5)
+    parser.add_argument('--step-per-epoch', type=int, default=500)
+    parser.add_argument('--batch-size', type=int, default=32)
+    parser.add_argument('--test-num', type=int, default=10)
+    parser.add_argument('--logdir', type=str, default='log')
+    parser.add_argument('--render', type=float, default=1 / 35)
+
+    parser.add_argument("--vae-hidden-sizes", type=int, nargs='*', default=[32, 32])
+    # default to 2 * action_dim
+    parser.add_argument('--latent_dim', type=int, default=None)
+    parser.add_argument("--gamma", default=0.99)
+    parser.add_argument("--tau", default=0.005)
+    # Weighting for Clipped Double Q-learning in BCQ
+    parser.add_argument("--lmbda", default=0.75)
+    # Max perturbation hyper-parameter for BCQ
+    parser.add_argument("--phi", default=0.05)
+    parser.add_argument(
+        '--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu'
+    )
+    parser.add_argument('--resume-path', type=str, default=None)
+    parser.add_argument(
+        '--watch',
+        default=False,
+        action='store_true',
+        help='watch the play of pre-trained policy only',
+    )
+    parser.add_argument("--load-buffer-name", type=str, default=expert_file_name())
+    parser.add_argument("--show-progress", action="store_true")
 
 
 
@@ -171,11 +201,11 @@ def prepare_dir_log(args):
 
     return MODEL_SAVE_PATH, logger_path
 
-def get_buffer_size(args, df_train):
+def get_buffer_size(args, df_train, env):
     num_bins = args.test_num
 
     df_user_num = df_train[["user_id", "item_id"]].groupby("user_id").agg(len)
-    df_user_num["item_id"] += 1
+    # df_user_num["item_id"] += 1
 
     df_user_num_sorted = df_user_num.sort_values("item_id", ascending=False)
 
@@ -188,16 +218,14 @@ def get_buffer_size(args, df_train):
         np.zeros([num_bins])
 
     max_size = max(bins)
-    buffer = VectorReplayBuffer(max_size, num_bins)
+    buffer_size = max_size * num_bins
+    buffer = VectorReplayBuffer(buffer_size, num_bins)
 
-    env, env_task_class = get_true_env(args)
-    env.max_turn = max_size + 1  # Not done at the last index
-
-
-
+    # env, env_task_class, kwargs_um = get_true_env(args)
+    env.max_turn = max_size
 
     df_user_items = df_train[["user_id", "item_id", args.yfeat]].groupby("user_id").agg(list)
-    for indices, users in bins_ind.items():
+    for indices, users in tqdm(bins_ind.items(), total=len(bins_ind), desc="preparing offline data into buffer..."):
         for user in users:
             items = [-1] + df_user_items.loc[user][0]
             rewards = df_user_items.loc[user][1]
@@ -213,17 +241,17 @@ def get_buffer_size(args, df_train):
                     env.reset()
                     env.cur_user = user
                 dones[k] = done
-                print(env.cur_user, obs_next, rew, done, info)
+                dones[-1] = True
+                # print(env.cur_user, obs_next, rew, done, info)
 
 
 
             batch = Batch(obs=np_ui_pair[:-1], obs_next=np_ui_pair[1:], act=items[1:],
                           policy={}, info={}, rew=rewards, done=dones)
 
-
             ptr, ep_rew, ep_len, ep_idx = buffer.add(batch, buffer_ids=np.ones([len(batch)], dtype=int) * indices)
 
-    return bins, bins_ind
+    return buffer
 
 
 
@@ -239,277 +267,160 @@ def prepare_buffer_via_offline_data(args):
 
     df_train[["user_id", "item_id"]].to_numpy()
 
-    get_buffer_size(args, df_train)
+    env, env_task_class, kwargs_um = get_true_env(args)
+    buffer = get_buffer_size(args, df_train, env)
+    env.max_turn = args.max_turn
 
-
-
-
-
-
-
-
-
-
-
-    args.device = torch.device("cuda:{}".format(args.cuda) if torch.cuda.is_available() else "cpu")
-    np.random.seed(args.seed)
-    random.seed(args.seed)
-
-    UM_SAVE_PATH = os.path.join(".", "saved_models", args.env, args.user_model_name)
-    # MODEL_MAT_PATH = os.path.join(UM_SAVE_PATH, "mats", f"[{args.read_message}]_mat.pickle")
-    MODEL_PARAMS_PATH = os.path.join(UM_SAVE_PATH, "params", f"[{args.read_message}]_params.pickle")
-
-
-    with open(MODEL_PARAMS_PATH, "rb") as file:
-        model_params = pickle.load(file)
-
-    n_models = model_params["n_models"]
-    model_params.pop('n_models')
-
-    ensemble_models = EnsembleModel(n_models, args.read_message, UM_SAVE_PATH, **model_params)
-    ensemble_models.load_all_models()
-
-    user_model = ensemble_models.user_models[0]
-    if hasattr(user_model, 'ab_embedding_dict') and args.is_ab:
-        alpha_u = user_model.ab_embedding_dict["alpha_u"].weight.detach().cpu().numpy()
-        beta_i = user_model.ab_embedding_dict["beta_i"].weight.detach().cpu().numpy()
-    else:
-        print("Note there are no available alpha and beta！！")
-        alpha_u = None
-        beta_i = None
-
-    return ensemble_models, alpha_u, beta_i
-
-    # %% 3. prepare envs
-def prepare_envs(args, ensemble_models, alpha_u, beta_i):
-    if args.env == "CoatEnv-v0":
-        from environments.coat.env.Coat import CoatEnv
-        mat, df_item, mat_distance = CoatEnv.load_mat()
-        kwargs_um = {"mat": mat,
-                     "df_item": df_item,
-                     "mat_distance": mat_distance,
-                     "num_leave_compute": args.num_leave_compute,
-                     "leave_threshold": args.leave_threshold,
-                     "max_turn": args.max_turn}
-        env = CoatEnv(**kwargs_um)
-        env_task_class = CoatEnv
-    elif args.env == "YahooEnv-v0":
-        from environments.YahooR3.env.Yahoo import YahooEnv
-        mat, mat_distance = YahooEnv.load_mat()
-        kwargs_um = {"mat": mat,
-                     "mat_distance": mat_distance,
-                     "num_leave_compute": args.num_leave_compute,
-                     "leave_threshold": args.leave_threshold,
-                     "max_turn": args.max_turn}
-
-        env = YahooEnv(**kwargs_um)
-        env_task_class = YahooEnv
-    elif args.env == "KuaiRand-v0":
-        from environments.KuaiRand_Pure.env.KuaiRand import KuaiRandEnv
-        mat, df_item, mat_distance = KuaiRandEnv.load_mat(args.yfeat)
-        kwargs_um = {"yname": args.yfeat,
-                     "mat": mat,
-                     "df_item": df_item,
-                     "mat_distance": mat_distance,
-                     "num_leave_compute": args.num_leave_compute,
-                     "leave_threshold": args.leave_threshold,
-                     "max_turn": args.max_turn}
-        env = KuaiRandEnv(**kwargs_um)
-        env_task_class = KuaiRandEnv
-    elif args.env == "KuaiEnv-v0":
-        from environments.KuaiRec.env.KuaiEnv import KuaiEnv
-        mat, lbe_user, lbe_item, list_feat, df_video_env, df_dist_small = KuaiEnv.load_mat()
-        kwargs_um = {"mat": mat,
-                     "lbe_user": lbe_user,
-                     "lbe_item": lbe_item,
-                     "num_leave_compute": args.num_leave_compute,
-                     "leave_threshold": args.leave_threshold,
-                     "max_turn": args.max_turn,
-                     "list_feat": list_feat,
-                     "df_video_env": df_video_env,
-                     "df_dist_small": df_dist_small}
-        env = KuaiEnv(**kwargs_um)
-        env_task_class = KuaiEnv
-
-
-    user_features, item_features, reward_features = get_features(args.env, args.is_userinfo)
-    # embedding_dim_set = set([column.embedding_dim for column in ensemble_models.user_models[0].feature_columns])
-    # assert len(embedding_dim_set) == 1
-    # embedding_dim = list(embedding_dim_set)[0]
-    embedding_dim = ensemble_models.user_models[0].feature_columns[0].embedding_dim
-
-    dataset_val, df_user_val, df_item_val = load_dataset_val(args, user_features, item_features, reward_features, embedding_dim, embedding_dim)
-
-    entropy_dict = dict()
-    if 0 in args.entropy_window:
-        entropy_path = os.path.join(ensemble_models.Entropy_PATH, "user_entropy.csv")
-        entropy = pd.read_csv(entropy_path)
-        entropy.set_index("user_id", inplace=True)
-        entropy_mat_0 = entropy.to_numpy().reshape([-1])
-        entropy_dict.update({"on_user": entropy_mat_0})
-
-    if len(set(args.entropy_window) - set([0])):
-        savepath = os.path.join(ensemble_models.Entropy_PATH, "map_entropy.pickle")
-        map_entropy = pickle.load(open(savepath, 'rb'))
-        entropy_dict.update({"map": map_entropy})
-
-    with open(ensemble_models.PREDICTION_MAT_PATH, "rb") as file:
-        predicted_mat = pickle.load(file)
-
-    with open(ensemble_models.VAR_MAT_PATH, "rb") as file:
-        maxvar_mat = pickle.load(file)
-
-
-    kwargs = {
-        "ensemble_models":ensemble_models,
-        # "dataset_val": dataset_val,
-        # "need_transform": args.need_transform,
-        "env_task_class":env_task_class,
-        # "user_model": user_model,
-        "use_exposure_intervention":args.use_exposure_intervention,
-        "task_env_param": kwargs_um,
-        "task_name": args.env,
-        "version": args.version,
-        "tau": args.tau,
-        "alpha_u": alpha_u,
-        "beta_i": beta_i,
-        "lambda_entropy": args.lambda_entropy,
-        "lambda_variance": args.lambda_variance,
-        "predicted_mat":predicted_mat,
-        "maxvar_mat":maxvar_mat,
-        "entropy_dict": entropy_dict,
-        "entropy_window": args.entropy_window,
-        "gamma_exposure": args.gamma_exposure,
-        "step_n_actions": max(args.entropy_window)}
-
-    simulatedEnv = SimulatedEnv(**kwargs)
-
-    train_envs = DummyVectorEnv(
-        [lambda: SimulatedEnv(**kwargs) for _ in range(args.training_num)])
-    # test_envs = gym.make(args.task)
     test_envs = DummyVectorEnv(
         [lambda: env_task_class(**kwargs_um) for _ in range(args.test_num)])
 
-    random.seed(args.seed)
+    args.device = torch.device("cuda:{}".format(args.cuda) if torch.cuda.is_available() else "cpu")
+    # seed
     np.random.seed(args.seed)
-    torch.manual_seed(args.seed)
-    train_envs.seed(args.seed)
-    # test_envs.seed(args.seed)
+    random.seed(args.seed)
 
-    return env, train_envs, test_envs
-
+    return env, buffer, test_envs
 
     # %% 4. Setup model
-def setup_policy_model(args, ensemble_models, env, train_envs, test_envs):
-    saved_embedding = ensemble_models.load_val_user_item_embedding(freeze_emb=args.freeze_emb)
+def setup_policy_model(args, env, test_envs):
+    ensemble_models, _, _ = prepare_user_model_and_env(args)
 
+    saved_embedding = ensemble_models.load_val_user_item_embedding(freeze_emb=args.freeze_emb)
     user_columns, action_columns, feedback_columns, \
     have_user_embedding, have_action_embedding, have_feedback_embedding = \
         get_dataset_columns(saved_embedding["feat_user"].weight.shape[1], saved_embedding["feat_item"].weight.shape[1], envname=args.env, env=env)
 
-    # train_envs = DummyVectorEnv(
-    #     [lambda: SimulatedEnv(**kwargs) for _ in range(args.training_num)])
-    # # test_envs = gym.make(args.task)
-    # test_envs = DummyVectorEnv(
-    #     [lambda: CoatEnv(**kwargs_um) for _ in range(args.test_num)])
 
-    # args.state_shape = args.dim_state # no use?
-
-    args.action_shape = env.mat.shape[1]
+    args.action_shape = action_columns[0].vocabulary_size
     if args.use_userEmbedding:
         args.state_shape = action_columns[0].embedding_dim + saved_embedding.feat_user.weight.shape[1]
     else:
         args.state_shape = action_columns[0].embedding_dim
 
+    args.max_action = env.action_space.high[0]
+
     state_tracker = StateTrackerAvg2(user_columns, action_columns, feedback_columns, args.state_shape,
                                     saved_embedding, device=args.device, window=args.window,
                                     use_userEmbedding=args.use_userEmbedding, MAX_TURN=args.max_turn + 1).to(args.device)
 
-    if args.cpu:
-        args.device = "cpu"
-    else:
-        args.device = torch.device("cuda:{}".format(args.cuda) if torch.cuda.is_available() else "cpu")
+    net_a = MLP(
+        input_dim=args.state_shape + args.action_shape,
+        output_dim=args.action_shape,
+        hidden_sizes=args.hidden_sizes,
+        device=args.device,
+    )
+    actor = Perturbation(
+        net_a, max_action=args.max_action, device=args.device, phi=args.phi
+    ).to(args.device)
+    actor_optim = torch.optim.Adam(actor.parameters(), lr=args.actor_lr)
 
-    # model
-    net = Net(args.state_shape, hidden_sizes=args.hidden_sizes, device=args.device)
-    actor = Actor(net, args.action_shape, device=args.device).to(args.device)
-    critic = Critic(net, device=args.device).to(args.device)
-    optim_RL = torch.optim.Adam(ActorCritic(actor, critic).parameters(), lr=args.lr)
-    optim_state = torch.optim.Adam(state_tracker.parameters(), lr=args.lr)
-    optim = [optim_RL, optim_state]
+    net_c1 = Net(
+        args.state_shape,
+        args.action_shape,
+        hidden_sizes=args.hidden_sizes,
+        concat=True,
+        device=args.device,
+    )
+    net_c2 = Net(
+        args.state_shape,
+        args.action_shape,
+        hidden_sizes=args.hidden_sizes,
+        concat=True,
+        device=args.device,
+    )
+    critic1 = Critic(net_c1, device=args.device).to(args.device)
+    critic1_optim = torch.optim.Adam(critic1.parameters(), lr=args.critic_lr)
+    critic2 = Critic(net_c2, device=args.device).to(args.device)
+    critic2_optim = torch.optim.Adam(critic2.parameters(), lr=args.critic_lr)
 
-    dist = torch.distributions.Categorical
-    policy = A2CPolicy_withEmbedding(
+    # vae
+    # output_dim = 0, so the last Module in the encoder is ReLU
+    vae_encoder = MLP(
+        input_dim=args.state_shape + args.action_shape,
+        hidden_sizes=args.vae_hidden_sizes,
+        device=args.device,
+    )
+    if not args.latent_dim:
+        args.latent_dim = args.action_shape * 2
+    vae_decoder = MLP(
+        input_dim=args.state_shape + args.latent_shape,
+        output_dim=args.action_shape,
+        hidden_sizes=args.vae_hidden_sizes,
+        device=args.device,
+    )
+    vae = VAE(
+        vae_encoder,
+        vae_decoder,
+        hidden_dim=args.vae_hidden_sizes[-1],
+        latent_dim=args.latent_dim,
+        max_action=args.max_action,
+        device=args.device,
+    ).to(args.device)
+    vae_optim = torch.optim.Adam(vae.parameters())
+    optim = [actor_optim, critic1_optim, critic2_optim, vae_optim]
+
+    policy = BCQPolicy(
         actor,
-        critic,
-        optim,
-        dist,
-        state_tracker=state_tracker,
-        discount_factor=args.gamma,
-        gae_lambda=args.gae_lambda,
-        vf_coef=args.vf_coef,
-        ent_coef=args.ent_coef,
-        max_grad_norm=args.max_grad_norm,
-        reward_normalization=args.rew_norm,
-        action_space=env.action_space,
-        action_bound_method="",  # not clip
-        action_scaling=False
+        actor_optim,
+        critic1,
+        critic1_optim,
+        critic2,
+        critic2_optim,
+        vae,
+        vae_optim,
+        device=args.device,
+        gamma=args.gamma,
+        tau=args.tau,
+        lmbda=args.lmbda,
     )
-    policy.set_eps(args.eps)
 
-    # %% 5. Prepare the collectors and logs
-    train_collector = Collector(
-        policy, train_envs,
-        VectorReplayBuffer(args.buffer_size, len(train_envs)),
-        preprocess_fn=state_tracker.build_state,
-        exploration_noise=args.exploration_noise,
-    )
+    # collector
+    # buffer has been gathered
+    # train_collector = Collector(policy, train_envs, buffer, exploration_noise=True)
     test_collector = Collector(
         policy, test_envs,
         VectorReplayBuffer(args.buffer_size, len(test_envs)),
         preprocess_fn=state_tracker.build_state,
         exploration_noise=args.exploration_noise,
     )
-    policy.set_collector(train_collector)
 
-    return policy, train_collector, test_collector, state_tracker, optim
 
-def learn_policy(args, policy, train_collector, test_collector, state_tracker, optim, MODEL_SAVE_PATH, logger_path):
+
+    return policy, test_collector, optim
+
+def learn_policy(args, policy, buffer, test_collector, state_tracker, optim, MODEL_SAVE_PATH, logger_path):
     # log
-    log_path = os.path.join(args.logdir, args.task, 'a2c')
+    t0 = datetime.datetime.now().strftime("%m%d_%H%M%S")
+    log_file = f'seed_{args.seed}_{t0}-{args.task.replace("-", "_")}_bcq'
+    log_path = os.path.join(args.logdir, args.task, 'bcq', log_file)
     writer = SummaryWriter(log_path)
+    writer.add_text("args", str(args))
     logger1 = TensorboardLogger(writer)
 
     def save_best_fn(policy):
         torch.save(policy.state_dict(), os.path.join(log_path, 'policy.pth'))
 
-    # def stop_fn(mean_rewards):
-    #     return mean_rewards >= args.reward_threshold
-
     policy.callbacks = [LoggerCallback_Policy(logger_path)]
     model_save_path = os.path.join(MODEL_SAVE_PATH, "{}_{}.pt".format(args.model_name, args.message))
 
-    # trainer
-    result = onpolicy_trainer(
+    result = offline_trainer(
         policy,
-        train_collector,
+        buffer,
         test_collector,
         args.epoch,
         args.step_per_epoch,
-        args.repeat_per_collect,
         args.test_num,
         args.batch_size,
-        episode_per_collect=args.episode_per_collect,
-        # stop_fn=stop_fn,
         save_best_fn=save_best_fn,
+        # stop_fn=stop_fn,
         logger=logger1,
+        show_progress=args.show_progress,
         save_model_fn=functools.partial(save_model_fn,
                                         model_save_path=model_save_path,
                                         state_tracker=state_tracker,
                                         optim=optim,
                                         is_save=args.is_save)
     )
-    # assert stop_fn(result['best_reward'])
 
     print(__file__)
     pprint.pprint(result)

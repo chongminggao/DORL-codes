@@ -3,7 +3,7 @@ import os
 import traceback
 import sys
 
-from run_Policy_BCQ import get_args_all, prepare_dir_log, prepare_buffer_via_offline_data, setup_policy_model, prepare_envs, \
+from run_Policy_BCQ import get_args_all, prepare_dir_log, prepare_buffer_via_offline_data, setup_policy_model, \
     learn_policy
 
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
@@ -48,14 +48,13 @@ def main(args):
     MODEL_SAVE_PATH, logger_path = prepare_dir_log(args)
 
     # %% 2. Prepare user model and environment
-    ensemble_models, alpha_u, beta_i = prepare_buffer_via_offline_data(args)
-    env, train_envs, test_envs = prepare_envs(args, ensemble_models, alpha_u, beta_i)
+    env, buffer, test_envs = prepare_buffer_via_offline_data(args)
 
     # %% 3. Setup policy
-    policy, train_collector, test_collector, state_tracker, optim = setup_policy_model(args, ensemble_models, env, train_envs, test_envs)
+    policy, test_collector, state_tracker, optim = setup_policy_model(args, env, test_envs)
 
     # %% 4. Learn policy
-    learn_policy(args, policy, train_collector, test_collector, state_tracker, optim, MODEL_SAVE_PATH, logger_path)
+    learn_policy(args, policy, buffer, test_collector, state_tracker, optim, MODEL_SAVE_PATH, logger_path)
 
 if __name__ == '__main__':
 

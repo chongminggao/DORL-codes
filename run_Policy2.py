@@ -127,7 +127,6 @@ def get_args_all():
     parser.add_argument('--test-num', type=int, default=100)
 
     parser.add_argument('--render', type=float, default=0)
-    parser.add_argument('--task', type=str, default='CartPole-v0')
     parser.add_argument('--reward-threshold', type=float, default=None)
     parser.add_argument('--gamma', type=float, default=0.9)
     parser.add_argument('--step-per-epoch', type=int, default=50000)
@@ -202,7 +201,7 @@ def prepare_user_model_and_env(args):
 
     # %% 3. prepare envs
 def prepare_envs(args, ensemble_models, alpha_u, beta_i):
-    env, env_task_class = get_true_env(args)
+    env, env_task_class, kwargs_um = get_true_env(args)
 
     user_features, item_features, reward_features = get_features(args.env, args.is_userinfo)
     # embedding_dim_set = set([column.embedding_dim for column in ensemble_models.user_models[0].feature_columns])
