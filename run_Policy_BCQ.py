@@ -97,16 +97,6 @@ def get_args_all():
     parser.set_defaults(freeze_emb=False)
 
     # Env
-    parser.add_argument("--version", type=str, default="v1")
-    parser.add_argument('--tau', default=100, type=float)
-    parser.add_argument('--gamma_exposure', default=10, type=float)
-
-    parser.add_argument('--lambda_variance', default=1, type=float)
-    parser.add_argument('--lambda_entropy', default=1, type=float)
-
-    parser.add_argument('--is_exposure_intervention', dest='use_exposure_intervention', action='store_true')
-    parser.add_argument('--no_exposure_intervention', dest='use_exposure_intervention', action='store_false')
-    parser.set_defaults(use_exposure_intervention=False)
 
     parser.add_argument('--leave_threshold', default=10, type=float)
     parser.add_argument('--num_leave_compute', default=3, type=int)
@@ -128,13 +118,11 @@ def get_args_all():
     parser.add_argument('--batch-size', type=int, default=1024)
     parser.add_argument('--hidden-sizes', type=int, nargs='*', default=[64, 64])
 
-    parser.add_argument('--episode-per-collect', type=int, default=100)
-    parser.add_argument('--training-num', type=int, default=100)
+
     parser.add_argument('--test-num', type=int, default=100)
 
     parser.add_argument('--render', type=float, default=0)
     parser.add_argument('--reward-threshold', type=float, default=None)
-    parser.add_argument('--gamma', type=float, default=0.9)
     parser.add_argument('--step-per-epoch', type=int, default=50000)
     parser.add_argument('--step-per-collect', type=int, default=16)
     parser.add_argument('--update-per-step', type=float, default=1 / 16)
@@ -146,17 +134,12 @@ def get_args_all():
     # )
 
 
-
     parser.add_argument('--actor-lr', type=float, default=1e-3)
     parser.add_argument('--critic-lr', type=float, default=1e-3)
-    parser.add_argument('--epoch', type=int, default=5)
     parser.add_argument('--step-per-epoch', type=int, default=500)
-    parser.add_argument('--batch-size', type=int, default=32)
-    parser.add_argument('--test-num', type=int, default=10)
-    parser.add_argument('--logdir', type=str, default='log')
-    parser.add_argument('--render', type=float, default=1 / 35)
+    parser.add_argument('--batch-size', type=int, default=1024)
 
-    parser.add_argument("--vae-hidden-sizes", type=int, nargs='*', default=[32, 32])
+    parser.add_argument("--vae-hidden-sizes", type=int, nargs='*', default=[64, 64])
     # default to 2 * action_dim
     parser.add_argument('--latent_dim', type=int, default=None)
     parser.add_argument("--gamma", default=0.99)
@@ -165,20 +148,14 @@ def get_args_all():
     parser.add_argument("--lmbda", default=0.75)
     # Max perturbation hyper-parameter for BCQ
     parser.add_argument("--phi", default=0.05)
-    parser.add_argument(
-        '--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu'
-    )
-    parser.add_argument('--resume-path', type=str, default=None)
-    parser.add_argument(
-        '--watch',
-        default=False,
-        action='store_true',
-        help='watch the play of pre-trained policy only',
-    )
-    parser.add_argument("--load-buffer-name", type=str, default=expert_file_name())
-    parser.add_argument("--show-progress", action="store_true")
 
-
+    # parser.add_argument(
+    #     '--watch',
+    #     default=False,
+    #     action='store_true',
+    #     help='watch the play of pre-trained policy only',
+    # )
+    # parser.add_argument("--show-progress", action="store_true")
 
 
     args = parser.parse_known_args()[0]
@@ -370,7 +347,7 @@ def setup_policy_model(args, env, test_envs):
         vae_optim,
         device=args.device,
         gamma=args.gamma,
-        tau=args.tau,
+        tau=args.tau_BCQ,
         lmbda=args.lmbda,
     )
 
@@ -414,7 +391,6 @@ def learn_policy(args, policy, buffer, test_collector, state_tracker, optim, MOD
         save_best_fn=save_best_fn,
         # stop_fn=stop_fn,
         logger=logger1,
-        show_progress=args.show_progress,
         save_model_fn=functools.partial(save_model_fn,
                                         model_save_path=model_save_path,
                                         state_tracker=state_tracker,
