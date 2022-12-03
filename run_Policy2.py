@@ -102,15 +102,15 @@ def get_args_all():
     parser.add_argument('--no_exposure_intervention', dest='use_exposure_intervention', action='store_false')
     parser.set_defaults(use_exposure_intervention=False)
 
-    parser.add_argument('--leave_threshold', default=10, type=float)
-    parser.add_argument('--num_leave_compute', default=3, type=int)
-    parser.add_argument('--max_turn', default=30, type=int)
+    # parser.add_argument('--leave_threshold', default=10, type=float)
+    # parser.add_argument('--num_leave_compute', default=3, type=int)
+    # parser.add_argument('--max_turn', default=30, type=int)
 
     # state_tracker
-    parser.add_argument('--dim_state', default=20, type=int)
-    parser.add_argument('--dim_model', default=64, type=int)
-    parser.add_argument('--nhead', default=4, type=int)
-    # parser.add_argument('--max_len', default=100, type=int)
+    # parser.add_argument('--dim_state', default=20, type=int)
+    # parser.add_argument('--dim_model', default=64, type=int)
+    # parser.add_argument('--nhead', default=4, type=int)
+    parser.add_argument('--max_len', default=100, type=int)
     parser.add_argument('--window', default=2, type=int)
 
     # tianshou
@@ -129,9 +129,9 @@ def get_args_all():
     parser.add_argument('--render', type=float, default=0)
     parser.add_argument('--reward-threshold', type=float, default=None)
     parser.add_argument('--gamma', type=float, default=0.9)
-    parser.add_argument('--step-per-epoch', type=int, default=50000)
-    parser.add_argument('--step-per-collect', type=int, default=16)
-    parser.add_argument('--update-per-step', type=float, default=1 / 16)
+    parser.add_argument('--step-per-epoch', type=int, default=1000000)
+    # parser.add_argument('--step-per-collect', type=int, default=16)
+    # parser.add_argument('--update-per-step', type=float, default=1 / 16)
     parser.add_argument('--repeat-per-collect', type=int, default=1)
     # parser.add_argument('--batch-size', type=int, default=64)
     parser.add_argument('--logdir', type=str, default='log')
@@ -347,7 +347,7 @@ def setup_policy_model(args, ensemble_models, env, train_envs, test_envs):
 
 def learn_policy(args, policy, train_collector, test_collector, state_tracker, optim, MODEL_SAVE_PATH, logger_path):
     # log
-    log_path = os.path.join(args.logdir, args.task, 'a2c')
+    log_path = os.path.join(args.logdir, args.env, 'a2c')
     writer = SummaryWriter(log_path)
     logger1 = TensorboardLogger(writer)
 
