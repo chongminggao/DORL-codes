@@ -51,7 +51,7 @@ def main(args):
     env, buffer, test_envs = prepare_buffer_via_offline_data(args)
 
     # %% 3. Setup policy
-    policy, test_collector, state_tracker, optim = setup_policy_model(args, env, test_envs)
+    policy, test_collector, state_tracker, optim = setup_policy_model(args, env, buffer, test_envs)
 
     # %% 4. Learn policy
     learn_policy(args, policy, buffer, test_collector, state_tracker, optim, MODEL_SAVE_PATH, logger_path)

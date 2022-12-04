@@ -5,6 +5,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
+from core.policy.utils import get_emb
 from tianshou.data import Batch, ReplayBuffer, to_torch_as
 from tianshou.policy import A2CPolicy
 from tianshou.utils.net.common import ActorCritic
@@ -85,10 +86,10 @@ class A2CPolicy_withEmbedding(A2CPolicy):
         with torch.no_grad():
             batch.indices = indices
             for minibatch in batch.split(self._batch, shuffle=False, merge_last=True):
-                obs_emb = self.get_emb(buffer, minibatch.indices, is_obs=True)
+                obs_emb = get_emb(self.state_tracker, buffer, minibatch.indices, is_obs=True)
                 # v_s.append(self.critic(minibatch.obs))
                 v_s.append(self.critic(obs_emb))
-                obs_next_emb = self.get_emb(buffer, minibatch.indices, is_obs=False)
+                obs_next_emb = get_emb(self.state_tracker, buffer, minibatch.indices, is_obs=False)
                 # v_s_.append(self.critic(minibatch.obs_next))
                 v_s_.append(self.critic(obs_next_emb))
         batch.v_s = torch.cat(v_s, dim=0).flatten()  # old value
@@ -120,20 +121,6 @@ class A2CPolicy_withEmbedding(A2CPolicy):
         batch.adv = to_torch_as(advantages, batch.v_s)
         return batch
 
-    def get_emb(self, buffer, indices=None, is_obs=None, obs=None):
-        if len(buffer) == 0:
-            obs_emb = self.state_tracker.forward(obs=obs, reset=True)
-        else:
-            if indices is None:
-                indices = buffer.last_index[~buffer[buffer.last_index].done]
-                is_obs = False
-            if is_obs:
-                obs_emb = self.state_tracker.forward(buffer=buffer, indices=indices, reset=False, is_obs=is_obs)
-            else:
-                obs_emb = self.state_tracker.forward(buffer=buffer, indices=indices, reset=False, is_obs=is_obs)
-
-
-        return obs_emb
 
     def forward(
         self,
@@ -159,7 +146,7 @@ class A2CPolicy_withEmbedding(A2CPolicy):
             more detailed explanation.
         """
 
-        obs_emb = self.get_emb(buffer, indices=indices, obs=batch.obs, is_obs=is_obs)
+        obs_emb = get_emb(self.state_tracker, buffer, indices=indices, obs=batch.obs, is_obs=is_obs)
 
         logits, hidden = self.actor(obs_emb, state=state)
 
@@ -195,7 +182,7 @@ class A2CPolicy_withEmbedding(A2CPolicy):
                 actor_loss = -(log_prob * minibatch.adv).mean()
                 # calculate loss for critic
 
-                obs_emb = self.get_emb(self.train_collector.buffer, minibatch.indices, is_obs=True)
+                obs_emb = get_emb(self.state_tracker, self.train_collector.buffer, minibatch.indices, is_obs=True)
                 value = self.critic(obs_emb).flatten()
                 vf_loss = F.mse_loss(minibatch.returns, value)
                 # calculate regularization and overall loss

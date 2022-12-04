@@ -3,13 +3,16 @@ import datetime
 import functools
 import json
 import os
+import pickle
 import pprint
 import random
 import time
 from collections import defaultdict
 
-
+import gym
 import numpy as np
+import pandas as pd
+# import pytest
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
@@ -18,19 +21,23 @@ import sys
 from tqdm import tqdm
 
 from core.policy.bcq import BCQPolicy_withEmbedding
-from core.policy.discrete_bcq import DiscreteBCQPolicy_withEmbedding
 from core.trainer.offline import offline_trainer
 from run_Policy2 import prepare_user_model_and_env
+from run_worldModel_ensemble import load_dataset_val
+from tianshou.policy import BCQPolicy
 from tianshou.utils.net.continuous import Perturbation, VAE
 
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
 sys.path.extend(["./src", "./src/DeepCTR-Torch", "./src/tianshou"])
+from core.user_model_ensemble import EnsembleModel
 from core.configs import get_features, get_training_data, get_true_env, get_val_data
 from core.collector2 import Collector
 from core.inputs import get_dataset_columns
-
+from core.policy.a2c2 import A2CPolicy_withEmbedding
 from core.state_tracker2 import StateTrackerAvg2
+from core.trainer.onpolicy import onpolicy_trainer
+from core.worldModel.simulated_env import SimulatedEnv
 
 from tianshou.data import VectorReplayBuffer, Batch
 from tianshou.env import DummyVectorEnv
@@ -97,6 +104,7 @@ def get_args_all():
 
     # tianshou
     parser.add_argument('--buffer-size', type=int, default=100000)
+    parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--epoch', type=int, default=200)
     # parser.add_argument('--step-per-epoch', type=int, default=15000)
     # parser.add_argument('--repeat-per-collect', type=int, default=2)
@@ -108,33 +116,35 @@ def get_args_all():
 
     parser.add_argument('--render', type=float, default=0)
     parser.add_argument('--reward-threshold', type=float, default=None)
-    parser.add_argument('--step-per-epoch', type=int, default=1000)
-
-    # parser.add_argument('--step-per-collect', type=int, default=16)
-    # parser.add_argument('--update-per-step', type=float, default=1 / 16)
-    # parser.add_argument('--repeat-per-collect', type=int, default=1)
     # parser.add_argument('--batch-size', type=int, default=64)
     parser.add_argument('--logdir', type=str, default='log')
     # parser.add_argument(
     #     '--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu'
     # )
 
-    # bcq
-    parser.add_argument("--task", type=str, default="CartPole-v0")
-    parser.add_argument("--eps-test", type=float, default=0.001)
-    parser.add_argument("--lr", type=float, default=3e-4)
-    parser.add_argument("--gamma", type=float, default=0.99)
-    parser.add_argument("--n-step", type=int, default=3)
-    parser.add_argument("--target-update-freq", type=int, default=320)
-    parser.add_argument("--unlikely-action-threshold", type=float, default=0.6)
-    parser.add_argument("--imitation-logits-penalty", type=float, default=0.01)
-    parser.add_argument("--update-per-epoch", type=int, default=5000)
-    # parser.add_argument("--batch-size", type=int, default=64)
-    # parser.add_argument("--hidden-sizes", type=int, nargs="*", default=[64, 64])
 
-    parser.add_argument("--resume", action="store_true")
-    parser.add_argument("--save-interval", type=int, default=4)
+    parser.add_argument('--actor-lr', type=float, default=1e-3)
+    parser.add_argument('--critic-lr', type=float, default=1e-3)
+    parser.add_argument('--step-per-epoch', type=int, default=1000)
+    parser.add_argument('--batch-size', type=int, default=1024)
 
+    parser.add_argument("--vae-hidden-sizes", type=int, nargs='*', default=[64, 64])
+    # default to 2 * action_dim
+    parser.add_argument('--latent_dim', type=int, default=None)
+    parser.add_argument("--gamma", default=0.99)
+    parser.add_argument("--tau_BCQ", default=0.005)
+    # Weighting for Clipped Double Q-learning in BCQ
+    parser.add_argument("--lmbda", default=0.75)
+    # Max perturbation hyper-parameter for BCQ
+    parser.add_argument("--phi", default=0.05)
+
+    # parser.add_argument(
+    #     '--watch',
+    #     default=False,
+    #     action='store_true',
+    #     help='watch the play of pre-trained policy only',
+    # )
+    # parser.add_argument("--show-progress", action="store_true")
 
 
     args = parser.parse_known_args()[0]
@@ -142,10 +152,10 @@ def get_args_all():
 
 def prepare_dir_log(args):
     # %% 1. Create dirs
-    MODEL_SAVE_PATH = os.path.join("../../Downloads", "saved_models", args.env, args.model_name)
+    MODEL_SAVE_PATH = os.path.join(".", "saved_models", args.env, args.model_name)
 
-    create_dirs = [os.path.join("../../Downloads", "saved_models"),
-                   os.path.join("../../Downloads", "saved_models", args.env),
+    create_dirs = [os.path.join(".", "saved_models"),
+                   os.path.join(".", "saved_models", args.env),
                    MODEL_SAVE_PATH,
                    os.path.join(MODEL_SAVE_PATH, "logs")]
     create_dir(create_dirs)
@@ -238,7 +248,7 @@ def prepare_buffer_via_offline_data(args):
     return env, buffer, test_envs
 
     # %% 4. Setup model
-def setup_policy_model(args, env, buffer, test_envs):
+def setup_policy_model(args, env, test_envs):
     ensemble_models, _, _ = prepare_user_model_and_env(args)
 
     saved_embedding = ensemble_models.load_val_user_item_embedding(freeze_emb=args.freeze_emb)
@@ -259,28 +269,75 @@ def setup_policy_model(args, env, buffer, test_envs):
                                     saved_embedding, device=args.device, window=args.window,
                                     use_userEmbedding=args.use_userEmbedding, MAX_TURN=args.max_turn + 1).to(args.device)
 
-    net = Net(args.state_shape, args.hidden_sizes[0], device=args.device)
-    policy_net = Actor(
-        net, args.action_shape, hidden_sizes=args.hidden_sizes, device=args.device
+    net_a = MLP(
+        input_dim=args.state_shape + args.action_shape,
+        output_dim=args.action_shape,
+        hidden_sizes=args.hidden_sizes,
+        device=args.device,
+    )
+    actor = Perturbation(
+        net_a, max_action=args.max_action, device=args.device, phi=args.phi
     ).to(args.device)
-    imitation_net = Actor(
-        net, args.action_shape, hidden_sizes=args.hidden_sizes, device=args.device
-    ).to(args.device)
-    actor_critic = ActorCritic(policy_net, imitation_net)
-    optim = torch.optim.Adam(actor_critic.parameters(), lr=args.lr)
+    actor_optim = torch.optim.Adam(actor.parameters(), lr=args.actor_lr)
 
-    policy = DiscreteBCQPolicy_withEmbedding(
-        policy_net,
-        imitation_net,
-        optim,
-        args.gamma,
-        args.n_step,
-        args.target_update_freq,
-        args.eps_test,
-        args.unlikely_action_threshold,
-        args.imitation_logits_penalty,
-        state_tracker=state_tracker,
-        buffer=buffer,
+    net_c1 = Net(
+        args.state_shape,
+        args.action_shape,
+        hidden_sizes=args.hidden_sizes,
+        concat=True,
+        device=args.device,
+    )
+    net_c2 = Net(
+        args.state_shape,
+        args.action_shape,
+        hidden_sizes=args.hidden_sizes,
+        concat=True,
+        device=args.device,
+    )
+    critic1 = Critic(net_c1, device=args.device).to(args.device)
+    critic1_optim = torch.optim.Adam(critic1.parameters(), lr=args.critic_lr)
+    critic2 = Critic(net_c2, device=args.device).to(args.device)
+    critic2_optim = torch.optim.Adam(critic2.parameters(), lr=args.critic_lr)
+
+    # vae
+    # output_dim = 0, so the last Module in the encoder is ReLU
+    vae_encoder = MLP(
+        input_dim=args.state_shape + args.action_shape,
+        hidden_sizes=args.vae_hidden_sizes,
+        device=args.device,
+    )
+    if not args.latent_dim:
+        args.latent_dim = args.action_shape * 2
+    vae_decoder = MLP(
+        input_dim=args.state_shape + args.latent_dim,
+        output_dim=args.action_shape,
+        hidden_sizes=args.vae_hidden_sizes,
+        device=args.device,
+    )
+    vae = VAE(
+        vae_encoder,
+        vae_decoder,
+        hidden_dim=args.vae_hidden_sizes[-1],
+        latent_dim=args.latent_dim,
+        max_action=args.max_action,
+        device=args.device,
+    ).to(args.device)
+    vae_optim = torch.optim.Adam(vae.parameters())
+    optim = [actor_optim, critic1_optim, critic2_optim, vae_optim]
+
+    policy = BCQPolicy_withEmbedding(
+        actor,
+        actor_optim,
+        critic1,
+        critic1_optim,
+        critic2,
+        critic2_optim,
+        vae,
+        vae_optim,
+        device=args.device,
+        gamma=args.gamma,
+        tau=args.tau_BCQ,
+        lmbda=args.lmbda,
     )
 
     # collector
@@ -293,13 +350,15 @@ def setup_policy_model(args, env, buffer, test_envs):
         exploration_noise=args.exploration_noise,
     )
 
-    return policy, test_collector, state_tracker, optim
+
+
+    return policy, test_collector, optim
 
 def learn_policy(args, policy, buffer, test_collector, state_tracker, optim, MODEL_SAVE_PATH, logger_path):
     # log
     t0 = datetime.datetime.now().strftime("%m%d_%H%M%S")
-    log_file = f'seed_{args.seed}_{t0}-{args.env.replace("-", "_")}_bcq'
-    log_path = os.path.join(args.logdir, args.env, 'bcq', log_file)
+    log_file = f'seed_{args.seed}_{t0}-{args.task.replace("-", "_")}_bcq'
+    log_path = os.path.join(args.logdir, args.task, 'bcq', log_file)
     writer = SummaryWriter(log_path)
     writer.add_text("args", str(args))
     logger1 = TensorboardLogger(writer)
@@ -321,24 +380,6 @@ def learn_policy(args, policy, buffer, test_collector, state_tracker, optim, MOD
         save_best_fn=save_best_fn,
         # stop_fn=stop_fn,
         logger=logger1,
-        save_model_fn=functools.partial(save_model_fn,
-                                        model_save_path=model_save_path,
-                                        state_tracker=state_tracker,
-                                        optim=optim,
-                                        is_save=args.is_save)
-    )
-
-    result = offline_trainer(
-        policy,
-        buffer,
-        test_collector,
-        args.epoch,
-        args.update_per_epoch,
-        args.test_num,
-        args.batch_size,
-        # stop_fn=stop_fn,
-        save_best_fn=save_best_fn,
-        logger=logger,
         save_model_fn=functools.partial(save_model_fn,
                                         model_save_path=model_save_path,
                                         state_tracker=state_tracker,

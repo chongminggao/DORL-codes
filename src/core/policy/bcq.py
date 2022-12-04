@@ -5,7 +5,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from tianshou.data import Batch, to_torch
+from tianshou.data import Batch, to_torch, ReplayBuffer
 from tianshou.policy import BCQPolicy
 from tianshou.utils.net.continuous import VAE
 
@@ -78,12 +78,18 @@ class BCQPolicy_withEmbedding(BCQPolicy):
     def forward(
             self,
             batch: Batch,
+            buffer: ReplayBuffer,
+            indices: np.ndarray = None,
+            is_obs=None,
             state: Optional[Union[dict, Batch, np.ndarray]] = None,
             **kwargs: Any,
     ) -> Batch:
         """Compute action over the given batch data."""
         # There is "obs" in the Batch
         # obs_group: several groups. Each group has a state.
+        obs_emb = self.get_emb(buffer, indices=indices, obs=batch.obs, is_obs=is_obs)
+        obs_group: torch.Tensor = to_torch(batch.obs, device=self.device)
+
         obs_group: torch.Tensor = to_torch(batch.obs, device=self.device)
         act_group = []
         for obs in obs_group:
