@@ -58,6 +58,7 @@ def get_val_data(env):
 
     return df_val, df_user_val, df_item_val, list_feat
 
+
 def get_common_args(args):
     env = args.env
     if env == "CoatEnv-v0":
@@ -93,7 +94,7 @@ def get_common_args(args):
         args.yfeat = "rating"
     return args
 
-def get_true_env(args, read_user=None):
+def get_true_env(args, read_user_num=None):
     if args.env == "CoatEnv-v0":
         from environments.coat.env.Coat import CoatEnv
         mat, df_item, mat_distance = CoatEnv.load_mat()
@@ -118,7 +119,7 @@ def get_true_env(args, read_user=None):
         env_task_class = YahooEnv
     elif args.env == "KuaiRand-v0":
         from environments.KuaiRand_Pure.env.KuaiRand import KuaiRandEnv
-        mat, df_item, mat_distance = KuaiRandEnv.load_mat(args.yfeat, read_user=read_user)
+        mat, df_item, mat_distance = KuaiRandEnv.load_mat(args.yfeat, read_user_num=read_user_num)
         kwargs_um = {"yname": args.yfeat,
                      "mat": mat,
                      "df_item": df_item,

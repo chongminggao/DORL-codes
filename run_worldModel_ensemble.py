@@ -10,16 +10,19 @@ import os
 import random
 import sys
 import time
+import traceback
+
 import logzero
 import numpy as np
 import pandas as pd
 import torch
 from torch import nn
 
+from core.evaluation.evaluator import test_static_model_in_RL_env
 from environments.KuaiRec.env.KuaiEnv import compute_exposure_effect_kuaiRec
 
 sys.path.extend(["./src", "./src/DeepCTR-Torch"])
-from core.configs import get_training_data, get_val_data
+from core.configs import get_training_data, get_val_data, get_common_args, get_features, get_true_env
 from core.user_model_ensemble import EnsembleModel
 from core.evaluation.metrics import get_ranking_results
 from core.inputs import SparseFeatP
@@ -27,19 +30,18 @@ from core.static_dataset import StaticDataset
 from core.util import negative_sampling
 from deepctr_torch.inputs import DenseFeat
 
-from util.utils import create_dir
+from util.utils import create_dir, LoggerCallback_Update
 
 
 def get_args_all():
     parser = argparse.ArgumentParser()
+    parser.add_argument("--env", type=str, required=True)
     parser.add_argument('--resume', action="store_true")
-
     parser.add_argument("--optimizer", type=str, default='adam')
     parser.add_argument('--seed', default=2022, type=int)
     parser.add_argument("--bpr_weight", type=float, default=0.5)
     parser.add_argument('--neg_K', default=5, type=int)
     parser.add_argument('--n_models', default=5, type=int)
-
 
     # recommendation related:
     # parser.add_argument('--not_softmax', action="store_false")
@@ -84,6 +86,42 @@ def get_args_all():
     parser.add_argument('--no_ab', dest='is_ab', action='store_false')
     parser.set_defaults(is_ab=False)
     parser.add_argument("--message", type=str, default="UM")
+
+    args = parser.parse_known_args()[0]
+    return args
+def get_args_dataset_specific(envname):
+    parser = argparse.ArgumentParser()
+    if envname == 'CoatEnv-v0':
+        parser.add_argument("--feature_dim", type=int, default=8)
+        parser.add_argument("--entity_dim", type=int, default=8)
+        parser.add_argument('--batch_size', default=1024, type=int)
+        parser.add_argument("--dnn_activation", type=str, default="prelu")
+        parser.add_argument('--leave_threshold', default=10, type=float)
+        parser.add_argument('--num_leave_compute', default=3, type=int)
+    elif envname == 'YahooEnv-v0':
+        parser.add_argument("--feature_dim", type=int, default=8)
+        parser.add_argument("--entity_dim", type=int, default=8)
+        parser.add_argument('--batch_size', default=128, type=int)
+        parser.add_argument('--leave_threshold', default=120, type=float)
+        parser.add_argument('--num_leave_compute', default=3, type=int)
+    elif envname == 'KuaiEnv-v0':
+        parser.add_argument('--neg_K', default=3, type=int)
+        parser.add_argument("--feature_dim", type=int, default=8)
+        parser.add_argument("--entity_dim", type=int, default=8)
+        parser.add_argument('--batch_size', default=4096, type=int)
+        parser.add_argument("--dnn_activation", type=str, default="swish")
+        parser.add_argument('--leave_threshold', default=0, type=int)  # todo
+        parser.add_argument('--num_leave_compute', default=1, type=int)  # todo
+    elif envname == 'KuaiRand-v0':
+        parser.add_argument("--yfeat", type=str, default='is_click')
+        parser.add_argument("--feature_dim", type=int, default=4)
+        parser.add_argument("--entity_dim", type=int, default=4)
+        parser.add_argument('--batch_size', default=4096, type=int)
+        parser.add_argument('--leave_threshold', default=10, type=float)
+        parser.add_argument('--num_leave_compute', default=3, type=int)
+    else:
+        raise("envname should be in the following four datasets:\n"
+              "{'CoatEnv-v0', 'YahooEnv-v0', 'KuaiEnv-v0', 'KuaiRand-v0'}")
 
     args = parser.parse_known_args()[0]
     return args
@@ -327,102 +365,6 @@ def setup_world_model(args, x_columns, y_columns, ab_columns, task, task_logit_d
 
     return ensemble_models
 
-
-
-# def get_detailed_path(Path_old, num):
-#     path_list = Path_old.split(".")
-#     assert len(path_list) >= 2
-#     filename = path_list[-2]
-#
-#     path_list_new = path_list[:-2] + [filename + f"_M{num}"] + path_list[-1:]
-#     Path_new = ".".join(path_list_new)
-#     return Path_new
-
-
-# %% 6. Save model
-# def save_world_model(args, ensemble_models, dataset_val, x_columns, y_columns, df_user, df_item, df_user_val,
-#                      df_item_val,
-#                      user_features, item_features, model_parameters, MODEL_SAVE_PATH, logger_path):
-#     MODEL_MAT_PATH = os.path.join(MODEL_SAVE_PATH, "mats", f"[{args.message}]_mat.pickle") # todo: deprecated
-#     MODEL_PARAMS_PATH = os.path.join(MODEL_SAVE_PATH, "params", f"[{args.message}]_params.pickle")
-#     MODEL_PATH = os.path.join(MODEL_SAVE_PATH, "models", f"[{args.message}]_model.pt")
-#     MODEL_EMBEDDING_PATH = os.path.join(MODEL_SAVE_PATH, "embeddings", f"[{args.message}]_emb.pt")
-#     USER_EMBEDDING_PATH = os.path.join(MODEL_SAVE_PATH, "embeddings", f"[{args.message}]_emb_user.pt")
-#     ITEM_EMBEDDING_PATH = os.path.join(MODEL_SAVE_PATH, "embeddings", f"[{args.message}]_emb_item.pt")
-#     USER_VAL_EMBEDDING_PATH = os.path.join(MODEL_SAVE_PATH, "embeddings", f"[{args.message}]_emb_user_val.pt")
-#     ITEM_VAL_EMBEDDING_PATH = os.path.join(MODEL_SAVE_PATH, "embeddings", f"[{args.message}]_emb_item_val.pt")
-#
-#     # (1) Compute and save Mat
-#     # # todo：暂时不需要
-#     # mean_mat_list, var_mat_list = compute_mean_var(ensemble_models, dataset_val, df_user, df_item, user_features, item_features,
-#     #                               x_columns, y_columns)
-#     # with open(MODEL_MAT_PATH, "wb") as f:
-#     #     pickle.dump(normed_mat, f)
-#
-#     # (2) Save params
-#     with open(MODEL_PARAMS_PATH, "wb") as output_file:
-#         pickle.dump(model_parameters, output_file)
-#
-#     # (3) Save Model
-#     #  To cpu
-#
-#     # model = user_model.cpu()
-#     # model.linear_model.device = "cpu"
-#     # model.linear.device = "cpu"
-#     #
-#     # torch.save(model.state_dict(), MODEL_PATH)
-#
-#
-#     for i, model in enumerate(ensemble_models.user_models):
-#         MODEL_PATH_new = get_detailed_path(MODEL_PATH, i)
-#
-#         model = model.cpu()
-#         model.linear_model.device = "cpu"
-#         model.linear.device = "cpu"
-#         torch.save(model.state_dict(), MODEL_PATH_new)
-#
-#     # (4) Save Embedding
-#     # torch.save(model.embedding_dict.state_dict(), MODEL_EMBEDDING_PATH)
-#
-#     def save_embedding(model, df_save, columns, SAVEPATH):
-#         df_save = df_save.reset_index(drop=False)
-#         df_save = df_save[[column.name for column in columns]]
-#
-#         feature_index = build_input_features(columns)
-#         tensor_save = torch.FloatTensor(df_save.to_numpy())
-#         sparse_embedding_list, dense_value_list = input_from_feature_columns(tensor_save, columns,
-#                                                                              model.embedding_dict,
-#                                                                              feature_index=feature_index,
-#                                                                              support_dense=True, device='cpu')
-#         representation_save = combined_dnn_input(sparse_embedding_list, dense_value_list)
-#         torch.save(representation_save, SAVEPATH)
-#         return representation_save
-#
-#     user_columns = x_columns[:len(user_features)]
-#     item_columns = x_columns[len(user_features):]
-#
-#     for i, model in enumerate(ensemble_models.user_models):
-#         ITEM_EMBEDDING_PATH_new = get_detailed_path(ITEM_EMBEDDING_PATH, i)
-#         USER_EMBEDDING_PATH_new = get_detailed_path(USER_EMBEDDING_PATH, i)
-#         ITEM_VAL_EMBEDDING_PATH_new = get_detailed_path(ITEM_VAL_EMBEDDING_PATH, i)
-#         USER_VAL_EMBEDDING_PATH_new = get_detailed_path(USER_VAL_EMBEDDING_PATH, i)
-#
-#         representation_save1 = save_embedding(model, df_item, item_columns, ITEM_EMBEDDING_PATH_new)
-#         representation_save2 = save_embedding(model, df_user, user_columns, USER_EMBEDDING_PATH_new)
-#         representation_save3 = save_embedding(model, df_item_val, item_columns, ITEM_VAL_EMBEDDING_PATH_new)
-#         representation_save4 = save_embedding(model, df_user_val, user_columns, USER_VAL_EMBEDDING_PATH_new)
-#
-#     logzero.logger.info(f"user_model and its parameters have been saved in {MODEL_SAVE_PATH}")
-#
-#     # %% 7. Upload logs
-#
-#     REMOTE_ROOT = "/root/Counterfactual_IRS"
-#     LOCAL_PATH = logger_path
-#     REMOTE_PATH = os.path.join(REMOTE_ROOT, os.path.dirname(LOCAL_PATH))
-#
-#     # my_upload(LOCAL_PATH, REMOTE_PATH, REMOTE_ROOT)
-
-
 sigmoid = nn.Sigmoid()
 
 
@@ -440,7 +382,6 @@ def process_logit(y_deepfm_pos, score, alpha_u=None, beta_i=None, args=None):
 
 def loss_pointwise_negative(y, y_deepfm_pos, y_deepfm_neg, score, alpha_u=None, beta_i=None, args=None, log_var=None, log_var_neg=None):
     y_weighted, loss_ab = process_logit(y_deepfm_pos, score, alpha_u=alpha_u, beta_i=beta_i, args=args)
-
 
     if log_var is not None:
         inv_var = torch.exp(-log_var)
@@ -500,3 +441,94 @@ def loss_pairwise_pointwise(y, y_deepfm_pos, y_deepfm_neg, score, alpha_u=None, 
     bpr_click = - sigmoid(y_weighted - y_deepfm_neg).log().sum()
     loss = loss_y + args.bpr_weight * bpr_click + loss_ab + loss_var_pos
     return loss
+
+
+
+
+CODEPATH = os.path.dirname(__file__)
+def get_datapath(envname):
+    DATAPATH = None
+    if envname == 'CoatEnv-v0':
+        DATAPATH = os.path.join(CODEPATH, "environments", "coat")
+    elif envname == 'YahooEnv-v0':
+        DATAPATH = os.path.join(CODEPATH, "environments", "YahooR3")
+    elif envname == 'KuaiEnv-v0':
+        DATAPATH = os.path.join(CODEPATH, "environments", "KuaiRec", "data")
+    elif envname == 'KuaiRand-v0':
+        DATAPATH = os.path.join(CODEPATH, "environments", "KuaiRand_Pure", "data")
+    return DATAPATH
+
+def get_task(envname):
+    task = None
+    task_logit_dim = 1
+    if envname == 'CoatEnv-v0':
+        task = "regression"
+        is_ranking = True
+    elif envname == 'YahooEnv-v0':
+        task = "regression"
+        is_ranking = True
+    elif envname == 'KuaiEnv-v0':
+        task = "regression"
+        is_ranking = False
+    elif envname == 'KuaiRand-v0':
+        task = "regression" if args.yfeat == "watch_ratio_normed" else "binary"
+        is_ranking = True
+    return task, task_logit_dim, is_ranking
+
+def main(args):
+    # %% 1. Prepare dir
+    DATAPATH = get_datapath(args.env)
+    args = get_common_args(args)
+    MODEL_SAVE_PATH, logger_path = prepare_dir_log(args)
+
+    # %% 2. Prepare dataset
+    user_features, item_features, reward_features = get_features(args.env, args.is_userinfo)
+
+    dataset_train, dataset_val, df_user, df_item, df_user_val, df_item_val, x_columns, y_columns, ab_columns = \
+        prepare_dataset(args, user_features, item_features, reward_features, MODEL_SAVE_PATH, DATAPATH)
+
+    # %% 3. Setup model
+    task, task_logit_dim, is_ranking = get_task(args.env)
+    ensemble_models = setup_world_model(args, x_columns, y_columns, ab_columns,
+                                        task, task_logit_dim, is_ranking, MODEL_SAVE_PATH)
+
+    # %% 4. Setup RL environment
+    # mat, df_item, mat_distance = CoatEnv.load_mat()
+    # kwargs_um = {"mat": mat,
+    #              "df_item": df_item,
+    #              "mat_distance": mat_distance,
+    #              "num_leave_compute": args.num_leave_compute,
+    #              "leave_threshold": args.leave_threshold,
+    #              "max_turn": args.max_turn}
+    # env = CoatEnv(**kwargs_um)
+
+    env, env_task_class, kwargs_um = get_true_env(args, read_user_num=None)
+
+    ensemble_models.compile_RL_test(
+        functools.partial(test_static_model_in_RL_env, env=env, dataset_val=dataset_val, is_softmax=args.is_softmax,
+                          epsilon=args.epsilon, is_ucb=args.is_ucb, need_transform=args.need_transform))
+
+    # %% 5. Learn and evaluate model
+
+    history_list = ensemble_models.fit_data(dataset_train, dataset_val,
+                                            batch_size=args.batch_size, epochs=args.epoch, shuffle=True,
+                                            callbacks=[[LoggerCallback_Update(logger_path)]])
+
+    # %% 6. Save model
+    ensemble_models.get_save_entropy_mat(args)
+    ensemble_models.save_all_models(dataset_val, x_columns, y_columns, df_user, df_item, df_user_val, df_item_val,
+                                    user_features, item_features, args.deterministic)
+
+
+
+if __name__ == '__main__':
+    args_all = get_args_all()
+    args = get_args_dataset_specific(args_all.env)
+    args_all.__dict__.update(args.__dict__)
+
+    try:
+        main(args_all)
+    except Exception as e:
+        var = traceback.format_exc()
+        print(var)
+        logzero.logger.error(var)

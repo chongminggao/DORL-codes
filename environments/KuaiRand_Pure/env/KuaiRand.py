@@ -71,7 +71,7 @@ class KuaiRandEnv(gym.Env):
 
 
     @staticmethod
-    def load_mat(yname, read_user=None):
+    def load_mat(yname, read_user_num=None):
         filename = ""
         if yname == "is_click":
             filename = "kuairand_is_click.csv"
@@ -85,8 +85,8 @@ class KuaiRandEnv(gym.Env):
         filepath_GT = os.path.join(ROOTPATH, "MF_results_GT", filename)
         df_mat = pd.read_csv(filepath_GT, header=0)
 
-        if not read_user is None:
-            df_mat_part = df_mat.loc[df_mat["user_id"]<read_user]
+        if not read_user_num is None:
+            df_mat_part = df_mat.loc[df_mat["user_id"] < read_user_num]
         else:
             df_mat_part = df_mat
 
