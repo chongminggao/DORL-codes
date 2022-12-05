@@ -17,10 +17,10 @@ import sys
 
 from tqdm import tqdm
 
-from core.policy.discrete_bcq import DiscreteBCQPolicy_withEmbedding
+
+from core.policy.discrete_cql import DiscreteCQLPolicy_withEmbedding
 from core.trainer.offline import offline_trainer
 from run_Policy2 import prepare_user_model_and_env
-
 
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
@@ -36,10 +36,8 @@ from tianshou.env import DummyVectorEnv
 
 from tianshou.utils import TensorboardLogger
 from tianshou.utils.net.common import ActorCritic, Net, MLP
-from tianshou.utils.net.discrete import Actor, Critic
 
-# from util.upload import my_upload
-from util.utils import create_dir, LoggerCallback_RL, LoggerCallback_Policy, save_model_fn
+from util.utils import create_dir, LoggerCallback_Policy, save_model_fn
 import logzero
 from logzero import logger
 
@@ -53,7 +51,7 @@ def get_args_all():
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--user_model_name", type=str, default="DeepFM")
-    parser.add_argument("--model_name", type=str, default="BCQ")
+    parser.add_argument("--model_name", type=str, default="CQL")
     parser.add_argument('--seed', default=2022, type=int)
     parser.add_argument('--cuda', default=1, type=int)
 
@@ -88,17 +86,11 @@ def get_args_all():
     parser.add_argument('--max_turn', default=30, type=int)
 
     # state_tracker
-    # parser.add_argument('--dim_state', default=20, type=int)
-    # parser.add_argument('--dim_model', default=64, type=int)
-    # parser.add_argument('--nhead', default=4, type=int)
-    # parser.add_argument('--max_len', default=100, type=int)
     parser.add_argument('--window', default=2, type=int)
 
     # tianshou
     parser.add_argument('--buffer-size', type=int, default=100000)
     parser.add_argument('--epoch', type=int, default=200)
-    # parser.add_argument('--step-per-epoch', type=int, default=15000)
-    # parser.add_argument('--repeat-per-collect', type=int, default=2)
     parser.add_argument('--batch-size', type=int, default=1024)
     parser.add_argument('--hidden-sizes', type=int, nargs='*', default=[64, 64])
 
@@ -108,27 +100,16 @@ def get_args_all():
     parser.add_argument('--render', type=float, default=0)
     parser.add_argument('--reward-threshold', type=float, default=None)
     parser.add_argument('--step-per-epoch', type=int, default=1000)
-
-    # parser.add_argument('--step-per-collect', type=int, default=16)
-    # parser.add_argument('--update-per-step', type=float, default=1 / 16)
-    # parser.add_argument('--repeat-per-collect', type=int, default=1)
-    # parser.add_argument('--batch-size', type=int, default=64)
     parser.add_argument('--logdir', type=str, default='log')
-    # parser.add_argument(
-    #     '--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu'
-    # )
 
-    # bcq
+    parser.add_argument("--lr", type=float, default=3e-3)
+    parser.add_argument('--num-quantiles', type=int, default=200)
+    parser.add_argument("--min-q-weight", type=float, default=10.)
     parser.add_argument("--eps-test", type=float, default=0.001)
-    parser.add_argument("--lr", type=float, default=3e-4)
     parser.add_argument("--gamma", type=float, default=0.99)
     parser.add_argument("--n-step", type=int, default=3)
     parser.add_argument("--target-update-freq", type=int, default=320)
-    parser.add_argument("--unlikely-action-threshold", type=float, default=0.6)
-    parser.add_argument("--imitation-logits-penalty", type=float, default=0.01)
     parser.add_argument("--update-per-epoch", type=int, default=5000)
-    # parser.add_argument("--batch-size", type=int, default=64)
-    # parser.add_argument("--hidden-sizes", type=int, nargs="*", default=[64, 64])
 
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--save-interval", type=int, default=4)
@@ -256,33 +237,30 @@ def setup_policy_model(args, env, buffer, test_envs):
                                     saved_embedding, device=args.device, window=args.window,
                                     use_userEmbedding=args.use_userEmbedding, MAX_TURN=args.max_turn + 1).to(args.device)
 
-    net = Net(args.state_shape, args.hidden_sizes[0], device=args.device)
-    policy_net = Actor(
-        net, args.action_shape, hidden_sizes=args.hidden_sizes, device=args.device
-    ).to(args.device)
-    imitation_net = Actor(
-        net, args.action_shape, hidden_sizes=args.hidden_sizes, device=args.device
-    ).to(args.device)
-    actor_critic = ActorCritic(policy_net, imitation_net)
-    optim = torch.optim.Adam(actor_critic.parameters(), lr=args.lr)
+    net = Net(
+        args.state_shape,
+        args.action_shape,
+        hidden_sizes=args.hidden_sizes,
+        device=args.device,
+        softmax=False,
+        num_atoms=args.num_quantiles
+    )
+    optim = torch.optim.Adam(net.parameters(), lr=args.lr)
 
-    policy = DiscreteBCQPolicy_withEmbedding(
-        policy_net,
-        imitation_net,
+    policy = DiscreteCQLPolicy_withEmbedding(
+        net,
         optim,
         args.gamma,
+        args.num_quantiles,
         args.n_step,
         args.target_update_freq,
-        args.eps_test,
-        args.unlikely_action_threshold,
-        args.imitation_logits_penalty,
+        min_q_weight=args.min_q_weight,
         state_tracker=state_tracker,
         buffer=buffer,
-    )
+    ).to(args.device)
 
     # collector
     # buffer has been gathered
-    # train_collector = Collector(policy, train_envs, buffer, exploration_noise=True)
     test_collector = Collector(
         policy, test_envs,
         VectorReplayBuffer(args.buffer_size, len(test_envs)),
@@ -325,23 +303,7 @@ def learn_policy(args, policy, buffer, test_collector, state_tracker, optim, MOD
                                         is_save=args.is_save)
     )
 
-    result = offline_trainer(
-        policy,
-        buffer,
-        test_collector,
-        args.epoch,
-        args.update_per_epoch,
-        args.test_num,
-        args.batch_size,
-        # stop_fn=stop_fn,
-        save_best_fn=save_best_fn,
-        logger=logger,
-        save_model_fn=functools.partial(save_model_fn,
-                                        model_save_path=model_save_path,
-                                        state_tracker=state_tracker,
-                                        optim=optim,
-                                        is_save=args.is_save)
-    )
+
 
     print(__file__)
     pprint.pprint(result)

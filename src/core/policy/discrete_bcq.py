@@ -131,17 +131,46 @@ class DiscreteBCQPolicy_withEmbedding(DiscreteBCQPolicy):
         }
 
 
-    def process_fn(
-        self, batch: Batch, buffer: ReplayBuffer, indices: np.ndarray
-    ) -> Batch:
-        """Compute the n-step return for Q-learning targets.
+    def update(self, sample_size: int, buffer: Optional[ReplayBuffer],
+               **kwargs: Any) -> Dict[str, Any]:
+        """Update the policy network and replay buffer.
 
-        More details can be found at
-        :meth:`~tianshou.policy.BasePolicy.compute_nstep_return`.
+        It includes 3 function steps: process_fn, learn, and post_process_fn. In
+        addition, this function will change the value of ``self.updating``: it will be
+        False before this function and will be True when executing :meth:`update`.
+        Please refer to :ref:`policy_state` for more detailed explanation.
+
+        :param int sample_size: 0 means it will extract all the data from the buffer,
+            otherwise it will sample a batch with given sample_size.
+        :param ReplayBuffer buffer: the corresponding replay buffer.
+
+        :return: A dict, including the data needed to be logged (e.g., loss) from
+            ``policy.learn()``.
         """
-        batch = self.compute_nstep_return(
-            batch, buffer, indices, self._target_q, self._gamma, self._n_step,
-            self._rew_norm
-        )
+        if buffer is None:
+            return {}
+        batch, indices = buffer.sample(sample_size)
         batch.indices = indices
-        return batch
+        self.updating = True
+        batch = self.process_fn(batch, buffer, indices)
+        result = self.learn(batch, **kwargs)
+        self.post_process_fn(batch, buffer, indices)
+        if self.lr_scheduler is not None:
+            self.lr_scheduler.step()
+        self.updating = False
+        return result
+
+    # def process_fn(
+    #     self, batch: Batch, buffer: ReplayBuffer, indices: np.ndarray
+    # ) -> Batch:
+    #     """Compute the n-step return for Q-learning targets.
+    #
+    #     More details can be found at
+    #     :meth:`~tianshou.policy.BasePolicy.compute_nstep_return`.
+    #     """
+    #     batch = self.compute_nstep_return(
+    #         batch, buffer, indices, self._target_q, self._gamma, self._n_step,
+    #         self._rew_norm
+    #     )
+    #     batch.indices = indices
+    #     return batch

@@ -3,7 +3,7 @@ import os
 import traceback
 import sys
 
-from run_Policy_BCQ import get_args_all, prepare_dir_log, prepare_buffer_via_offline_data, setup_policy_model, \
+from run_Policy_CQL import get_args_all, prepare_dir_log, prepare_buffer_via_offline_data, setup_policy_model, \
     learn_policy
 
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'

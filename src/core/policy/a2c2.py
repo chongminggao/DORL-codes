@@ -147,7 +147,6 @@ class A2CPolicy_withEmbedding(A2CPolicy):
         """
 
         obs_emb = get_emb(self.state_tracker, buffer, indices=indices, obs=batch.obs, is_obs=is_obs)
-
         logits, hidden = self.actor(obs_emb, state=state)
 
         if isinstance(logits, tuple):

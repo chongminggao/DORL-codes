@@ -1,14 +1,15 @@
-from typing import Any, Dict
+from typing import Any, Dict, Optional, Union
 
 import numpy as np
 import torch
 import torch.nn.functional as F
 
-from tianshou.data import Batch, to_torch
-from tianshou.policy import QRDQNPolicy
+from core.policy.utils import get_emb
+from tianshou.data import Batch, to_torch, to_numpy, ReplayBuffer
+from tianshou.policy import DiscreteCQLPolicy
 
 
-class DiscreteCQLPolicy(QRDQNPolicy):
+class DiscreteCQLPolicy_withEmbedding(DiscreteCQLPolicy):
     """Implementation of discrete Conservative Q-Learning algorithm. arXiv:2006.04779.
 
     :param torch.nn.Module model: a model following the rules in
@@ -41,20 +42,67 @@ class DiscreteCQLPolicy(QRDQNPolicy):
         target_update_freq: int = 0,
         reward_normalization: bool = False,
         min_q_weight: float = 10.0,
+        state_tracker=None,
+        buffer=None,
         **kwargs: Any,
     ) -> None:
         super().__init__(
-            model, optim, discount_factor, num_quantiles, estimation_step,
-            target_update_freq, reward_normalization, **kwargs
+            model, optim, discount_factor, num_quantiles, estimation_step, target_update_freq, reward_normalization,
+            min_q_weight, **kwargs
         )
-        self._min_q_weight = min_q_weight
+        self.state_tracker = state_tracker
+        self.buffer = buffer
+
+    def forward(
+        self,
+        batch: Batch,
+        buffer: ReplayBuffer,
+        indices: np.ndarray = None,
+        is_obs=None,
+        state: Optional[Union[dict, Batch, np.ndarray]] = None,
+        model: str = "model",
+        input: str = "obs",
+        **kwargs: Any,
+    ) -> Batch:
+        model = getattr(self, model)
+
+        obs_emb = get_emb(self.state_tracker, buffer, indices=indices, obs=batch.obs, is_obs=is_obs)
+        logits, hidden = model(obs_emb, state=state, info=batch.info)
+
+        assert not hasattr(batch.obs, "obs")
+        # obs = batch[input]
+        # obs_next = obs.obs if hasattr(obs, "obs") else obs
+        # logits, hidden = model(obs_next, state=state, info=batch.info)
+
+
+        q = self.compute_q_value(logits, getattr(obs_emb, "mask", None))
+        if not hasattr(self, "max_action_num"):
+            self.max_action_num = q.shape[1]
+        act = to_numpy(q.max(dim=1)[1])
+        return Batch(logits=logits, act=act, state=hidden)
+
+    def _target_q(self, buffer: ReplayBuffer, indices: np.ndarray) -> torch.Tensor:
+        batch = buffer[indices]  # batch.obs_next: s_{t+n}
+        if self._target:
+            act = self(batch, buffer, indices, is_obs=False, input="obs_next").act
+            next_dist = self(batch, buffer, indices, is_obs=False, model="model_old", input="obs_next").logits
+        else:
+            next_batch = self(batch, buffer, indices, is_obs=False, input="obs_next")
+            act = next_batch.act
+            next_dist = next_batch.logits
+        next_dist = next_dist[np.arange(len(act)), act, :]
+        return next_dist  # shape: [bsz, num_quantiles]
 
     def learn(self, batch: Batch, **kwargs: Any) -> Dict[str, float]:
         if self._target and self._iter % self._freq == 0:
             self.sync_weight()
         self.optim.zero_grad()
         weight = batch.pop("weight", 1.0)
-        all_dist = self(batch).logits
+
+
+
+        all_dist = self(batch, self.buffer, indices=batch.indices, is_obs=True).logits
+        # all_dist = self(batch).logits
         act = to_torch(batch.act, dtype=torch.long, device=all_dist.device)
         curr_dist = all_dist[np.arange(len(act)), act, :].unsqueeze(2)
         target_dist = batch.returns.unsqueeze(1)
@@ -82,3 +130,32 @@ class DiscreteCQLPolicy(QRDQNPolicy):
             "loss/qr": qr_loss.item(),
             "loss/cql": min_q_loss.item(),
         }
+
+    def update(self, sample_size: int, buffer: Optional[ReplayBuffer],
+               **kwargs: Any) -> Dict[str, Any]:
+        """Update the policy network and replay buffer.
+
+        It includes 3 function steps: process_fn, learn, and post_process_fn. In
+        addition, this function will change the value of ``self.updating``: it will be
+        False before this function and will be True when executing :meth:`update`.
+        Please refer to :ref:`policy_state` for more detailed explanation.
+
+        :param int sample_size: 0 means it will extract all the data from the buffer,
+            otherwise it will sample a batch with given sample_size.
+        :param ReplayBuffer buffer: the corresponding replay buffer.
+
+        :return: A dict, including the data needed to be logged (e.g., loss) from
+            ``policy.learn()``.
+        """
+        if buffer is None:
+            return {}
+        batch, indices = buffer.sample(sample_size)
+        batch.indices = indices
+        self.updating = True
+        batch = self.process_fn(batch, buffer, indices)
+        result = self.learn(batch, **kwargs)
+        self.post_process_fn(batch, buffer, indices)
+        if self.lr_scheduler is not None:
+            self.lr_scheduler.step()
+        self.updating = False
+        return result
