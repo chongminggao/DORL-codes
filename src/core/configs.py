@@ -1,3 +1,6 @@
+import argparse
+
+
 def get_features(env, is_userinfo=False):
     if env == "CoatEnv-v0":
         user_features = ["user_id", 'gender_u', 'age', 'location', 'fashioninterest']
@@ -61,60 +64,75 @@ def get_val_data(env):
 
 def get_common_args(args):
     env = args.env
-    if env == "CoatEnv-v0":
-        args.is_userinfo = True
-        args.is_binarize = True
-        args.need_transform = False
-        # args.entropy_on_user = True
-        args.entropy_window = [0]
-        args.rating_threshold = 4
-        args.yfeat = "rating"
 
-        args.leave_threshold = 10
-        args.num_leave_compute = 3
-        args.max_turn = 30
-        args.window = 3
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--is_userinfo', dest='is_userinfo', action='store_true')
+    parser.add_argument('--no_userinfo', dest='is_userinfo', action='store_false')
+
+    parser.add_argument('--is_binarize', dest='is_binarize', action='store_true')
+    parser.add_argument('--no_binarize', dest='is_binarize', action='store_false')
+
+    parser.add_argument('--is_need_transform', dest='need_transform', action='store_true')
+    parser.add_argument('--no_need_transform', dest='need_transform', action='store_false')
+
+
+    if env == "CoatEnv-v0":
+        parser.set_defaults(is_userinfo=True)
+        parser.set_defaults(is_binarize=True)
+        parser.set_defaults(need_transform=False)
+        # args.entropy_on_user = True
+        parser.add_argument("--entropy_window", type=int, nargs="*", default=[0])
+        parser.add_argument("--rating_threshold", type=float, default=4)
+        parser.add_argument("--yfeat", type=str, default="rating")
+
+        parser.add_argument('--leave_threshold', default=10, type=float)
+        parser.add_argument('--num_leave_compute', default=3, type=int)
+        parser.add_argument('--max_turn', default=30, type=int)
+        parser.add_argument('--window', default=3, type=int)
 
     elif env == "YahooEnv-v0":
-        args.is_userinfo = True
-        args.is_binarize = True
-        args.need_transform = False
+        parser.set_defaults(is_userinfo=True)
+        parser.set_defaults(is_binarize=True)
+        parser.set_defaults(need_transform=False)
         # args.entropy_on_user = True
-        args.entropy_window = [0]
-        args.rating_threshold = 4
-        args.yfeat = "rating"
+        parser.add_argument("--entropy_window", type=int, nargs="*", default=[0])
+        parser.add_argument("--rating_threshold", type=float, default=4)
+        parser.add_argument("--yfeat", type=str, default="rating")
 
-        args.leave_threshold = 120
-        args.num_leave_compute = 3
-        args.max_turn = 30
-        args.window = 3
+        parser.add_argument('--leave_threshold', default=120, type=float)
+        parser.add_argument('--num_leave_compute', default=3, type=int)
+        parser.add_argument('--max_turn', default=30, type=int)
+        parser.add_argument('--window', default=3, type=int)
 
     elif env == "KuaiRand-v0":
-        args.is_userinfo = False
-        args.is_binarize = True
-        args.need_transform = False
+        parser.set_defaults(is_userinfo=False)
+        parser.set_defaults(is_binarize=True)
+        parser.set_defaults(need_transform=False)
         # args.entropy_on_user = False
-        args.entropy_window = [0, 1, 2]
-        args.rating_threshold = 1
-        args.yfeat = "is_click"
+        parser.add_argument("--entropy_window", type=int, nargs="*", default=[0,1,2])
+        parser.add_argument("--rating_threshold", type=float, default=1)
+        parser.add_argument("--yfeat", type=str, default="is_click")
 
-        args.leave_threshold = 10
-        args.num_leave_compute = 3
-        args.max_turn = 30
-        args.window = 3
+        parser.add_argument('--leave_threshold', default=10, type=float)
+        parser.add_argument('--num_leave_compute', default=3, type=int)
+        parser.add_argument('--max_turn', default=30, type=int)
+        parser.add_argument('--window', default=3, type=int)
 
     elif env == "KuaiEnv-v0":
-        args.is_userinfo = False
-        args.is_binarize = False
-        args.need_transform = True
+        parser.set_defaults(is_userinfo=False)
+        parser.set_defaults(is_binarize=False)
+        parser.set_defaults(need_transform=True)
         # args.entropy_on_user = False
-        args.entropy_window = [0,1,2]
-        args.yfeat = "watch_ratio_normed"
+        parser.add_argument("--entropy_window", type=int, nargs="*", default=[0,1,2])
+        parser.add_argument("--yfeat", type=str, default="watch_ratio_normed")
 
-        args.leave_threshold = 120
-        args.num_leave_compute = 3
-        args.max_turn = 30
-        args.window = 3
+        parser.add_argument('--leave_threshold', default=120, type=float)
+        parser.add_argument('--num_leave_compute', default=3, type=int)
+        parser.add_argument('--max_turn', default=30, type=int)
+        parser.add_argument('--window', default=3, type=int)
+
+    args_new = parser.parse_known_args()[0]
+    args.__dict__.update(args_new.__dict__)
 
     return args
 

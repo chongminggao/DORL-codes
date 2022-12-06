@@ -19,13 +19,14 @@ import sys
 from tqdm import tqdm
 
 
-from core.policy.discrete_cql import DiscreteCQLPolicy_withEmbedding
-from core.trainer.offline import offline_trainer
-from run_Policy2 import prepare_user_model_and_env
+
 
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
 sys.path.extend(["./src", "./src/DeepCTR-Torch", "./src/tianshou"])
+from core.policy.discrete_cql import DiscreteCQLPolicy_withEmbedding
+from core.trainer.offline import offline_trainer
+from run_Policy_Main import prepare_user_model_and_env
 from core.configs import get_features, get_training_data, get_true_env, get_val_data, get_common_args
 from core.collector2 import Collector
 from core.inputs import get_dataset_columns
@@ -75,19 +76,9 @@ def get_args_all():
     parser.add_argument('--no_exploration_noise', dest='exploration_noise', action='store_false')
     parser.set_defaults(exploration_noise=True)
 
-
     parser.add_argument('--is_freeze_emb', dest='freeze_emb', action='store_true')
     parser.add_argument('--no_freeze_emb', dest='freeze_emb', action='store_false')
     parser.set_defaults(freeze_emb=False)
-
-    # Env
-
-    parser.add_argument('--leave_threshold', default=10, type=float)
-    parser.add_argument('--num_leave_compute', default=3, type=int)
-    parser.add_argument('--max_turn', default=30, type=int)
-
-    # state_tracker
-    parser.add_argument('--window', default=2, type=int)
 
     # tianshou
     parser.add_argument('--buffer-size', type=int, default=100000)
@@ -115,20 +106,15 @@ def get_args_all():
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--save-interval", type=int, default=4)
 
+    parser.add_argument("--read_message", type=str, default="UM")
+    parser.add_argument("--message", type=str, default="CQL_with_emb")
 
 
-    args = parser.parse_known_args()[0]
-    return args
-
-def get_args_dataset_specific(envname):
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--leave_threshold', type=float)
-    parser.add_argument('--num_leave_compute', type=int)
-    parser.add_argument('--max_turn', type=int)
-    parser.add_argument('--window', type=int)
 
     args = parser.parse_known_args()[0]
     return args
+
+
 
 def prepare_dir_log(args):
     # %% 1. Create dirs
@@ -336,8 +322,7 @@ def main(args):
 
 if __name__ == '__main__':
     args_all = get_args_all()
-    args_all = get_common_args(args_all)
-    args = get_args_dataset_specific(args_all.env)
+    args = get_common_args(args_all)
     args_all.__dict__.update(args.__dict__)
 
     try:

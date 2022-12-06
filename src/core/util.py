@@ -179,7 +179,8 @@ def negative_sampling(df_train, df_item, df_user, y_name, is_rand=True, neg_in_t
             neg_i_list = np.random.randint(max(item_ids) + 1, size=len(user_ids) * num_break)
             find_negative(user_ids, item_ids, neg_u_list, neg_i_list, mat_train, array_k, is_rand=is_rand, num_break=num_break)
             df_k = pd.DataFrame(array_k, columns=["user_id", "item_id", y_name])
-            df_negative = df_negative.append(df_k, ignore_index=True)
+            # df_negative = df_negative.append(df_k, ignore_index=True)
+            df_negative = pd.concat([df_negative, df_k])
 
         df_negative = df_negative.join(df_item, on=['item_id'], how="left")
         df_negative = df_negative.join(df_user, on=['user_id'], how="left")

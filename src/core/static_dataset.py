@@ -47,6 +47,9 @@ class StaticDataset(Dataset):
         else:
             self.score = score
 
+        self.x_numpy = self.x_numpy.astype(np.float)
+        self.y_numpy = self.y_numpy.astype(np.float)
+
         self.len = len(self.x_numpy)
 
     def get_dataset_train(self):

@@ -102,13 +102,6 @@ def get_args_all():
     parser.add_argument('--no_exposure_intervention', dest='use_exposure_intervention', action='store_false')
     parser.set_defaults(use_exposure_intervention=False)
 
-
-    # state_tracker
-    parser.add_argument('--leave_threshold', type=float)
-    parser.add_argument('--num_leave_compute', type=int)
-    parser.add_argument('--max_turn', type=int)
-    parser.add_argument('--window', type=int)
-
     # tianshou
     parser.add_argument('--buffer-size', type=int, default=100000)
     parser.add_argument('--lr', type=float, default=1e-3)
@@ -134,21 +127,12 @@ def get_args_all():
     parser.add_argument('--gae-lambda', type=float, default=1.)
     parser.add_argument('--rew-norm', action="store_true", default=False)
 
-    parser.add_argument("--read_message", type=str, default="pointneg")
+    parser.add_argument("--read_message", type=str, default="UM")
     parser.add_argument("--message", type=str, default="A2C_with_emb")
 
     args = parser.parse_known_args()[0]
     return args
 
-def get_args_dataset_specific(envname):
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--leave_threshold', type=float)
-    parser.add_argument('--num_leave_compute', type=int)
-    parser.add_argument('--max_turn', type=int)
-    parser.add_argument('--window', type=int)
-
-    args = parser.parse_known_args()[0]
-    return args
 
 def prepare_dir_log(args):
     # %% 1. Create dirs
@@ -391,8 +375,7 @@ def main(args):
 
 if __name__ == '__main__':
     args_all = get_args_all()
-    args_all = get_common_args(args_all)
-    args = get_args_dataset_specific(args_all.env)
+    args = get_common_args(args_all)
     args_all.__dict__.update(args.__dict__)
 
     try:

@@ -18,10 +18,11 @@ import pandas as pd
 import torch
 from torch import nn
 
-from core.evaluation.evaluator import test_static_model_in_RL_env
+
 from environments.KuaiRec.env.KuaiEnv import compute_exposure_effect_kuaiRec
 
 sys.path.extend(["./src", "./src/DeepCTR-Torch"])
+from core.evaluation.evaluator import test_static_model_in_RL_env
 from core.configs import get_training_data, get_val_data, get_common_args, get_features, get_true_env
 from core.user_model_ensemble import EnsembleModel
 from core.evaluation.metrics import get_ranking_results
@@ -95,7 +96,7 @@ def get_args_dataset_specific(envname):
         parser.add_argument("--feature_dim", type=int, default=8)
         parser.add_argument("--entity_dim", type=int, default=8)
         parser.add_argument('--batch_size', default=1024, type=int)
-        parser.add_argument("--dnn_activation", type=str, default="prelu")
+        # parser.add_argument("--dnn_activation", type=str, default="prelu")
         parser.add_argument('--leave_threshold', default=10, type=float)
         parser.add_argument('--num_leave_compute', default=3, type=int)
     elif envname == 'YahooEnv-v0':
@@ -109,7 +110,7 @@ def get_args_dataset_specific(envname):
         parser.add_argument("--feature_dim", type=int, default=8)
         parser.add_argument("--entity_dim", type=int, default=8)
         parser.add_argument('--batch_size', default=4096, type=int)
-        parser.add_argument("--dnn_activation", type=str, default="swish")
+        # parser.add_argument("--dnn_activation", type=str, default="swish")
         parser.add_argument('--leave_threshold', default=0, type=int)  # todo
         parser.add_argument('--num_leave_compute', default=1, type=int)  # todo
     elif envname == 'KuaiRand-v0':
@@ -492,15 +493,6 @@ def main(args):
     ensemble_models = setup_world_model(args, x_columns, y_columns, ab_columns,
                                         task, task_logit_dim, is_ranking, MODEL_SAVE_PATH)
 
-    # %% 4. Setup RL environment
-    # mat, df_item, mat_distance = CoatEnv.load_mat()
-    # kwargs_um = {"mat": mat,
-    #              "df_item": df_item,
-    #              "mat_distance": mat_distance,
-    #              "num_leave_compute": args.num_leave_compute,
-    #              "leave_threshold": args.leave_threshold,
-    #              "max_turn": args.max_turn}
-    # env = CoatEnv(**kwargs_um)
 
     env, env_task_class, kwargs_um = get_true_env(args, read_user_num=None)
 
