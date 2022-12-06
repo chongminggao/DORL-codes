@@ -6,6 +6,7 @@ import os
 import pprint
 import random
 import time
+import traceback
 from collections import defaultdict
 
 
@@ -25,7 +26,7 @@ from run_Policy2 import prepare_user_model_and_env
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
 sys.path.extend(["./src", "./src/DeepCTR-Torch", "./src/tianshou"])
-from core.configs import get_features, get_training_data, get_true_env, get_val_data
+from core.configs import get_features, get_training_data, get_true_env, get_val_data, get_common_args
 from core.collector2 import Collector
 from core.inputs import get_dataset_columns
 
@@ -51,7 +52,7 @@ except ImportError:
 
 def get_args_all():
     parser = argparse.ArgumentParser()
-
+    parser.add_argument("--env", type=str, required=True)
     parser.add_argument("--user_model_name", type=str, default="DeepFM")
     parser.add_argument("--model_name", type=str, default="BCQ")
     parser.add_argument('--seed', default=2022, type=int)
@@ -134,6 +135,16 @@ def get_args_all():
     parser.add_argument("--save-interval", type=int, default=4)
 
 
+
+    args = parser.parse_known_args()[0]
+    return args
+
+def get_args_dataset_specific(envname):
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--leave_threshold', type=float)
+    parser.add_argument('--num_leave_compute', type=int)
+    parser.add_argument('--max_turn', type=int)
+    parser.add_argument('--window', type=int)
 
     args = parser.parse_known_args()[0]
     return args
@@ -347,3 +358,29 @@ def learn_policy(args, policy, buffer, test_collector, state_tracker, optim, MOD
     pprint.pprint(result)
     logger.info(result)
 
+
+def main(args):
+    # %% 1. Prepare the saved path.
+    MODEL_SAVE_PATH, logger_path = prepare_dir_log(args)
+
+    # %% 2. Prepare user model and environment
+    env, buffer, test_envs = prepare_buffer_via_offline_data(args)
+
+    # %% 3. Setup policy
+    policy, test_collector, state_tracker, optim = setup_policy_model(args, env, buffer, test_envs)
+
+    # %% 4. Learn policy
+    learn_policy(args, policy, buffer, test_collector, state_tracker, optim, MODEL_SAVE_PATH, logger_path)
+
+if __name__ == '__main__':
+    args_all = get_args_all()
+    args_all = get_common_args(args_all)
+    args = get_args_dataset_specific(args_all.env)
+    args_all.__dict__.update(args.__dict__)
+
+    try:
+        main(args_all)
+    except Exception as e:
+        var = traceback.format_exc()
+        print(var)
+        logzero.logger.error(var)

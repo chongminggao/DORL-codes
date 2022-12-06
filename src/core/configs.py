@@ -69,21 +69,12 @@ def get_common_args(args):
         args.entropy_window = [0]
         args.rating_threshold = 4
         args.yfeat = "rating"
-    elif env == "KuaiRand-v0":
-        args.is_userinfo = False
-        args.is_binarize = True
-        args.need_transform = False
-        # args.entropy_on_user = False
-        args.entropy_window = [0, 1, 2]
-        args.rating_threshold = 1
-        args.yfeat = "is_click"
-    elif env == "KuaiEnv-v0":
-        args.is_userinfo = False
-        args.is_binarize = False
-        args.need_transform = True
-        # args.entropy_on_user = False
-        args.entropy_window = [0,1,2]
-        args.yfeat = "watch_ratio_normed"
+
+        args.leave_threshold = 10
+        args.num_leave_compute = 3
+        args.max_turn = 30
+        args.window = 3
+
     elif env == "YahooEnv-v0":
         args.is_userinfo = True
         args.is_binarize = True
@@ -92,6 +83,39 @@ def get_common_args(args):
         args.entropy_window = [0]
         args.rating_threshold = 4
         args.yfeat = "rating"
+
+        args.leave_threshold = 120
+        args.num_leave_compute = 3
+        args.max_turn = 30
+        args.window = 3
+
+    elif env == "KuaiRand-v0":
+        args.is_userinfo = False
+        args.is_binarize = True
+        args.need_transform = False
+        # args.entropy_on_user = False
+        args.entropy_window = [0, 1, 2]
+        args.rating_threshold = 1
+        args.yfeat = "is_click"
+
+        args.leave_threshold = 10
+        args.num_leave_compute = 3
+        args.max_turn = 30
+        args.window = 3
+
+    elif env == "KuaiEnv-v0":
+        args.is_userinfo = False
+        args.is_binarize = False
+        args.need_transform = True
+        # args.entropy_on_user = False
+        args.entropy_window = [0,1,2]
+        args.yfeat = "watch_ratio_normed"
+
+        args.leave_threshold = 120
+        args.num_leave_compute = 3
+        args.max_turn = 30
+        args.window = 3
+
     return args
 
 def get_true_env(args, read_user_num=None):
