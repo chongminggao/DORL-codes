@@ -325,7 +325,7 @@ class UserModel_Variance(nn.Module):
             eval_result[name] = metric_fun(y, y_predict)
 
         if self.metric_fun_ranking is not None:
-            ground_truth = dataset_val.ground_truth
+            ground_truth_positive = dataset_val.ground_truth
 
             if dataset_val.all_item_ranking:
                 y_complete_predict = self.predict_data(dataset_val.dataset_complete, batch_size*10)
@@ -345,7 +345,7 @@ class UserModel_Variance(nn.Module):
             xy_predict = xy_predict.astype(dtype={"user_id": "int64", "item_id": "int64", "y_pred": "float64"})
             # df_score = xy_predict.groupby("user_id").agg(list)
 
-            eval_result.update(self.metric_fun_ranking(xy_predict, ground_truth))
+            eval_result.update(self.metric_fun_ranking(xy_predict, ground_truth_positive))
 
         return eval_result
 
