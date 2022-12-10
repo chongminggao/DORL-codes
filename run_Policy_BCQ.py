@@ -18,7 +18,7 @@ import sys
 
 from tqdm import tqdm
 
-
+from core.evaluation.evaluator import Callback_Coverage_Count
 
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
@@ -40,7 +40,7 @@ from tianshou.utils.net.common import ActorCritic, Net, MLP
 from tianshou.utils.net.discrete import Actor, Critic
 
 # from util.upload import my_upload
-from util.utils import create_dir, LoggerCallback_RL, LoggerCallback_Policy, save_model_fn
+from util.utils import create_dir, LoggerCallback_Policy, save_model_fn
 import logzero
 from logzero import logger
 
@@ -296,7 +296,7 @@ def learn_policy(args, policy, buffer, test_collector, state_tracker, optim, MOD
     def save_best_fn(policy):
         torch.save(policy.state_dict(), os.path.join(log_path, 'policy.pth'))
 
-    policy.callbacks = [LoggerCallback_Policy(logger_path)]
+    policy.callbacks = [Callback_Coverage_Count(test_collector), LoggerCallback_Policy(logger_path)]
     model_save_path = os.path.join(MODEL_SAVE_PATH, "{}_{}.pt".format(args.model_name, args.message))
 
     result = offline_trainer(

@@ -87,26 +87,28 @@ class LoggerCallback_Policy():
         self.REMOTE_ROOT = REMOTE_ROOT
         self.REMOTE_PATH = os.path.join(REMOTE_ROOT, os.path.dirname(logger_path))
 
-    def on_epoch_begin(self, epoch):
+    def on_epoch_begin(self, epoch, **kwargs):
         pass
 
-    def on_train_begin(self):
+    def on_train_begin(self, **kwargs):
         pass
 
-    def on_train_end(self):
+    def on_train_end(self, **kwargs):
         pass
 
-    def on_epoch_end(self, epoch, logs=None):
-        num_test = logs["n/ep"]
-        len_tra = logs["n/st"] / num_test
-        R_tra = logs["rew"]
+    def on_epoch_end(self, epoch, results=None, **kwargs):
+        num_test = results["n/ep"]
+        len_tra = results["n/st"] / num_test
+        R_tra = results["rew"]
         ctr = R_tra / len_tra
 
         result = dict()
         result['num_test'] = num_test
+        result['CV'] = f"{results['CV']:.3f}"
+        result['CV_turn'] = f"{results['CV_turn']:.3f}"
+        result['ctr'] = f"{ctr:.3f}"
         result['len_tra'] = len_tra
         result['R_tra'] = R_tra
-        result['ctr'] = f"{ctr:.3f}"
 
         # 1. write logger
         logger.info("Epoch: [{}], Info: [{}]".format(epoch, result))

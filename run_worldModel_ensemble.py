@@ -49,6 +49,7 @@ def get_args_all():
     parser.add_argument('--is_softmax', dest='is_softmax', action='store_true')
     parser.add_argument('--no_softmax', dest='is_softmax', action='store_false')
     parser.set_defaults(is_softmax=False)
+    parser.add_argument("--num_trajectory", type=int, default=200)
 
     parser.add_argument('--is_deterministic', dest='deterministic', action='store_true')
     parser.add_argument('--no_deterministic', dest='deterministic', action='store_false')
@@ -498,7 +499,7 @@ def main(args):
 
     ensemble_models.compile_RL_test(
         functools.partial(test_static_model_in_RL_env, env=env, dataset_val=dataset_val, is_softmax=args.is_softmax,
-                          epsilon=args.epsilon, is_ucb=args.is_ucb, need_transform=args.need_transform))
+                          epsilon=args.epsilon, is_ucb=args.is_ucb, need_transform=args.need_transform, num_trajectory=args.num_trajectory))
 
     # %% 5. Learn and evaluate model
 

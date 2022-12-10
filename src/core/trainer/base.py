@@ -395,7 +395,8 @@ class BaseTrainer(ABC):
         if self.train_fn:
             self.train_fn(self.epoch, self.env_step)
         result = self.train_collector.collect(
-            n_step=self.step_per_collect, n_episode=self.episode_per_collect
+            n_step=self.step_per_collect, n_episode=self.episode_per_collect,
+            # no_grad=False, # added by gcm
         )
         if result["n/ep"] > 0 and self.reward_metric:
             rew = self.reward_metric(result["rews"])

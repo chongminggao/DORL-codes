@@ -17,7 +17,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 import sys
 
-
+from core.evaluation.evaluator import Callback_Coverage_Count
 from run_worldModel_ensemble import load_dataset_val
 
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
@@ -191,7 +191,7 @@ def prepare_envs(args, ensemble_models, alpha_u, beta_i):
     # embedding_dim = list(embedding_dim_set)[0]
     embedding_dim = ensemble_models.user_models[0].feature_columns[0].embedding_dim
 
-    dataset_val, df_user_val, df_item_val = load_dataset_val(args, user_features, item_features, reward_features, embedding_dim, embedding_dim)
+    # dataset_val, df_user_val, df_item_val = load_dataset_val(args, user_features, item_features, reward_features, embedding_dim, embedding_dim)
 
     entropy_dict = dict()
     if 0 in args.entropy_window:
@@ -328,7 +328,7 @@ def learn_policy(args, policy, train_collector, test_collector, state_tracker, o
     def save_best_fn(policy):
         torch.save(policy.state_dict(), os.path.join(log_path, 'policy.pth'))
 
-    policy.callbacks = [LoggerCallback_Policy(logger_path)]
+    policy.callbacks = [Callback_Coverage_Count(test_collector), LoggerCallback_Policy(logger_path)]
     model_save_path = os.path.join(MODEL_SAVE_PATH, "{}_{}.pt".format(args.model_name, args.message))
 
     # trainer

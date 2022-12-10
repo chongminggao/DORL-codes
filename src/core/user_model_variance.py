@@ -128,8 +128,9 @@ class UserModel_Variance(nn.Module):
                 epoch_logs["val_" + name] = result
         if self.RL_eval_fun:
             eval_result_RL = self.RL_eval_fun(self.eval())
-            for name, result in eval_result_RL.items():
-                epoch_logs["RL_val_" + name] = result
+            # for name, result in eval_result_RL.items():
+            #     epoch_logs["RL_val_" + name] = result
+            eval_result.update(eval_result_RL)
         callbacks.on_epoch_end(-1, epoch_logs)
 
         # Train
