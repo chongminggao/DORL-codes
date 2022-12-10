@@ -25,11 +25,11 @@ sys.path.extend(["./src", "./src/DeepCTR-Torch", "./src/tianshou"])
 from core.policy.discrete_bcq import DiscreteBCQPolicy_withEmbedding
 from core.trainer.offline import offline_trainer
 from run_Policy_Main import prepare_user_model_and_env
-from core.configs import get_features, get_training_data, get_true_env, get_val_data, get_common_args
+from core.configs import get_training_data, get_true_env, get_common_args
 from core.collector2 import Collector
 from core.inputs import get_dataset_columns
 
-from core.state_tracker2 import StateTrackerAvg2
+from core.state_tracker2 import StateTracker_Caser
 
 from tianshou.data import VectorReplayBuffer, Batch
 from tianshou.env import DummyVectorEnv
@@ -57,10 +57,6 @@ def get_args_all():
     parser.add_argument('--seed', default=2022, type=int)
     parser.add_argument('--cuda', default=1, type=int)
 
-    parser.add_argument('--is_userinfo', dest='is_userinfo', action='store_true')
-    parser.add_argument('--no_userinfo', dest='is_userinfo', action='store_false')
-    parser.set_defaults(is_userinfo=False)
-
     parser.add_argument('--cpu', dest='cpu', action='store_true')
     parser.set_defaults(cpu=False)
 
@@ -68,17 +64,13 @@ def get_args_all():
     parser.add_argument('--no_save', dest='is_save', action='store_false')
     parser.set_defaults(is_save=False)
 
-    parser.add_argument('--is_use_userEmbedding', dest='use_userEmbedding', action='store_true')
-    parser.add_argument('--no_use_userEmbedding', dest='use_userEmbedding', action='store_false')
-    parser.set_defaults(use_userEmbedding=False)
-
     parser.add_argument('--is_exploration_noise', dest='exploration_noise', action='store_true')
     parser.add_argument('--no_exploration_noise', dest='exploration_noise', action='store_false')
     parser.set_defaults(exploration_noise=True)
 
-    parser.add_argument('--is_freeze_emb', dest='freeze_emb', action='store_true')
-    parser.add_argument('--no_freeze_emb', dest='freeze_emb', action='store_false')
-    parser.set_defaults(freeze_emb=False)
+    # for state_tracker
+    parser.add_argument("--embedding_dim", type=int, default=32)
+    parser.add_argument("--window_state", type=int, default=10)
 
     # tianshou
     parser.add_argument('--buffer-size', type=int, default=100000)
@@ -94,16 +86,10 @@ def get_args_all():
     parser.add_argument('--reward-threshold', type=float, default=None)
     parser.add_argument('--step-per-epoch', type=int, default=1000)
 
-    # parser.add_argument('--step-per-collect', type=int, default=16)
-    # parser.add_argument('--update-per-step', type=float, default=1 / 16)
-    # parser.add_argument('--repeat-per-collect', type=int, default=1)
-    # parser.add_argument('--batch-size', type=int, default=64)
-    parser.add_argument('--logdir', type=str, default='log')
-    # parser.add_argument(
-    #     '--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu'
-    # )
 
-    # bcq
+    parser.add_argument('--logdir', type=str, default='log')
+
+    # BCQ
     parser.add_argument("--eps-test", type=float, default=0.001)
     parser.add_argument("--lr", type=float, default=3e-4)
     parser.add_argument("--gamma", type=float, default=0.99)
@@ -112,8 +98,6 @@ def get_args_all():
     parser.add_argument("--unlikely-action-threshold", type=float, default=0.6)
     parser.add_argument("--imitation-logits-penalty", type=float, default=0.01)
     parser.add_argument("--update-per-epoch", type=int, default=5000)
-    # parser.add_argument("--batch-size", type=int, default=64)
-    # parser.add_argument("--hidden-sizes", type=int, nargs="*", default=[64, 64])
 
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--save-interval", type=int, default=4)
@@ -196,7 +180,7 @@ def construct_buffer_from_offline_data(args, df_train, env):
 def prepare_buffer_via_offline_data(args):
     df_train, df_user, df_item, list_feat = get_training_data(args.env)
     # df_val, df_user_val, df_item_val, list_feat = get_val_data(args.env)
-    # df_train = df_train.head(10000)
+    df_train = df_train.head(10000)
     if "time_ms" in df_train.columns:
         df_train.rename(columns={"time_ms": "timestamp"}, inplace=True)
         df_train = df_train.sort_values(["user_id", "timestamp"])
@@ -225,23 +209,17 @@ def prepare_buffer_via_offline_data(args):
 def setup_policy_model(args, env, buffer, test_envs):
     ensemble_models, _, _ = prepare_user_model_and_env(args)
 
-    saved_embedding = ensemble_models.load_val_user_item_embedding(freeze_emb=args.freeze_emb)
+    # saved_embedding = ensemble_models.load_val_user_item_embedding(freeze_emb=args.freeze_emb)
     user_columns, action_columns, feedback_columns, have_user_embedding, have_action_embedding, have_feedback_embedding = \
-        get_dataset_columns(saved_embedding["feat_user"].weight.shape[1], saved_embedding["feat_item"].weight.shape[1],
-                            env.mat.shape[0], env.mat.shape[1], envname=args.env)
+        get_dataset_columns(args.embedding_dim, args.embedding_dim, env.mat.shape[0], env.mat.shape[1], envname=args.env)
 
     args.action_shape = action_columns[0].vocabulary_size
-    if args.use_userEmbedding:
-        args.state_dim = action_columns[0].embedding_dim + saved_embedding.feat_user.weight.shape[1]
-    else:
-        args.state_dim = action_columns[0].embedding_dim
+    args.state_dim = action_columns[0].embedding_dim
 
     args.max_action = env.action_space.high[0]
 
-    state_tracker = StateTrackerAvg2(user_columns, action_columns, feedback_columns, args.state_dim,
-                                     saved_embedding, device=args.device, window=args.window,
-                                     use_userEmbedding=args.use_userEmbedding, MAX_TURN=args.max_turn + 1).to(
-        args.device)
+    state_tracker = StateTracker_Caser(user_columns, action_columns, feedback_columns, args.state_dim,
+                                       device=args.device, window=args.window_state).to(args.device)
 
     net = Net(args.state_dim, args.hidden_sizes[0], device=args.device)
     policy_net = Actor(

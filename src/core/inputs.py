@@ -24,7 +24,7 @@ class SparseFeatP(SparseFeat):
 
 
 
-def get_dataset_columns(dim_user, dim_action, envname="VirtualTB-v0", env=None):
+def get_dataset_columns(dim_user, dim_action, num_user, num_action, envname="VirtualTB-v0"):
     user_columns, action_columns, feedback_columns = [], [], []
     has_user_embedding, has_action_embedding, has_feedback_embedding = None, None, None
     if envname == "VirtualTB-v0":
@@ -36,8 +36,8 @@ def get_dataset_columns(dim_user, dim_action, envname="VirtualTB-v0", env=None):
         has_action_embedding = True
         has_feedback_embedding = True
     else: # for kuairecenv, coat
-        user_columns = [SparseFeatP("feat_user", env.mat.shape[0], embedding_dim=dim_user)]
-        action_columns = [SparseFeatP("feat_item", env.mat.shape[1], embedding_dim=dim_action)]
+        user_columns = [SparseFeatP("feat_user", num_user, embedding_dim=dim_user)]
+        action_columns = [SparseFeatP("feat_item", num_action, embedding_dim=dim_action)]
         feedback_columns = [DenseFeat("feat_feedback", 1)]
         has_user_embedding = False
         has_action_embedding = False

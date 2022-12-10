@@ -18,7 +18,6 @@ from torch.utils.tensorboard import SummaryWriter
 import sys
 
 from core.evaluation.evaluator import Callback_Coverage_Count
-from run_worldModel_ensemble import load_dataset_val
 
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
@@ -185,11 +184,8 @@ def prepare_user_model_and_env(args):
 def prepare_envs(args, ensemble_models, alpha_u, beta_i):
     env, env_task_class, kwargs_um = get_true_env(args)
 
-    user_features, item_features, reward_features = get_features(args.env, args.is_userinfo)
-    # embedding_dim_set = set([column.embedding_dim for column in ensemble_models.user_models[0].feature_columns])
-    # assert len(embedding_dim_set) == 1
-    # embedding_dim = list(embedding_dim_set)[0]
-    embedding_dim = ensemble_models.user_models[0].feature_columns[0].embedding_dim
+    # user_features, item_features, reward_features = get_features(args.env, args.is_userinfo)
+    # embedding_dim = ensemble_models.user_models[0].feature_columns[0].embedding_dim
 
     # dataset_val, df_user_val, df_item_val = load_dataset_val(args, user_features, item_features, reward_features, embedding_dim, embedding_dim)
 
@@ -256,17 +252,17 @@ def prepare_envs(args, ensemble_models, alpha_u, beta_i):
 def setup_policy_model(args, ensemble_models, env, train_envs, test_envs):
     saved_embedding = ensemble_models.load_val_user_item_embedding(freeze_emb=args.freeze_emb)
 
-    user_columns, action_columns, feedback_columns, \
-    have_user_embedding, have_action_embedding, have_feedback_embedding = \
-        get_dataset_columns(saved_embedding["feat_user"].weight.shape[1], saved_embedding["feat_item"].weight.shape[1], envname=args.env, env=env)
+    user_columns, action_columns, feedback_columns, have_user_embedding, have_action_embedding, have_feedback_embedding = \
+        get_dataset_columns(saved_embedding["feat_user"].weight.shape[1], saved_embedding["feat_item"].weight.shape[1],
+                            env.mat.shape[0], env.mat.shape[1], envname=args.env)
 
     args.action_shape = env.mat.shape[1]
     if args.use_userEmbedding:
-        args.state_shape = action_columns[0].embedding_dim + saved_embedding.feat_user.weight.shape[1]
+        args.state_dim = action_columns[0].embedding_dim + saved_embedding.feat_user.weight.shape[1]
     else:
-        args.state_shape = action_columns[0].embedding_dim
+        args.state_dim = action_columns[0].embedding_dim
 
-    state_tracker = StateTrackerAvg2(user_columns, action_columns, feedback_columns, args.state_shape,
+    state_tracker = StateTrackerAvg2(user_columns, action_columns, feedback_columns, args.state_dim,
                                     saved_embedding, device=args.device, window=args.window,
                                     use_userEmbedding=args.use_userEmbedding, MAX_TURN=args.max_turn + 1).to(args.device)
 
@@ -276,7 +272,7 @@ def setup_policy_model(args, ensemble_models, env, train_envs, test_envs):
         args.device = torch.device("cuda:{}".format(args.cuda) if torch.cuda.is_available() else "cpu")
 
     # model
-    net = Net(args.state_shape, hidden_sizes=args.hidden_sizes, device=args.device)
+    net = Net(args.state_dim, hidden_sizes=args.hidden_sizes, device=args.device)
     actor = Actor(net, args.action_shape, device=args.device).to(args.device)
     critic = Critic(net, device=args.device).to(args.device)
     optim_RL = torch.optim.Adam(ActorCritic(actor, critic).parameters(), lr=args.lr)

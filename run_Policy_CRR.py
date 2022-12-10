@@ -135,7 +135,7 @@ def prepare_dir_log(args):
 
     return MODEL_SAVE_PATH, logger_path
 
-def get_buffer_size(args, df_train, env):
+def construct_buffer_from_offline_data(args, df_train, env):
     num_bins = args.test_num
 
     df_user_num = df_train[["user_id", "item_id"]].groupby("user_id").agg(len)
@@ -192,7 +192,7 @@ def get_buffer_size(args, df_train, env):
 def prepare_buffer_via_offline_data(args):
     df_train, df_user, df_item, list_feat = get_training_data(args.env)
     # df_val, df_user_val, df_item_val, list_feat = get_val_data(args.env)
-    df_train = df_train.head(10000)
+    # df_train = df_train.head(10000)
     if "time_ms" in df_train.columns:
         df_train.rename(columns={"time_ms": "timestamp"}, inplace=True)
         df_train = df_train.sort_values(["user_id", "timestamp"])
@@ -202,7 +202,7 @@ def prepare_buffer_via_offline_data(args):
     df_train[["user_id", "item_id"]].to_numpy()
 
     env, env_task_class, kwargs_um = get_true_env(args)
-    buffer = get_buffer_size(args, df_train, env)
+    buffer = construct_buffer_from_offline_data(args, df_train, env)
     env.max_turn = args.max_turn
 
     test_envs = DummyVectorEnv(
@@ -220,24 +220,24 @@ def setup_policy_model(args, env, buffer, test_envs):
     ensemble_models, _, _ = prepare_user_model_and_env(args)
 
     saved_embedding = ensemble_models.load_val_user_item_embedding(freeze_emb=args.freeze_emb)
-    user_columns, action_columns, feedback_columns, \
-    have_user_embedding, have_action_embedding, have_feedback_embedding = \
-        get_dataset_columns(saved_embedding["feat_user"].weight.shape[1], saved_embedding["feat_item"].weight.shape[1], envname=args.env, env=env)
+    user_columns, action_columns, feedback_columns, have_user_embedding, have_action_embedding, have_feedback_embedding = \
+        get_dataset_columns(saved_embedding["feat_user"].weight.shape[1], saved_embedding["feat_item"].weight.shape[1],
+                            env.mat.shape[0], env.mat.shape[1], envname=args.env)
 
 
     args.action_shape = action_columns[0].vocabulary_size
     if args.use_userEmbedding:
-        args.state_shape = action_columns[0].embedding_dim + saved_embedding.feat_user.weight.shape[1]
+        args.state_dim = action_columns[0].embedding_dim + saved_embedding.feat_user.weight.shape[1]
     else:
-        args.state_shape = action_columns[0].embedding_dim
+        args.state_dim = action_columns[0].embedding_dim
 
     args.max_action = env.action_space.high[0]
 
-    state_tracker = StateTrackerAvg2(user_columns, action_columns, feedback_columns, args.state_shape,
+    state_tracker = StateTrackerAvg2(user_columns, action_columns, feedback_columns, args.state_dim,
                                     saved_embedding, device=args.device, window=args.window,
                                     use_userEmbedding=args.use_userEmbedding, MAX_TURN=args.max_turn + 1).to(args.device)
 
-    net = Net(args.state_shape, args.hidden_sizes[0], device=args.device)
+    net = Net(args.state_dim, args.hidden_sizes[0], device=args.device)
     actor = Actor(
         net,
         args.action_shape,
