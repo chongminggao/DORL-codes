@@ -32,7 +32,6 @@ class StateTrackerBase2(nn.Module):
 
         self.dataset = dataset
 
-
         self.device = device
         self.MAX_TURN = MAX_TURN
 
@@ -143,14 +142,15 @@ class StateTrackerAvg2(nn.Module):
         ind_nan = X == -1
 
         if any(ind_nan):
-            X_normal = np.expand_dims(X[~ind_nan],-1)
+            X_normal = np.expand_dims(X[~ind_nan], -1)
             dim_res = sum([column.embedding_dim for column in feat_columns])
 
             X_res = torch.zeros([len(X), dim_res], device=self.device)
             nn.init.normal_(X_res, mean=0, std=0.001)
 
             # self.embedding_dict.feat_item.weight.requires_grad
-            sparse_embedding_list, dense_value_list = input_from_feature_columns(FLOAT(X_normal).to(self.device), feat_columns,
+            sparse_embedding_list, dense_value_list = input_from_feature_columns(FLOAT(X_normal).to(self.device),
+                                                                                 feat_columns,
                                                                                  self.embedding_dict, feat_index,
                                                                                  support_dense=True, device=self.device)
             new_X = combined_dnn_input(sparse_embedding_list, dense_value_list)
@@ -170,10 +170,10 @@ class StateTrackerAvg2(nn.Module):
     def forward(self, buffer=None, indices=None, obs=None,
                 reset=None, is_obs=None):
 
-        if reset: # get user embedding
+        if reset:  # get user embedding
 
-            users = np.expand_dims(obs[:,0],-1)
-            items = np.expand_dims(obs[:,1],-1)
+            users = np.expand_dims(obs[:, 0], -1)
+            items = np.expand_dims(obs[:, 1], -1)
 
             # e_i = torch.ones(obs.shape[0], self.dim_item, device=self.device)
             # nn.init.normal_(e_i, mean=0, std=0.0001)
@@ -202,22 +202,18 @@ class StateTrackerAvg2(nn.Module):
             # ind_init = ~live_id_now & ~flag_has_init
             # obs_all = buffer[index].obs_next
             # rew_all = buffer[index].rew
-            obs_all = np.zeros([0,2], dtype=int)
+            obs_all = np.zeros([0, 2], dtype=int)
             rew_all = np.zeros([0])
 
 
-            # obs_all[ind_init, 1] = -1
-            # rew_all[ind_init] = 1
-            # flag_has_init[ind_init] = True
-            # live_id_now[ind_init] = True
-
-            # live_mat = np.expand_dims(live_id_now, 0)
-            live_mat = np.zeros([0,len(index)], dtype=bool)
-
-            # live_id_prev = buffer.prev(index) != index
-
+            live_mat = np.zeros([0, len(index)], dtype=bool)
 
             first_flag = True
+
+            '''
+            Logic: Always use obs_next(t) and reward(t) to construct state(t+1), since obs_next(t) == obs(t+1).
+            Note: The inital obs(0) == obs_next(-1) and reward(-1) are not recorded. So we have to initialize them.  
+            '''
             while not all(flag_has_init) and len(live_mat) < self.window:
                 if is_obs or not first_flag:
                     live_id_prev = buffer.prev(index) != index
@@ -232,8 +228,8 @@ class StateTrackerAvg2(nn.Module):
                 obs_prev = buffer[index].obs_next
                 rew_prev = buffer[index].rew
 
-                obs_prev[ind_init, 1] = -1
-                rew_prev[ind_init] = 1
+                obs_prev[ind_init, 1] = -1 # initialize obs
+                rew_prev[ind_init] = 1     # initialize reward.
                 flag_has_init[ind_init] = True
                 live_id_prev[ind_init] = True
 
@@ -264,8 +260,6 @@ class StateTrackerAvg2(nn.Module):
 
             state_sum = state_masked.sum(dim=0)
             state_final = state_sum / torch.from_numpy(np.expand_dims(live_mat.sum(0), -1)).to(self.device)
-
-
 
             # BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB
 
@@ -340,7 +334,6 @@ class StateTrackerAvg2(nn.Module):
 
             return state_final
 
-
     def build_state(self, obs=None,
                     env_id=None,
                     obs_next=None,
@@ -364,6 +357,7 @@ class StateTrackerAvg2(nn.Module):
 
         return res
 
+
 class StateTrackerTransformer2(StateTrackerBase2):
     def __init__(self, user_columns, action_columns, feedback_columns,
                  dim_model, dim_state, dim_max_batch, dropout=0.1,
@@ -375,13 +369,13 @@ class StateTrackerTransformer2(StateTrackerBase2):
                  init_std=0.0001, padding_idx=None, MAX_TURN=100):
 
         super(StateTrackerTransformer2, self).__init__(user_columns, action_columns, feedback_columns,
-                                                      have_user_embedding=have_user_embedding,
-                                                      have_action_embedding=have_action_embedding,
-                                                      have_feedback_embedding=have_feedback_embedding,
-                                                      use_pretrained_embedding=use_pretrained_embedding,
-                                                      saved_embedding=saved_embedding,
-                                                      dataset=dataset,
-                                                      device=device, seed=seed, init_std=init_std, MAX_TURN=MAX_TURN)
+                                                       have_user_embedding=have_user_embedding,
+                                                       have_action_embedding=have_action_embedding,
+                                                       have_feedback_embedding=have_feedback_embedding,
+                                                       use_pretrained_embedding=use_pretrained_embedding,
+                                                       saved_embedding=saved_embedding,
+                                                       dataset=dataset,
+                                                       device=device, seed=seed, init_std=init_std, MAX_TURN=MAX_TURN)
         self.dim_model = dim_model
         self.ffn_user = nn.Linear(compute_input_dim(user_columns),
                                   dim_model, device=device)
@@ -448,7 +442,7 @@ class StateTrackerTransformer2(StateTrackerBase2):
         if obs is not None:  # 1. initialize the state vectors
             if self.dataset == "VirtualTB-v0":
                 e_u = self.get_embedding(obs[:, :-3], "user")
-            else: # "KuaiEnv-v0":
+            else:  # "KuaiEnv-v0":
                 e_u = self.get_embedding(obs, "user")
 
             e_u_prime = self.ffn_user(e_u)
@@ -467,7 +461,7 @@ class StateTrackerTransformer2(StateTrackerBase2):
         elif obs_next is not None:  # 2. add action autoregressively
             if self.dataset == "VirtualTB-v0":
                 a_t = self.get_embedding(obs_next[:, :-3], "action")
-            else: # "KuaiEnv-v0":
+            else:  # "KuaiEnv-v0":
                 a_t = self.get_embedding(obs_next, "action")
 
             self.len_data[env_id] += 1
@@ -523,10 +517,10 @@ class PositionalEncoding(nn.Module):
         return self.dropout(x)
 
 
-
 class StateTracker_Caser(nn.Module):
     def __init__(self, user_columns, action_columns, feedback_columns, dim_model, device,
-                 use_userEmbedding=False, window=10):
+                 use_userEmbedding=False, window_size=10, filter_sizes=[2, 3, 4], num_filters=16,
+                 dropout_rate=0.1):
         super(StateTracker_Caser, self).__init__()
         self.user_columns = user_columns
         self.action_columns = action_columns
@@ -537,23 +531,41 @@ class StateTracker_Caser(nn.Module):
         self.feedback_index = build_input_features(feedback_columns)
 
         self.dim_model = dim_model
-
-
-        embedding_dict = torch.nn.ModuleDict(
-            {"feat_item": torch.nn.Embedding(num_embeddings=action_columns[0].vocabulary_size + 1,
-                                             embedding_dim=action_columns[0].embedding_dim)})
-
-        self.embedding_dict = embedding_dict.to(device)
-
-        nn.init.normal_(self.embedding_dict.feat_item.weight, mean=0, std=0.01)
-
-        self.window = window
-
+        self.window_size = window_size
         self.device = device
-
         self.use_userEmbedding = use_userEmbedding
+        self.filter_sizes = filter_sizes
+        self.num_filters = num_filters
+        self.dropout_rate = dropout_rate
 
+        self.hidden_size = action_columns[0].embedding_dim
+        self.num_item = action_columns[0].vocabulary_size
 
+        self.num_filters_total = self.num_filters * len(self.filter_sizes)
+        self.final_dim = self.hidden_size + self.num_filters_total
+
+        # Item embedding
+        embedding_dict = torch.nn.ModuleDict(
+            {"feat_item": torch.nn.Embedding(num_embeddings=self.num_item + 1,
+                                             embedding_dim=self.hidden_size)})
+        self.embedding_dict = embedding_dict.to(device)
+        nn.init.normal_(self.embedding_dict.feat_item.weight, mean=0, std=0.1)
+
+        # Horizontal Convolutional Layers
+        self.horizontal_cnn = nn.ModuleList(
+            [nn.Conv2d(1, self.num_filters, (i, self.hidden_size)) for i in self.filter_sizes])
+        # Initialize weights and biases
+        for cnn in self.horizontal_cnn:
+            nn.init.xavier_normal_(cnn.weight)
+            nn.init.constant_(cnn.bias, 0.1)
+
+        # Vertical Convolutional Layer
+        self.vertical_cnn = nn.Conv2d(1, 1, (self.window_size, 1))
+        nn.init.xavier_normal_(self.vertical_cnn.weight)
+        nn.init.constant_(self.vertical_cnn.bias, 0.1)
+
+        # dropout
+        self.dropout = nn.Dropout(self.dropout_rate)
 
     def build_state(self, obs=None,
                     env_id=None,
@@ -566,7 +578,7 @@ class StateTracker_Caser(nn.Module):
         if obs is not None:  # 1. initialize the state vectors
             self.user = obs
             # item = np.ones_like(obs) * np.nan
-            item = np.ones_like(obs) * -1
+            item = np.ones_like(obs) * self.num_item
             ui_pair = np.hstack([self.user, item])
             res = {"obs": ui_pair}
 
@@ -592,7 +604,7 @@ class StateTracker_Caser(nn.Module):
         # X[-1][0] = np.nan
         # ind_nan = np.isnan(X)
 
-        X[X == -1] = feat_columns[0].vocabulary_size
+        X[X == -1] = self.num_item
 
         sparse_embedding_list, dense_value_list = input_from_feature_columns(FLOAT(X).to(self.device), feat_columns,
                                                                              self.embedding_dict, feat_index,
@@ -602,31 +614,34 @@ class StateTracker_Caser(nn.Module):
 
         return X_res
 
-    def forward(self, buffer=None, indices=None, obs=None,
-                reset=None, is_obs=None):
-
-        if reset: # get user embedding
+    def convert_to_k_state_embedding(self, buffer=None, indices=None, obs=None, reset=None, is_obs=None):
+        if reset:  # get user embedding
             # users = np.expand_dims(obs[:, 0], -1)
             items = np.expand_dims(obs[:, 1], -1)
+            items_window = items.repeat(self.window_size, axis=1)
+
+            # a = self.get_embedding(items_window, "action")
 
             e_i = self.get_embedding(items, "action")
-            s0 = e_i.repeat_interleave(self.window, dim=0).reshape([len(e_i),self.window,-1])
+            emb_state = e_i.repeat_interleave(self.window_size, dim=0).reshape([len(e_i), self.window_size, -1])
 
-            return s0
+            return emb_state, items_window
 
         else:
             index = indices
             flag_has_init = np.zeros_like(index, dtype=bool)
 
-            obs_all = np.zeros([0,2], dtype=int)
+            obs_all = np.zeros([0, 2], dtype=int)
             rew_all = np.zeros([0])
-
-
-            live_mat = np.zeros([0,len(index)], dtype=bool)
-
+            live_mat = np.zeros([0, len(index)], dtype=bool)
 
             first_flag = True
-            while not all(flag_has_init) and len(live_mat) < self.window:
+            '''
+                Logic: Always use obs_next(t) and reward(t) to construct state(t+1), since obs_next(t) == obs(t+1).
+                Note: The inital obs(0) == obs_next(-1) and reward(-1) are not recorded. So we have to initialize them.  
+            '''
+            # while not all(flag_has_init) and len(live_mat) < self.window_size:
+            while len(live_mat) < self.window_size:
                 if is_obs or not first_flag:
                     live_id_prev = buffer.prev(index) != index
                     index = buffer.prev(index)
@@ -636,12 +651,14 @@ class StateTracker_Caser(nn.Module):
                 first_flag = False
                 # live_id_prev = buffer.prev(index) != index
 
-                ind_init = ~live_id_prev & ~flag_has_init
+                ind_init = ~live_id_prev & ~flag_has_init # just dead and have not been initialized before.
                 obs_prev = buffer[index].obs_next
                 rew_prev = buffer[index].rew
 
-                obs_prev[ind_init, 1] = -1
-                rew_prev[ind_init] = 1
+                obs_prev[~live_id_prev, 1] = self.num_item
+                rew_prev[~live_id_prev] = 1
+                # obs_prev[ind_init, 1] = self.num_item
+                # rew_prev[ind_init] = 1
                 flag_has_init[ind_init] = True
                 live_id_prev[ind_init] = True
 
@@ -655,16 +672,17 @@ class StateTracker_Caser(nn.Module):
 
             e_i = self.get_embedding(item_all, "action")
 
-            rew_matrix = rew_all.reshape((-1, 1))
-            e_r = self.get_embedding(rew_matrix, "feedback")
+            # rew_matrix = rew_all.reshape((-1, 1))
+            # e_r = self.get_embedding(rew_matrix, "feedback")
 
-            if self.use_userEmbedding:
-                e_u = self.get_embedding(user_all, "user")
-                s_t = torch.cat([e_u, e_i], dim=-1)
-            else:
-                s_t = e_i
+            # if self.use_userEmbedding:
+            #     e_u = self.get_embedding(user_all, "user")
+            #     s_t = torch.cat([e_u, e_i], dim=-1)
+            # else:
+            s_t = e_i
 
-            state_flat = s_t * e_r
+            # state_flat = s_t * e_r
+            state_flat = s_t
             state_cube = state_flat.reshape((-1, len(index), state_flat.shape[-1]))
 
             mask = torch.from_numpy(np.expand_dims(live_mat, -1)).to(self.device)
@@ -674,3 +692,28 @@ class StateTracker_Caser(nn.Module):
             state_final = state_sum / torch.from_numpy(np.expand_dims(live_mat.sum(0), -1)).to(self.device)
 
             return state_final
+
+    def forward(self, buffer=None, indices=None, obs=None, reset=None, is_obs=None):
+
+        emb_state, items_window = self.convert_to_k_state_embedding(buffer, indices, obs, reset, is_obs)
+
+        mask = torch.ne(FLOAT(items_window), self.num_item).unsqueeze(-1)
+        emb_state_masked = emb_state * mask
+        emb_state_final = emb_state_masked.unsqueeze(1)
+        pooled_outputs = []
+        for cnn in self.horizontal_cnn:
+            h_out = nn.functional.relu(cnn(emb_state_final))
+            h_out = h_out.squeeze()
+            p_out = nn.functional.max_pool1d(h_out, h_out.shape[2])
+            pooled_outputs.append(p_out)
+
+        h_pool = torch.cat(pooled_outputs, 1)
+        h_pool_flat = h_pool.view(-1, self.num_filters_total)
+
+        v_out = nn.functional.relu(self.vertical_cnn(emb_state_final))
+        v_flat = v_out.view(-1, self.hidden_size)
+
+        state_hidden = torch.cat([h_pool_flat, v_flat], 1)
+        state_hidden_dropout = self.dropout(state_hidden)
+
+        return state_hidden_dropout

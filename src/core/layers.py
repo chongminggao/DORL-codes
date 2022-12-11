@@ -4,17 +4,45 @@
 # @FileName: layers.py
 import math
 
+import numpy as np
 import torch
 import torch.nn as nn
+from typing import Any, Dict, Optional, Sequence, Tuple, Union
+import torch.nn.functional as F
+
 
 from core.inputs import SparseFeatP
 from core.inputs import create_embedding_matrix
-from deepctr_torch.inputs import build_input_features, DenseFeat, VarLenSparseFeat, get_varlen_pooling_list, varlen_embedding_lookup
-from deepctr_torch.layers import PredictionLayer, activation_layer
-# from ..layers.utils import slice_arrays
-from deepctr_torch.callbacks import History
+from deepctr_torch.inputs import DenseFeat, VarLenSparseFeat, get_varlen_pooling_list, varlen_embedding_lookup
 from torch import Tensor
 
+
+class Actor_Linear(nn.Module):
+    def __init__(
+        self,
+        input_dim: int,
+        action_shape: int,
+        device: Union[str, int, torch.device] = "cpu",
+        softmax_output: bool = False,
+    ) -> None:
+        super().__init__()
+        self.device = device
+        self.output_dim = action_shape
+        self.last = nn.Linear(input_dim, action_shape)
+        self.softmax_output = softmax_output
+
+    def forward(
+        self,
+        obs: Union[np.ndarray, torch.Tensor],
+        state: Any = None,
+        info: Dict[str, Any] = {},
+    ) -> Tuple[torch.Tensor, Any]:
+        r"""Mapping: s -> Q(s, \*)."""
+        logits = self.last(obs)
+        if self.softmax_output:
+            logits = F.softmax(logits, dim=-1)
+        hidden = None
+        return logits, hidden
 
 
 class Linear(nn.Module):

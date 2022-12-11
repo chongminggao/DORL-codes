@@ -18,6 +18,8 @@ import sys
 from tqdm import tqdm
 
 from core.evaluation.evaluator import Callback_Coverage_Count
+from core.layers import Actor_Linear
+from core.policy.sqn_caser import SQN_Caser
 
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
@@ -70,7 +72,10 @@ def get_args_all():
 
     # for state_tracker
     parser.add_argument("--embedding_dim", type=int, default=32)
-    parser.add_argument("--window_state", type=int, default=10)
+    parser.add_argument("--window_size", type=int, default=10)
+    parser.add_argument('--filter_sizes', type=int, nargs='*', default=[2,3,4])
+    parser.add_argument("--num_filters", type=int, default=16)
+    parser.add_argument("--dropout_rate", type=float, default=0.1)
 
     # tianshou
     parser.add_argument('--buffer-size', type=int, default=100000)
@@ -218,22 +223,20 @@ def setup_policy_model(args, env, buffer, test_envs):
 
     args.max_action = env.action_space.high[0]
 
-    state_tracker = StateTracker_Caser(user_columns, action_columns, feedback_columns, args.state_dim,
-                                       device=args.device, window=args.window_state).to(args.device)
+    state_tracker = StateTracker_Caser(user_columns, action_columns, feedback_columns, args.state_dim, device=args.device,
+                                       window_size=args.window_size,
+                                       filter_sizes=args.filter_sizes, num_filters=args.num_filters,
+                                       dropout_rate=args.dropout_rate).to(args.device)
 
-    net = Net(args.state_dim, args.hidden_sizes[0], device=args.device)
-    policy_net = Actor(
-        net, args.action_shape, hidden_sizes=args.hidden_sizes, device=args.device
-    ).to(args.device)
-    imitation_net = Actor(
-        net, args.action_shape, hidden_sizes=args.hidden_sizes, device=args.device
-    ).to(args.device)
-    actor_critic = ActorCritic(policy_net, imitation_net)
+    model_final_layer = Actor_Linear(state_tracker.final_dim, args.action_shape, device=args.device)
+    imitation_final_layer = Actor_Linear(state_tracker.final_dim, args.action_shape, device=args.device)
+
+    actor_critic = ActorCritic(model_final_layer, imitation_final_layer)
     optim = torch.optim.Adam(actor_critic.parameters(), lr=args.lr)
 
-    policy = DiscreteBCQPolicy_withEmbedding(
-        policy_net,
-        imitation_net,
+    policy = SQN_Caser(
+        model_final_layer,
+        imitation_final_layer,
         optim,
         args.gamma,
         args.n_step,

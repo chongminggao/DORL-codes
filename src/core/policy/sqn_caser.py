@@ -15,7 +15,7 @@ class SQN_Caser(DiscreteBCQPolicy):
 
     :param torch.nn.Module model: a model following the rules in
         :class:`~tianshou.policy.BasePolicy`. (s -> q_value)
-    :param torch.nn.Module imitator: a model following the rules in
+    :param torch.nn.Module imitator_final_layer: a model following the rules in
         :class:`~tianshou.policy.BasePolicy`. (s -> imitation_logits)
     :param torch.optim.Optimizer optim: a torch.optim for optimizing the model.
     :param float discount_factor: in [0, 1].
@@ -38,28 +38,27 @@ class SQN_Caser(DiscreteBCQPolicy):
     """
 
     def __init__(
-        self,
-        model: torch.nn.Module,
-        imitator: torch.nn.Module,
-        optim: torch.optim.Optimizer,
-        discount_factor: float = 0.99,
-        estimation_step: int = 1,
-        target_update_freq: int = 8000,
-        eval_eps: float = 1e-3,
-        unlikely_action_threshold: float = 0.3,
-        imitation_logits_penalty: float = 1e-2,
-        reward_normalization: bool = False,
-        state_tracker = None,
-        buffer = None,
-        **kwargs: Any,
+            self,
+            model_final_layer: torch.nn.Module,
+            imitator_final_layer: torch.nn.Module,
+            optim: torch.optim.Optimizer,
+            discount_factor: float = 0.99,
+            estimation_step: int = 1,
+            target_update_freq: int = 8000,
+            eval_eps: float = 1e-3,
+            unlikely_action_threshold: float = 0.3,
+            imitation_logits_penalty: float = 1e-2,
+            reward_normalization: bool = False,
+            state_tracker=None,
+            buffer=None,
+            **kwargs: Any,
     ) -> None:
         super().__init__(
-            model,imitator,optim,discount_factor,estimation_step,target_update_freq,eval_eps,
-            unlikely_action_threshold,imitation_logits_penalty,reward_normalization, **kwargs
+            model_final_layer, imitator_final_layer, optim, discount_factor, estimation_step, target_update_freq,
+            eval_eps, unlikely_action_threshold, imitation_logits_penalty, reward_normalization, **kwargs
         )
         self.state_tracker = state_tracker
-        self.buffer=buffer
-
+        self.buffer = buffer
 
     def _target_q(self, buffer: ReplayBuffer, indices: np.ndarray) -> torch.Tensor:
         batch = buffer[indices]  # batch.obs_next: s_{t+n}
@@ -75,14 +74,14 @@ class SQN_Caser(DiscreteBCQPolicy):
         return target_q
 
     def forward(  # type: ignore
-        self,
-        batch: Batch,
-        buffer: ReplayBuffer,
-        indices: np.ndarray = None,
-        is_obs=None,
-        state: Optional[Union[dict, Batch, np.ndarray]] = None,
-        input: str = "obs",
-        **kwargs: Any,
+            self,
+            batch: Batch,
+            buffer: ReplayBuffer,
+            indices: np.ndarray = None,
+            is_obs=None,
+            state: Optional[Union[dict, Batch, np.ndarray]] = None,
+            input: str = "obs",
+            **kwargs: Any,
     ) -> Batch:
         # assert input == "obs"
         is_obs = True if input == "obs" else False
@@ -129,7 +128,6 @@ class SQN_Caser(DiscreteBCQPolicy):
             "loss/i": i_loss.item(),
             "loss/reg": reg_loss.item(),
         }
-
 
     def update(self, sample_size: int, buffer: Optional[ReplayBuffer],
                **kwargs: Any) -> Dict[str, Any]:
