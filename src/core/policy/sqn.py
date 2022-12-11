@@ -10,7 +10,7 @@ from tianshou.data import Batch, ReplayBuffer, to_torch
 from tianshou.policy import DiscreteBCQPolicy
 
 
-class SQN_Caser(DiscreteBCQPolicy):
+class SQN(DiscreteBCQPolicy):
     """Implementation of discrete BCQ algorithm. arXiv:1910.01708.
 
     :param torch.nn.Module model: a model following the rules in
@@ -51,6 +51,7 @@ class SQN_Caser(DiscreteBCQPolicy):
             reward_normalization: bool = False,
             state_tracker=None,
             buffer=None,
+            which_head="shead",
             **kwargs: Any,
     ) -> None:
         super().__init__(
@@ -59,6 +60,8 @@ class SQN_Caser(DiscreteBCQPolicy):
         )
         self.state_tracker = state_tracker
         self.buffer = buffer
+        assert which_head in {"shead", "qhead", "bcq"}
+        self.which_head = which_head
 
     def _target_q(self, buffer: ReplayBuffer, indices: np.ndarray) -> torch.Tensor:
         batch = buffer[indices]  # batch.obs_next: s_{t+n}
@@ -93,10 +96,16 @@ class SQN_Caser(DiscreteBCQPolicy):
             self.max_action_num = q_value.shape[1]
         imitation_logits, _ = self.imitator(obs_emb, state=state, info=batch.info)
 
-        # mask actions for argmax
-        ratio = imitation_logits - imitation_logits.max(dim=-1, keepdim=True).values
-        mask = (ratio < self._log_tau).float()
-        act = (q_value - np.inf * mask).argmax(dim=-1)
+        if self.which_head == "bcq":
+            # BCQ way
+            ratio = imitation_logits - imitation_logits.max(dim=-1, keepdim=True).values
+            mask = (ratio < self._log_tau).float()
+            act = (q_value - np.inf * mask).argmax(dim=-1)
+        elif self.which_head == "shead":
+            # Supervised head
+            act = imitation_logits.argmax(dim=-1)
+        elif self.which_head == "qhead":
+            act = q_value.argmax(dim=-1)
 
         return Batch(
             act=act, state=state, q_value=q_value, imitation_logits=imitation_logits

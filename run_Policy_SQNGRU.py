@@ -31,7 +31,7 @@ from core.configs import get_training_data, get_true_env, get_common_args
 from core.collector2 import Collector
 from core.inputs import get_dataset_columns
 
-from core.state_tracker2 import StateTracker_Caser
+from core.state_tracker2 import StateTracker_Caser, StateTracker_GRU
 
 from tianshou.data import VectorReplayBuffer, Batch
 from tianshou.env import DummyVectorEnv
@@ -73,9 +73,6 @@ def get_args_all():
     # for state_tracker
     parser.add_argument("--embedding_dim", type=int, default=32)
     parser.add_argument("--window_size", type=int, default=10)
-    parser.add_argument('--filter_sizes', type=int, nargs='*', default=[2,3,4])
-    parser.add_argument("--num_filters", type=int, default=16)
-    parser.add_argument("--dropout_rate", type=float, default=0.1)
 
     # head:
     parser.add_argument('--which_head', type=str, default='shead') # in {"shead", "qhead", "bcq"}
@@ -226,10 +223,8 @@ def setup_policy_model(args, env, buffer, test_envs):
 
     args.max_action = env.action_space.high[0]
 
-    state_tracker = StateTracker_Caser(user_columns, action_columns, feedback_columns, args.state_dim, device=args.device,
-                                       window_size=args.window_size,
-                                       filter_sizes=args.filter_sizes, num_filters=args.num_filters,
-                                       dropout_rate=args.dropout_rate).to(args.device)
+    state_tracker = StateTracker_GRU(user_columns, action_columns, feedback_columns, args.state_dim, device=args.device,
+                                     window_size=args.window_size).to(args.device)
 
     model_final_layer = Actor_Linear(state_tracker.final_dim, args.action_shape, device=args.device)
     imitation_final_layer = Actor_Linear(state_tracker.final_dim, args.action_shape, device=args.device)

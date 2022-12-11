@@ -491,7 +491,6 @@ class StateTrackerTransformer2(StateTrackerBase2):
 
 
 class PositionalEncoding(nn.Module):
-
     def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 100):
         super().__init__()
         self.dropout = nn.Dropout(p=dropout)
@@ -618,14 +617,16 @@ class StateTracker_Caser(nn.Module):
         if reset:  # get user embedding
             # users = np.expand_dims(obs[:, 0], -1)
             items = np.expand_dims(obs[:, 1], -1)
-            items_window = items.repeat(self.window_size, axis=1)
+
 
             # a = self.get_embedding(items_window, "action")
 
             e_i = self.get_embedding(items, "action")
             emb_state = e_i.repeat_interleave(self.window_size, dim=0).reshape([len(e_i), self.window_size, -1])
 
-            return emb_state, items_window
+            # items_window = items.repeat(self.window_size, axis=1)
+
+            return emb_state
 
         else:
             index = indices
@@ -688,18 +689,219 @@ class StateTracker_Caser(nn.Module):
             mask = torch.from_numpy(np.expand_dims(live_mat, -1)).to(self.device)
             state_masked = state_cube * mask
 
-            state_sum = state_masked.sum(dim=0)
-            state_final = state_sum / torch.from_numpy(np.expand_dims(live_mat.sum(0), -1)).to(self.device)
+            emb_state = torch.swapaxes(state_masked, 0, 1)
 
-            return state_final
+            # items_window = np.swapaxes(item_all.reshape(-1,(len(index))), 0, 1)
+            # emb_state * torch.ne(FLOAT(items_window), self.num_item).unsqueeze(-1) == emb_state
+
+            return emb_state
 
     def forward(self, buffer=None, indices=None, obs=None, reset=None, is_obs=None):
 
-        emb_state, items_window = self.convert_to_k_state_embedding(buffer, indices, obs, reset, is_obs)
+        # emb_state, items_window = self.convert_to_k_state_embedding(buffer, indices, obs, reset, is_obs)
+        # mask = torch.ne(FLOAT(items_window), self.num_item).unsqueeze(-1)
+        # emb_state = emb_state * mask
 
-        mask = torch.ne(FLOAT(items_window), self.num_item).unsqueeze(-1)
-        emb_state_masked = emb_state * mask
-        emb_state_final = emb_state_masked.unsqueeze(1)
+        emb_state = self.convert_to_k_state_embedding(buffer, indices, obs, reset, is_obs)
+
+        emb_state_final = emb_state.unsqueeze(1)
+        pooled_outputs = []
+        for cnn in self.horizontal_cnn:
+            h_out = nn.functional.relu(cnn(emb_state_final))
+            h_out = h_out.squeeze()
+            p_out = nn.functional.max_pool1d(h_out, h_out.shape[2])
+            pooled_outputs.append(p_out)
+
+        h_pool = torch.cat(pooled_outputs, 1)
+        h_pool_flat = h_pool.view(-1, self.num_filters_total)
+
+        v_out = nn.functional.relu(self.vertical_cnn(emb_state_final))
+        v_flat = v_out.view(-1, self.hidden_size)
+
+        state_hidden = torch.cat([h_pool_flat, v_flat], 1)
+        state_hidden_dropout = self.dropout(state_hidden)
+
+        return state_hidden_dropout
+
+
+
+class StateTracker_GRU(nn.Module):
+    def __init__(self, user_columns, action_columns, feedback_columns, dim_model, device,
+                 use_userEmbedding=False, window_size=10, gru_layers=1):
+        super(StateTracker_Caser, self).__init__()
+        self.user_columns = user_columns
+        self.action_columns = action_columns
+        self.feedback_columns = feedback_columns
+
+        self.user_index = build_input_features(user_columns)
+        self.action_index = build_input_features(action_columns)
+        self.feedback_index = build_input_features(feedback_columns)
+
+        self.dim_model = dim_model
+        self.window_size = window_size
+        self.device = device
+        self.use_userEmbedding = use_userEmbedding
+
+        self.hidden_size = action_columns[0].embedding_dim
+        self.num_item = action_columns[0].vocabulary_size
+
+        self.num_filters_total = self.num_filters * len(self.filter_sizes)
+        self.final_dim = self.hidden_size + self.num_filters_total
+
+        # Item embedding
+        embedding_dict = torch.nn.ModuleDict(
+            {"feat_item": torch.nn.Embedding(num_embeddings=self.num_item + 1,
+                                             embedding_dim=self.hidden_size)})
+        self.embedding_dict = embedding_dict.to(device)
+        nn.init.normal_(self.embedding_dict.feat_item.weight, mean=0, std=0.1)
+
+        # Horizontal Convolutional Layers
+        self.gru = nn.GRU(
+            input_size=self.hidden_size,
+            hidden_size=self.hidden_size,
+            num_layers=gru_layers,
+            batch_first=True
+        )
+
+    def build_state(self, obs=None,
+                    env_id=None,
+                    obs_next=None,
+                    reset=False, **kwargs):
+        if reset:
+            self.user = None
+            return
+
+        if obs is not None:  # 1. initialize the state vectors
+            self.user = obs
+            # item = np.ones_like(obs) * np.nan
+            item = np.ones_like(obs) * self.num_item
+            ui_pair = np.hstack([self.user, item])
+            res = {"obs": ui_pair}
+
+        elif obs_next is not None:  # 2. add action autoregressively
+            item = obs_next
+            user = self.user[env_id]
+            ui_pair = np.hstack([user, item])
+            res = {"obs_next": ui_pair}
+
+        return res
+
+    def get_embedding(self, X, type):
+        if type == "user":
+            feat_columns = self.user_columns
+            feat_index = self.user_index
+        elif type == "action":
+            feat_columns = self.action_columns
+            feat_index = self.action_index
+        elif type == "feedback":
+            feat_columns = self.feedback_columns
+            feat_index = self.feedback_index
+
+        # X[-1][0] = np.nan
+        # ind_nan = np.isnan(X)
+
+        X[X == -1] = self.num_item
+
+        sparse_embedding_list, dense_value_list = input_from_feature_columns(FLOAT(X).to(self.device), feat_columns,
+                                                                             self.embedding_dict, feat_index,
+                                                                             support_dense=True, device=self.device)
+        new_X = combined_dnn_input(sparse_embedding_list, dense_value_list)
+        X_res = new_X
+
+        return X_res
+
+    def convert_to_k_state_embedding(self, buffer=None, indices=None, obs=None, reset=None, is_obs=None):
+        if reset:  # get user embedding
+            # users = np.expand_dims(obs[:, 0], -1)
+            items = np.expand_dims(obs[:, 1], -1)
+
+
+            # a = self.get_embedding(items_window, "action")
+
+            e_i = self.get_embedding(items, "action")
+            emb_state = e_i.repeat_interleave(self.window_size, dim=0).reshape([len(e_i), self.window_size, -1])
+
+            # items_window = items.repeat(self.window_size, axis=1)
+
+            return emb_state
+
+        else:
+            index = indices
+            flag_has_init = np.zeros_like(index, dtype=bool)
+
+            obs_all = np.zeros([0, 2], dtype=int)
+            rew_all = np.zeros([0])
+            live_mat = np.zeros([0, len(index)], dtype=bool)
+
+            first_flag = True
+            '''
+                Logic: Always use obs_next(t) and reward(t) to construct state(t+1), since obs_next(t) == obs(t+1).
+                Note: The inital obs(0) == obs_next(-1) and reward(-1) are not recorded. So we have to initialize them.  
+            '''
+            # while not all(flag_has_init) and len(live_mat) < self.window_size:
+            while len(live_mat) < self.window_size:
+                if is_obs or not first_flag:
+                    live_id_prev = buffer.prev(index) != index
+                    index = buffer.prev(index)
+                else:
+                    live_id_prev = np.ones_like(index, dtype=bool)
+
+                first_flag = False
+                # live_id_prev = buffer.prev(index) != index
+
+                ind_init = ~live_id_prev & ~flag_has_init # just dead and have not been initialized before.
+                obs_prev = buffer[index].obs_next
+                rew_prev = buffer[index].rew
+
+                obs_prev[~live_id_prev, 1] = self.num_item
+                rew_prev[~live_id_prev] = 1
+                # obs_prev[ind_init, 1] = self.num_item
+                # rew_prev[ind_init] = 1
+                flag_has_init[ind_init] = True
+                live_id_prev[ind_init] = True
+
+                live_mat = np.vstack([live_mat, live_id_prev])
+
+                obs_all = np.concatenate([obs_all, obs_prev])
+                rew_all = np.concatenate([rew_all, rew_prev])
+
+            user_all = np.expand_dims(obs_all[:, 0], -1)
+            item_all = np.expand_dims(obs_all[:, 1], -1)
+
+            e_i = self.get_embedding(item_all, "action")
+
+            # rew_matrix = rew_all.reshape((-1, 1))
+            # e_r = self.get_embedding(rew_matrix, "feedback")
+
+            # if self.use_userEmbedding:
+            #     e_u = self.get_embedding(user_all, "user")
+            #     s_t = torch.cat([e_u, e_i], dim=-1)
+            # else:
+            s_t = e_i
+
+            # state_flat = s_t * e_r
+            state_flat = s_t
+            state_cube = state_flat.reshape((-1, len(index), state_flat.shape[-1]))
+
+            mask = torch.from_numpy(np.expand_dims(live_mat, -1)).to(self.device)
+            state_masked = state_cube * mask
+
+            emb_state = torch.swapaxes(state_masked, 0, 1)
+
+            # items_window = np.swapaxes(item_all.reshape(-1,(len(index))), 0, 1)
+            # emb_state * torch.ne(FLOAT(items_window), self.num_item).unsqueeze(-1) == emb_state
+
+            return emb_state
+
+    def forward(self, buffer=None, indices=None, obs=None, reset=None, is_obs=None):
+
+        # emb_state, items_window = self.convert_to_k_state_embedding(buffer, indices, obs, reset, is_obs)
+        # mask = torch.ne(FLOAT(items_window), self.num_item).unsqueeze(-1)
+        # emb_state = emb_state * mask
+
+        emb_state = self.convert_to_k_state_embedding(buffer, indices, obs, reset, is_obs)
+
+        emb_state_final = emb_state.unsqueeze(1)
         pooled_outputs = []
         for cnn in self.horizontal_cnn:
             h_out = nn.functional.relu(cnn(emb_state_final))
