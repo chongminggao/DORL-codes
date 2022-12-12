@@ -18,11 +18,10 @@ import sys
 
 from tqdm import tqdm
 
-from core.evaluation.evaluator import Callback_Coverage_Count
-
-os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
+# os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
 sys.path.extend(["./src", "./src/DeepCTR-Torch", "./src/tianshou"])
+from core.evaluation.evaluator import Callback_Coverage_Count
 from core.policy.discrete_crr import DiscreteCRRPolicy_withEmbedding
 from core.trainer.offline import offline_trainer
 from run_Policy_Main import prepare_user_model_and_env
@@ -279,8 +278,8 @@ def setup_policy_model(args, env, buffer, test_envs):
 def learn_policy(args, policy, buffer, test_collector, state_tracker, optim, MODEL_SAVE_PATH, logger_path):
     # log
     t0 = datetime.datetime.now().strftime("%m%d_%H%M%S")
-    log_file = f'seed_{args.seed}_{t0}-{args.env.replace("-", "_")}_bcq'
-    log_path = os.path.join(args.logdir, args.env, 'bcq', log_file)
+    log_file = f'seed_{args.seed}_{t0}-{args.env.replace("-", "_")}_crr'
+    log_path = os.path.join(args.logdir, args.env, 'crr', log_file)
     writer = SummaryWriter(log_path)
     writer.add_text("args", str(args))
     logger1 = TensorboardLogger(writer)

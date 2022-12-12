@@ -17,11 +17,10 @@ from torch.utils.tensorboard import SummaryWriter
 
 import sys
 
-from core.evaluation.evaluator import Callback_Coverage_Count
-
-os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
+# os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
 sys.path.extend(["./src", "./src/DeepCTR-Torch", "./src/tianshou"])
+from core.evaluation.evaluator import Callback_Coverage_Count
 from core.user_model_ensemble import EnsembleModel
 from core.configs import get_features, get_true_env, get_common_args
 from core.collector2 import Collector

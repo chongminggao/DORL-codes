@@ -17,11 +17,11 @@ import sys
 
 from tqdm import tqdm
 
-from core.evaluation.evaluator import Callback_Coverage_Count
 
-os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
+# os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 sys.path.extend(["./src", "./src/DeepCTR-Torch", "./src/tianshou"])
+from core.evaluation.evaluator import Callback_Coverage_Count
 from core.policy.discrete_bcq import DiscreteBCQPolicy_withEmbedding
 from core.trainer.offline import offline_trainer
 from run_Policy_Main import prepare_user_model_and_env

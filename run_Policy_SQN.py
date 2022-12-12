@@ -17,14 +17,12 @@ import sys
 
 from tqdm import tqdm
 
+# os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
+
+sys.path.extend(["./src", "./src/DeepCTR-Torch", "./src/tianshou"])
 from core.evaluation.evaluator import Callback_Coverage_Count
 from core.layers import Actor_Linear
 from core.policy.sqn import SQN
-
-os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
-
-sys.path.extend(["./src", "./src/DeepCTR-Torch", "./src/tianshou"])
-from core.policy.discrete_bcq import DiscreteBCQPolicy_withEmbedding
 from core.trainer.offline import offline_trainer
 from run_Policy_Main import prepare_user_model_and_env
 from core.configs import get_training_data, get_true_env, get_common_args
@@ -54,8 +52,8 @@ except ImportError:
 def get_args_all():
     parser = argparse.ArgumentParser()
     parser.add_argument("--env", type=str, required=True)
-    parser.add_argument("--user_model_name", type=str, default="DeepFM")
-    parser.add_argument("--model_name", type=str, default="BCQ")
+    # parser.add_argument("--user_model_name", type=str, default="DeepFM")
+    parser.add_argument("--model_name", type=str, default="SQN")
     parser.add_argument('--seed', default=2022, type=int)
     parser.add_argument('--cuda', default=1, type=int)
 
@@ -71,9 +69,9 @@ def get_args_all():
     parser.set_defaults(exploration_noise=True)
 
     # State_tracker
-    parser.add_argument("--embedding_dim", type=int, default=32)
+    parser.add_argument("--embedding_dim", type=int, default=64)
     parser.add_argument("--window_sqn", type=int, default=10)
-    parser.add_argument("--which_tracker", type=str, default="SASRec")
+    parser.add_argument("--which_tracker", type=str, default="caser") # in {"caser", "sasrec", "gru"}
     # State_tracker Caser
     parser.add_argument('--filter_sizes', type=int, nargs='*', default=[2, 3, 4])
     parser.add_argument("--num_filters", type=int, default=16)
@@ -115,7 +113,7 @@ def get_args_all():
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--save-interval", type=int, default=4)
 
-    parser.add_argument("--read_message", type=str, default="UM")
+    # parser.add_argument("--read_message", type=str, default="UM")
     parser.add_argument("--message", type=str, default="BCQ_with_emb")
 
     args = parser.parse_known_args()[0]
@@ -220,7 +218,7 @@ def prepare_buffer_via_offline_data(args):
 
 
 def setup_policy_model(args, env, buffer, test_envs):
-    ensemble_models, _, _ = prepare_user_model_and_env(args)
+    # ensemble_models, _, _ = prepare_user_model_and_env(args)
 
     # saved_embedding = ensemble_models.load_val_user_item_embedding(freeze_emb=args.freeze_emb)
     user_columns, action_columns, feedback_columns, have_user_embedding, have_action_embedding, have_feedback_embedding = \
@@ -247,8 +245,10 @@ def setup_policy_model(args, env, buffer, test_envs):
                                             device=args.device, window_size=args.window_sqn,
                                             dropout_rate=args.dropout_rate, num_heads=args.num_heads).to(args.device)
 
-    model_final_layer = Actor_Linear(state_tracker.final_dim, args.action_shape, device=args.device)
-    imitation_final_layer = Actor_Linear(state_tracker.final_dim, args.action_shape, device=args.device)
+    # state_tracker = state_tracker.to(args.device)
+
+    model_final_layer = Actor_Linear(state_tracker.final_dim, args.action_shape, device=args.device).to(args.device)
+    imitation_final_layer = Actor_Linear(state_tracker.final_dim, args.action_shape, device=args.device).to(args.device)
 
     actor_critic = ActorCritic(model_final_layer, imitation_final_layer)
     optim = torch.optim.Adam(actor_critic.parameters(), lr=args.lr)

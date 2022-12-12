@@ -123,7 +123,7 @@ class StateTrackerAvg2(StateTracker_Base):
         self.dim_item = self.embedding_dict.feat_item.weight.shape[1]
 
         # Add a new embedding vector
-        new_embedding = FLOAT(1, self.dim_model)
+        new_embedding = FLOAT(1, self.dim_model).to(device)
         nn.init.normal_(new_embedding, mean=0, std=0.01)
         emb_cat = torch.cat([self.embedding_dict.feat_item.weight.data, new_embedding])
         new_item_embedding = torch.nn.Embedding.from_pretrained(
@@ -272,7 +272,7 @@ class StateTracker_Caser(StateTracker_Base):
             e_i = self.get_embedding(items, "action")
             emb_state = e_i.repeat_interleave(self.window_size, dim=0).reshape([len(e_i), self.window_size, -1])
 
-            mask = torch.zeros([emb_state.shape[0], emb_state.shape[1], 1])
+            mask = torch.zeros([emb_state.shape[0], emb_state.shape[1], 1], device=self.device)
             mask[:, 0, :] = 1
             emb_state *= mask
 
@@ -458,7 +458,7 @@ class StateTracker_GRU(StateTracker_Base):
 
             emb_state = torch.swapaxes(state_masked, 0, 1)
 
-            len_states = mask.sum(0).squeeze(-1)
+            len_states = mask.sum(0).squeeze(-1).cpu().numpy()
 
             emb_state_reverse = reverse_padded_sequence(emb_state, len_states)
             emb_packed = torch.nn.utils.rnn.pack_padded_sequence(emb_state_reverse, len_states,
@@ -615,7 +615,7 @@ class StateTracker_SASRec(StateTracker_Base):
             seq = self.emb_dropout(inputs_pos_emb)
 
             # mask = torch.ne(states, self.item_num).float().unsqueeze(-1).to(self.device)
-            mask = torch.zeros([inputs_pos_emb.shape[0], inputs_pos_emb.shape[1], 1])
+            mask = torch.zeros([inputs_pos_emb.shape[0], inputs_pos_emb.shape[1], 1], device=self.device)
             mask[:, 0, :] = 1
 
             return seq, mask, len_states
