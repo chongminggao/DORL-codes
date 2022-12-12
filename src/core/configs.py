@@ -88,7 +88,7 @@ def get_common_args(args):
         parser.add_argument('--leave_threshold', default=10, type=float)
         parser.add_argument('--num_leave_compute', default=3, type=int)
         parser.add_argument('--max_turn', default=30, type=int)
-        parser.add_argument('--window', default=3, type=int)
+        parser.add_argument('--window_size', default=3, type=int)
 
     elif env == "YahooEnv-v0":
         parser.set_defaults(is_userinfo=True)
@@ -102,7 +102,7 @@ def get_common_args(args):
         parser.add_argument('--leave_threshold', default=120, type=float)
         parser.add_argument('--num_leave_compute', default=3, type=int)
         parser.add_argument('--max_turn', default=30, type=int)
-        parser.add_argument('--window', default=3, type=int)
+        parser.add_argument('--window_size', default=3, type=int)
 
     elif env == "KuaiRand-v0":
         parser.set_defaults(is_userinfo=False)
@@ -116,7 +116,7 @@ def get_common_args(args):
         parser.add_argument('--leave_threshold', default=10, type=float)
         parser.add_argument('--num_leave_compute', default=3, type=int)
         parser.add_argument('--max_turn', default=30, type=int)
-        parser.add_argument('--window', default=3, type=int)
+        parser.add_argument('--window_size', default=3, type=int)
 
     elif env == "KuaiEnv-v0":
         parser.set_defaults(is_userinfo=False)
@@ -129,7 +129,7 @@ def get_common_args(args):
         parser.add_argument('--leave_threshold', default=120, type=float)
         parser.add_argument('--num_leave_compute', default=3, type=int)
         parser.add_argument('--max_turn', default=30, type=int)
-        parser.add_argument('--window', default=3, type=int)
+        parser.add_argument('--window_size', default=3, type=int)
 
     args_new = parser.parse_known_args()[0]
     args.__dict__.update(args_new.__dict__)

@@ -230,8 +230,8 @@ def setup_policy_model(args, env, buffer, test_envs):
     args.max_action = env.action_space.high[0]
 
     state_tracker = StateTrackerAvg2(user_columns, action_columns, feedback_columns, args.state_dim,
-                                    saved_embedding, device=args.device, window=args.window,
-                                    use_userEmbedding=args.use_userEmbedding, MAX_TURN=args.max_turn + 1).to(args.device)
+                                     saved_embedding, device=args.device, window_size=args.window_size,
+                                     use_userEmbedding=args.use_userEmbedding).to(args.device)
 
     net = Net(
         args.state_dim,

@@ -31,7 +31,7 @@ from core.configs import get_training_data, get_true_env, get_common_args
 from core.collector2 import Collector
 from core.inputs import get_dataset_columns
 
-from core.state_tracker2 import StateTracker_Caser
+from core.state_tracker2 import StateTracker_Caser, StateTracker_GRU, StateTracker_SASRec
 
 from tianshou.data import VectorReplayBuffer, Batch
 from tianshou.env import DummyVectorEnv
@@ -70,15 +70,21 @@ def get_args_all():
     parser.add_argument('--no_exploration_noise', dest='exploration_noise', action='store_false')
     parser.set_defaults(exploration_noise=True)
 
-    # for state_tracker
+    # State_tracker
     parser.add_argument("--embedding_dim", type=int, default=32)
-    parser.add_argument("--window_size", type=int, default=10)
-    parser.add_argument('--filter_sizes', type=int, nargs='*', default=[2,3,4])
+    parser.add_argument("--window_sqn", type=int, default=10)
+    parser.add_argument("--which_tracker", type=str, default="SASRec")
+    # State_tracker Caser
+    parser.add_argument('--filter_sizes', type=int, nargs='*', default=[2, 3, 4])
     parser.add_argument("--num_filters", type=int, default=16)
     parser.add_argument("--dropout_rate", type=float, default=0.1)
+    # State_tracker SASRec
+    # parser.add_argument("--dropout_rate", type=float, default=0.1)
+    parser.add_argument("--num_heads", type=int, default=1)
+    # State_tracker GRU
 
-    # head:
-    parser.add_argument('--which_head', type=str, default='shead') # in {"shead", "qhead", "bcq"}
+    # SQN head:
+    parser.add_argument('--which_head', type=str, default='shead')  # in {"shead", "qhead", "bcq"}
 
     # tianshou
     parser.add_argument('--buffer-size', type=int, default=100000)
@@ -93,7 +99,6 @@ def get_args_all():
     parser.add_argument('--render', type=float, default=0)
     parser.add_argument('--reward-threshold', type=float, default=None)
     parser.add_argument('--step-per-epoch', type=int, default=1000)
-
 
     parser.add_argument('--logdir', type=str, default='log')
 
@@ -219,17 +224,28 @@ def setup_policy_model(args, env, buffer, test_envs):
 
     # saved_embedding = ensemble_models.load_val_user_item_embedding(freeze_emb=args.freeze_emb)
     user_columns, action_columns, feedback_columns, have_user_embedding, have_action_embedding, have_feedback_embedding = \
-        get_dataset_columns(args.embedding_dim, args.embedding_dim, env.mat.shape[0], env.mat.shape[1], envname=args.env)
+        get_dataset_columns(args.embedding_dim, args.embedding_dim, env.mat.shape[0], env.mat.shape[1],
+                            envname=args.env)
 
     args.action_shape = action_columns[0].vocabulary_size
     args.state_dim = action_columns[0].embedding_dim
 
     args.max_action = env.action_space.high[0]
 
-    state_tracker = StateTracker_Caser(user_columns, action_columns, feedback_columns, args.state_dim, device=args.device,
-                                       window_size=args.window_size,
-                                       filter_sizes=args.filter_sizes, num_filters=args.num_filters,
-                                       dropout_rate=args.dropout_rate).to(args.device)
+    if args.which_tracker.lower() == "caser":
+        state_tracker = StateTracker_Caser(user_columns, action_columns, feedback_columns, args.state_dim,
+                                           device=args.device,
+                                           window_size=args.window_sqn,
+                                           filter_sizes=args.filter_sizes, num_filters=args.num_filters,
+                                           dropout_rate=args.dropout_rate).to(args.device)
+    elif args.which_tracker.lower() == "gru":
+        state_tracker = StateTracker_GRU(user_columns, action_columns, feedback_columns, args.state_dim,
+                                         device=args.device,
+                                         window_size=args.window_sqn).to(args.device)
+    elif args.which_tracker.lower() == "sasrec":
+        state_tracker = StateTracker_SASRec(user_columns, action_columns, feedback_columns, args.state_dim,
+                                            device=args.device, window_size=args.window_sqn,
+                                            dropout_rate=args.dropout_rate, num_heads=args.num_heads).to(args.device)
 
     model_final_layer = Actor_Linear(state_tracker.final_dim, args.action_shape, device=args.device)
     imitation_final_layer = Actor_Linear(state_tracker.final_dim, args.action_shape, device=args.device)

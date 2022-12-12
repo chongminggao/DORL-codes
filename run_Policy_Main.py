@@ -263,8 +263,8 @@ def setup_policy_model(args, ensemble_models, env, train_envs, test_envs):
         args.state_dim = action_columns[0].embedding_dim
 
     state_tracker = StateTrackerAvg2(user_columns, action_columns, feedback_columns, args.state_dim,
-                                    saved_embedding, device=args.device, window=args.window,
-                                    use_userEmbedding=args.use_userEmbedding, MAX_TURN=args.max_turn + 1).to(args.device)
+                                     saved_embedding, device=args.device, window_size=args.window_size,
+                                     use_userEmbedding=args.use_userEmbedding).to(args.device)
 
     if args.cpu:
         args.device = "cpu"
