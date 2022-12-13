@@ -17,6 +17,8 @@ from torch.utils.tensorboard import SummaryWriter
 
 import sys
 
+from policy_utils import prepare_dir_log
+
 # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
 sys.path.extend(["./src", "./src/DeepCTR-Torch", "./src/tianshou"])
@@ -131,23 +133,6 @@ def get_args_all():
     args = parser.parse_known_args()[0]
     return args
 
-
-def prepare_dir_log(args):
-    # %% 1. Create dirs
-    MODEL_SAVE_PATH = os.path.join(".", "saved_models", args.env, args.model_name)
-
-    create_dirs = [os.path.join(".", "saved_models"),
-                   os.path.join(".", "saved_models", args.env),
-                   MODEL_SAVE_PATH,
-                   os.path.join(MODEL_SAVE_PATH, "logs")]
-    create_dir(create_dirs)
-
-    nowtime = datetime.datetime.fromtimestamp(time.time()).strftime("%Y_%m_%d-%H_%M_%S")
-    logger_path = os.path.join(MODEL_SAVE_PATH, "logs", "[{}]_{}.log".format(args.message, nowtime))
-    logzero.logfile(logger_path)
-    logger.info(json.dumps(vars(args), indent=2))
-
-    return MODEL_SAVE_PATH, logger_path
 
 def prepare_user_model_and_env(args):
     args.device = torch.device("cuda:{}".format(args.cuda) if torch.cuda.is_available() else "cpu")

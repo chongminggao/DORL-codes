@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
-# @Time    : 2021/10/1 3:03 下午
-# @Author  : Chongming GAO
-# @FileName: kuaiEnv.py
+
 import json
 import os
 import pickle

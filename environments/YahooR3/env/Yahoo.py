@@ -95,6 +95,7 @@ class YahooEnv(gym.Env):
 
         mat = mat[:5400,:]
 
+
         return mat, mat_distance
 
 
