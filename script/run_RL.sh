@@ -141,17 +141,17 @@
 
 #
 #python run_Policy_BCQ.py  --read_message "pointneg" --cuda 1 --env CoatEnv-v0  --message "CoatEnv"  &
-python run_Policy_BCQ.py  --read_message "pointneg" --cuda 2 --env YahooEnv-v0 --message "YahooEnv" &
+#python run_Policy_BCQ.py  --read_message "pointneg" --cuda 2 --env YahooEnv-v0 --message "YahooEnv" &
 #python run_Policy_BCQ.py  --read_message "pointneg" --cuda 4 --env KuaiRand-v0 --message "KuaiRand" &
 python run_Policy_BCQ.py  --read_message "pointneg" --cuda 1 --env KuaiEnv-v0  --message "KuaiRand" &
 #
 #python run_Policy_CQL.py  --read_message "pointneg" --cuda 1 --env CoatEnv-v0  --message "CoatEnv"  &
-python run_Policy_CQL.py  --read_message "pointneg" --cuda 2 --env YahooEnv-v0 --message "YahooEnv" &
+#python run_Policy_CQL.py  --read_message "pointneg" --cuda 2 --env YahooEnv-v0 --message "YahooEnv" &
 #python run_Policy_CQL.py  --read_message "pointneg" --cuda 4 --env KuaiRand-v0 --message "KuaiRand" &
 python run_Policy_CQL.py  --read_message "pointneg" --cuda 1 --env KuaiEnv-v0  --message "KuaiRand" &
 #
 #python run_Policy_CRR.py  --read_message "pointneg" --cuda 4 --env CoatEnv-v0  --message "CoatEnv"  &
-python run_Policy_CRR.py  --read_message "pointneg" --cuda 1 --env YahooEnv-v0 --message "YahooEnv" &
+#python run_Policy_CRR.py  --read_message "pointneg" --cuda 1 --env YahooEnv-v0 --message "YahooEnv" &
 #python run_Policy_CRR.py  --read_message "pointneg" --cuda 6 --env KuaiRand-v0 --message "KuaiRand" &
 python run_Policy_CRR.py  --read_message "pointneg" --cuda 7 --env KuaiEnv-v0  --message "KuaiRand" &
 
@@ -167,7 +167,7 @@ python run_Policy_CRR.py  --read_message "pointneg" --cuda 7 --env KuaiEnv-v0  -
 #python run_Policy_SQN.py  --cuda 2 --which_tracker caser --which_head shead --env KuaiEnv-v0  --message "caser_shead" &
 #
 #python run_Policy_SQN.py  --cuda 1 --which_tracker caser --which_head qhead --env CoatEnv-v0  --message "caser_qhead" &
-python run_Policy_SQN.py  --cuda 2 --which_tracker caser --which_head qhead --env YahooEnv-v0 --message "caser_qhead" &
+#python run_Policy_SQN.py  --cuda 2 --which_tracker caser --which_head qhead --env YahooEnv-v0 --message "caser_qhead" &
 #python run_Policy_SQN.py  --cuda 1 --which_tracker caser --which_head qhead --env KuaiRand-v0 --message "caser_qhead" &
 python run_Policy_SQN.py  --cuda 2 --which_tracker caser --which_head qhead --env KuaiEnv-v0  --message "caser_qhead" &
 
@@ -178,13 +178,13 @@ python run_Policy_SQN.py  --cuda 2 --which_tracker caser --which_head qhead --en
 #python run_Policy_SQN.py  --cuda 5 --which_tracker gru --which_head shead --env KuaiEnv-v0  --message "gru_shead" &
 #
 #python run_Policy_SQN.py  --cuda 3 --which_tracker sasrec --which_head qhead --env CoatEnv-v0  --message "sasrec_qhead" &
-python run_Policy_SQN.py  --cuda 6 --which_tracker sasrec --which_head qhead --env YahooEnv-v0 --message "sasrec_qhead" &
+#python run_Policy_SQN.py  --cuda 6 --which_tracker sasrec --which_head qhead --env YahooEnv-v0 --message "sasrec_qhead" &
 #python run_Policy_SQN.py  --cuda 3 --which_tracker sasrec --which_head qhead --env KuaiRand-v0 --message "sasrec_qhead" &
 python run_Policy_SQN.py  --cuda 7 --which_tracker sasrec --which_head qhead --env KuaiEnv-v0  --message "sasrec_qhead" &
 #
 #
 #python run_Policy_SQN.py  --cuda 6 --which_tracker gru --which_head qhead --env CoatEnv-v0  --message "gru_qhead" &
-python run_Policy_SQN.py  --cuda 7 --which_tracker gru --which_head qhead --env YahooEnv-v0 --message "gru_qhead" &
+#python run_Policy_SQN.py  --cuda 7 --which_tracker gru --which_head qhead --env YahooEnv-v0 --message "gru_qhead" &
 #python run_Policy_SQN.py  --cuda 4 --which_tracker gru --which_head qhead --env KuaiRand-v0 --message "gru_qhead" &
 python run_Policy_SQN.py  --cuda 2 --which_tracker gru --which_head qhead --env KuaiEnv-v0  --message "gru_qhead" &
 ##
