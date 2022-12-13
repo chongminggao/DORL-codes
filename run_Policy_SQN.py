@@ -82,7 +82,7 @@ def get_args_all():
     # State_tracker GRU
 
     # SQN head:
-    parser.add_argument('--which_head', type=str, default='shead')  # in {"shead", "qhead", "bcq"}
+    parser.add_argument('--which_head', type=str, default='qhead')  # in {"shead", "qhead", "bcq"}
 
     # tianshou
     parser.add_argument('--buffer-size', type=int, default=100000)

@@ -349,7 +349,7 @@ class StateTracker_Caser(StateTracker_Base):
         pooled_outputs = []
         for cnn in self.horizontal_cnn:
             h_out = nn.functional.relu(cnn(emb_state_final))
-            h_out = h_out.squeeze()
+            h_out = h_out.squeeze(-1)
             p_out = nn.functional.max_pool1d(h_out, h_out.shape[2])
             pooled_outputs.append(p_out)
 
@@ -608,7 +608,7 @@ class StateTracker_SASRec(StateTracker_Base):
             e_i = self.get_embedding(items, "action")
             emb_state = e_i.repeat_interleave(self.window_size, dim=0).reshape([len(e_i), self.window_size, -1])
 
-            len_states = np.ones([len(emb_state)])
+            len_states = np.ones([len(emb_state)], dtype=int)
 
             inputs_emb = emb_state * self.hidden_size ** 0.5
             inputs_pos_emb = inputs_emb + self.positional_embeddings(torch.arange(self.window_size).to(self.device))
