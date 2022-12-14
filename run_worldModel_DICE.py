@@ -443,7 +443,18 @@ def loss_pairwise_pointwise(y, y_deepfm_pos, y_deepfm_neg, score, alpha_u=None, 
     loss = loss_y + args.bpr_weight * bpr_click + loss_ab + loss_var_pos
     return loss
 
-
+def loss_IPS(y, y_deepfm_pos, y_deepfm_neg, score, alpha_u=None, beta_i=None, args=None, log_var=None, log_var_neg=None):
+    y_weighted, loss_ab = process_logit(y_deepfm_pos, score, alpha_u=alpha_u, beta_i=beta_i, args=args)
+    if log_var is not None:
+        inv_var = torch.exp(-log_var)
+        loss_var_pos = log_var.sum()
+    else:
+        inv_var = 1
+        loss_var_pos = 0
+    loss_y = (((y_weighted - y) ** 2) * inv_var).sum()
+    bpr_click = - sigmoid(y_weighted - y_deepfm_neg).log().sum()
+    loss = loss_y + args.bpr_weight * bpr_click + loss_ab + loss_var_pos
+    return loss
 
 
 CODEPATH = os.path.dirname(__file__)
