@@ -2,8 +2,7 @@
 # @Time    : 2022/9/15 22:40
 # @Author  : Chongming GAO
 # @FileName: Coat.py
-
-
+import collections
 import os
 
 import gym
@@ -20,6 +19,8 @@ import numpy as np
 import random
 
 from tqdm import tqdm
+
+from core.util import get_sorted_item_features
 
 CODEPATH = os.path.dirname(__file__)
 ROOTPATH = os.path.dirname(CODEPATH)
@@ -73,7 +74,14 @@ class CoatEnv(gym.Env):
         df_data = df_data.astype(int)
         list_feat = None
 
+        CODEDIRPATH = os.path.dirname(__file__)
+        feature_domination_path = os.path.join(CODEDIRPATH, "feature_domination.pickle")
+        if not os.path.isfile(feature_domination_path):
+            get_sorted_item_features(df_data, df_item, feature_domination_path)
+
+
         return df_data, df_user, df_item, list_feat
+
 
     @staticmethod
     def load_exposure_and_popularity(predicted_mat, filename="train.ascii"):

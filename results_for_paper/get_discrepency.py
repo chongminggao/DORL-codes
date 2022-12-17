@@ -24,10 +24,7 @@ CODEPATH = os.path.dirname(__file__)
 ROOTPATH = os.path.dirname(CODEPATH)
 sys.path.extend([ROOTPATH])
 
-# from environments.coat.env.Coat import CoatEnv
-from environments.KuaiRand_Pure.env.KuaiRand import KuaiRandEnv
-# from environments.KuaiRec.env.KuaiEnv import KuaiEnv
-# from environments.YahooR3.env.Yahoo import YahooEnv
+
 
 
 def get_args():
@@ -250,7 +247,9 @@ def main(args, df_train, df_test, envname, lossname, yname, popbin):
 
 
 def get_data(dataset):
+
     if dataset == "CoatEnv":
+        from environments.coat.env.Coat import CoatEnv
         df_train = CoatEnv.get_df_coat("train.ascii")[0]
         df_test = CoatEnv.get_df_coat("test.ascii")[0]
         envname = "CoatEnv-v0"
@@ -261,6 +260,7 @@ def get_data(dataset):
         popbin = [0, 10, 20, 40, 60, 80, 100, 200]
 
     if dataset == "YahooEnv":
+        from environments.YahooR3.env.Yahoo import YahooEnv
         df_train = YahooEnv.get_df_yahoo("ydata-ymusic-rating-study-v1_0-train.txt")[0]
         df_test = YahooEnv.get_df_yahoo("ydata-ymusic-rating-study-v1_0-test.txt")[0]
         envname = "YahooEnv-v0"
@@ -271,6 +271,7 @@ def get_data(dataset):
         popbin = [0, 40, 60, 80, 100, 200]
 
     if dataset == "KuaiRandEnv":
+        from environments.KuaiRand_Pure.env.KuaiRand import KuaiRandEnv
         df_train = KuaiRandEnv.get_df_kuairand("train_processed.csv")[0]
         df_test = KuaiRandEnv.get_df_kuairand("test_processed.csv")[0]
         envname = "KuaiRand-v0"
@@ -281,6 +282,7 @@ def get_data(dataset):
         popbin = [0, 10, 20, 40, 80, 150, 300]
 
     if dataset == "KuaiEnv":
+        from environments.KuaiRec.env.KuaiEnv import KuaiEnv
         df_train = KuaiEnv.get_df_kuairec("big_matrix_processed.csv")[0]
         df_test = KuaiEnv.get_df_kuairec("small_matrix_processed.csv")[0]
         envname = "KuaiEnv-v0"
@@ -295,19 +297,19 @@ def get_data(dataset):
 
 if __name__ == '__main__':
     datasets = [
-        # "CoatEnv",
+        "CoatEnv",
         # "YahooEnv",
         "KuaiRandEnv",
         # "KuaiEnv"
     ]
 
-    losses = ["point", "pointneg", "pp", "pair"]
+    # losses = ["point", "pointneg", "pp", "pair"]
 
     args = get_args()
     for i in range(len(datasets)):
         df_train, df_test, envname, yname, threshold, item_features, multi_feat, popbin = get_data(datasets[i])
-        for lossname in losses:
-            if envname == "YahooEnv-v0":
-                df_train = df_train.loc[df_train["user_id"] < 5400]
-            get_distribution(threshold, item_features, multi_feat, envname)
+        # for lossname in losses:
+        if envname == "YahooEnv-v0":
+            df_train = df_train.loc[df_train["user_id"] < 5400]
+        get_distribution(threshold, item_features, multi_feat, envname)
             # main(args, df_train, df_test, envname, lossname, yname, popbin)

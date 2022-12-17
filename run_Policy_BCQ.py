@@ -48,7 +48,6 @@ try:
 except ImportError:
     envpool = None
 
-
 def get_args_all():
     parser = argparse.ArgumentParser()
     parser.add_argument("--env", type=str, required=True)
@@ -241,7 +240,6 @@ if __name__ == '__main__':
     args_all = get_args_all()
     args = get_common_args(args_all)
     args_all.__dict__.update(args.__dict__)
-
     try:
         main(args_all)
     except Exception as e:

@@ -42,6 +42,8 @@ def test_static_model_in_RL_env(model, env, dataset_val, is_softmax=True, epsilo
     ctr = cumulative_reward / total_turns
     click_loss = total_click_loss / total_turns
 
+    dataset_val.df_item_val
+
     hit_item = len(set(all_acts))
     num_items = len(dataset_val.df_item_val)
     CV = hit_item / num_items
