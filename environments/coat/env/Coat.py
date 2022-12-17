@@ -20,7 +20,7 @@ import random
 
 from tqdm import tqdm
 
-from core.util import get_sorted_item_features
+from core.util import get_sorted_domination_features
 
 CODEPATH = os.path.dirname(__file__)
 ROOTPATH = os.path.dirname(CODEPATH)
@@ -49,7 +49,7 @@ class CoatEnv(gym.Env):
         self.reset()
 
     @staticmethod
-    def get_df_coat(name):
+    def get_df_coat(name, is_require_feature_domination=False):
         # read interaction
         filename = os.path.join(DATAPATH, name)
         mat_train = pd.read_csv(filename, sep="\s+", header=None)
@@ -74,14 +74,19 @@ class CoatEnv(gym.Env):
         df_data = df_data.astype(int)
         list_feat = None
 
-        CODEDIRPATH = os.path.dirname(__file__)
-        feature_domination_path = os.path.join(CODEDIRPATH, "feature_domination.pickle")
-        if not os.path.isfile(feature_domination_path):
-            get_sorted_item_features(df_data, df_item, feature_domination_path)
-
+        if is_require_feature_domination:
+            item_feat_domination = CoatEnv.get_domination(df_data, df_item)
+            return df_data, df_user, df_item, list_feat, item_feat_domination
 
         return df_data, df_user, df_item, list_feat
 
+
+    @staticmethod
+    def get_domination(df_data, df_item):
+        CODEDIRPATH = os.path.dirname(__file__)
+        feature_domination_path = os.path.join(CODEDIRPATH, "feature_domination.pickle")
+        item_feat_domination = get_sorted_domination_features(df_data, df_item, feature_domination_path)
+        return item_feat_domination
 
     @staticmethod
     def load_exposure_and_popularity(predicted_mat, filename="train.ascii"):

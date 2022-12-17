@@ -1,4 +1,3 @@
-
 import argparse
 import os
 import pickle
@@ -10,9 +9,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 
-
 import torch
-
 
 # matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -25,8 +22,6 @@ ROOTPATH = os.path.dirname(CODEPATH)
 sys.path.extend([ROOTPATH])
 
 
-
-
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--env", type=str, default="CoatEnv-v0")
@@ -35,8 +30,6 @@ def get_args():
 
     args = parser.parse_known_args()[0]
     return args
-
-
 
 
 def visual(df_data, df_pop, envname, lossname, field_train):
@@ -112,8 +105,6 @@ def draw(df_data, predicted_mat, df_pop, envname, lossname, is_train, df_frequen
     return df_frequency if is_train else None
 
 
-
-
 def get_pop(df_train, popbin):
     df_popularity = df_train[["item_id", "user_id"]].groupby("item_id").agg(len)
     miss_id = list(set(range(df_train["item_id"].max() + 1)) - set(df_popularity.index))
@@ -148,6 +139,7 @@ def get_pop(df_train, popbin):
 
     return df_pop
 
+
 def get_percentage(cats, all_values, is_test=False, sorted_idx=None):
     res_cnt = Counter(cats)
     if is_test:
@@ -167,10 +159,7 @@ def get_percentage(cats, all_values, is_test=False, sorted_idx=None):
         return res
 
 
-
 def draw(res_train, res_test, num, featname):
-
-
     df = pd.DataFrame({k + 1: [x, y] for k, (x, y) in enumerate(zip(res_train, res_test))})
     df["domain"] = ["Standard", "Random"]
 
@@ -178,7 +167,7 @@ def draw(res_train, res_test, num, featname):
     fig = plt.figure(figsize=(6, 3))
     for i in range(num, 0, -1):
         # print(i)
-        sns.barplot(x=i, y="domain", data=df, color=colors[i-1])
+        sns.barplot(x=i, y="domain", data=df, color=colors[i - 1])
     plt.xlabel(featname)
     plt.xticks([])
     plt.savefig(os.path.join(CODEPATH, f'feat_{envname}_{featname}.pdf'), bbox_inches='tight',
@@ -188,15 +177,14 @@ def draw(res_train, res_test, num, featname):
     plt.show()
     plt.close()
 
+
 def get_distribution(threshold, item_features, multi_feat, envname):
-
-
     # if threshold > 0:
     feat_train = df_train.loc[df_train[yname] >= threshold, item_features[1:]]
     feat_test = df_test.loc[df_test[yname] >= threshold, item_features[1:]]
     feat_num = feat_train.nunique()
 
-    if multi_feat: # for kuairand and kuairec
+    if multi_feat:  # for kuairand and kuairec
         cats_train = feat_train.to_numpy().reshape(-1)
         pos_cat_train = cats_train[cats_train > 0]
 
@@ -214,6 +202,7 @@ def get_distribution(threshold, item_features, multi_feat, envname):
         res_train, sorted_idx = get_percentage(feat_train[featname], cat_set)
         res_test = get_percentage(feat_test[featname], cat_set, is_test=True, sorted_idx=sorted_idx)
         draw(res_train, res_test, num, featname)
+
 
 def main(args, df_train, df_test, envname, lossname, yname, popbin):
     UM_SAVE_PATH = os.path.join(ROOTPATH, "saved_models", envname, args.user_model_name)
@@ -236,7 +225,6 @@ def main(args, df_train, df_test, envname, lossname, yname, popbin):
     test_item_emb = item_train_embedding[df_test["item_id"]]
     test_emb = np.concatenate([test_user_emb, test_item_emb], axis=-1)
 
-
     df_pop = get_pop(df_train, popbin)
 
     with open(MODEL_MAT_PATH, "rb") as file:
@@ -247,10 +235,9 @@ def main(args, df_train, df_test, envname, lossname, yname, popbin):
 
 
 def get_data(dataset):
-
     if dataset == "CoatEnv":
         from environments.coat.env.Coat import CoatEnv
-        df_train = CoatEnv.get_df_coat("train.ascii")[0]
+        df_train, _, _, _, item_feat_items = CoatEnv.get_df_coat("train.ascii", is_require_feature_domination=True)
         df_test = CoatEnv.get_df_coat("test.ascii")[0]
         envname = "CoatEnv-v0"
         yname = "rating"
@@ -272,7 +259,8 @@ def get_data(dataset):
 
     if dataset == "KuaiRandEnv":
         from environments.KuaiRand_Pure.env.KuaiRand import KuaiRandEnv
-        df_train = KuaiRandEnv.get_df_kuairand("train_processed.csv")[0]
+        df_train, _, _, _, item_feat_items = KuaiRandEnv.get_df_kuairand("train_processed.csv",
+                                                                         is_require_feature_domination=True)
         df_test = KuaiRandEnv.get_df_kuairand("test_processed.csv")[0]
         envname = "KuaiRand-v0"
         yname = "is_click"
@@ -283,7 +271,7 @@ def get_data(dataset):
 
     if dataset == "KuaiEnv":
         from environments.KuaiRec.env.KuaiEnv import KuaiEnv
-        df_train = KuaiEnv.get_df_kuairec("big_matrix_processed.csv")[0]
+        df_train, _, _, _, item_feat_items = KuaiEnv.get_df_kuairec("big_matrix_processed.csv", is_require_feature_domination=True)
         df_test = KuaiEnv.get_df_kuairec("small_matrix_processed.csv")[0]
         envname = "KuaiEnv-v0"
         yname = "watch_ratio_normed"
@@ -300,7 +288,7 @@ if __name__ == '__main__':
         "CoatEnv",
         # "YahooEnv",
         "KuaiRandEnv",
-        # "KuaiEnv"
+        "KuaiEnv"
     ]
 
     # losses = ["point", "pointneg", "pp", "pair"]
@@ -312,4 +300,4 @@ if __name__ == '__main__':
         if envname == "YahooEnv-v0":
             df_train = df_train.loc[df_train["user_id"] < 5400]
         get_distribution(threshold, item_features, multi_feat, envname)
-            # main(args, df_train, df_test, envname, lossname, yname, popbin)
+        # main(args, df_train, df_test, envname, lossname, yname, popbin)

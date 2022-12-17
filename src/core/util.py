@@ -13,22 +13,19 @@ from scipy.sparse import csr_matrix
 from tqdm import tqdm
 
 
-def get_sorted_item_features(df_data, df_item, feature_domination_path):
-    # CODEDIRPATH = os.path.dirname(__file__)
-
+def get_sorted_domination_features(df_data, df_item, feature_domination_path):
     if os.path.isfile(feature_domination_path):
-        item_feat_items = pickle.load(open(feature_domination_path, 'rb'))
+        item_feat_domination = pickle.load(open(feature_domination_path, 'rb'))
     else:
-        item_feat_items = dict()
+        item_feat_domination = dict()
         item_feat = df_item.columns.to_list()
         for x in item_feat:
             sorted_count = collections.Counter(df_data[x])
             sorted_percentile = dict(map(lambda x: (x[0], x[1] / len(df_data)), dict(sorted_count).items()))
             sorted_items = sorted(sorted_percentile.items(), key=lambda x: x[1], reverse=True)
-            item_feat_items[x] = sorted_items
-        pickle.dump(item_feat_items, open(feature_domination_path, 'wb'))
-
-    return item_feat_items
+            item_feat_domination[x] = sorted_items
+        pickle.dump(item_feat_domination, open(feature_domination_path, 'wb'))
+    return item_feat_domination
 
 def compute_action_distance(action: np.ndarray, actions_hist: np.ndarray,
                             env_name="VirtualTB-v0", realenv=None):  # for kuaishou data

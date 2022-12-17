@@ -21,6 +21,8 @@ import random
 
 from tqdm import tqdm
 
+from core.util import get_sorted_domination_features
+
 # from core.util import get_similarity_mat, get_distance_mat
 
 CODEPATH = os.path.dirname(__file__)
@@ -60,7 +62,7 @@ class KuaiEnv(gym.Env):
         self.reset()
 
     @staticmethod
-    def get_df_kuairec(name="big_matrix_processed.csv"):
+    def get_df_kuairec(name="big_matrix_processed.csv", is_require_feature_domination=False):
         filename = os.path.join(DATAPATH, name)
         df_data = pd.read_csv(filename,
                              usecols=['user_id', 'item_id', 'timestamp', 'watch_ratio_normed', 'duration_normed'])
@@ -77,10 +79,20 @@ class KuaiEnv(gym.Env):
         df_user = KuaiEnv.load_user_feat(only_small)
         df_item = KuaiEnv.load_item_feat(only_small)
 
-
         df_data = df_data.join(df_feat, on=['item_id'], how="left")
 
+        if is_require_feature_domination:
+            item_feat_domination = KuaiEnv.get_domination(df_data, df_item)
+            return df_data, df_user, df_item, list_feat, item_feat_domination
+
         return df_data, df_user, df_item, list_feat
+
+    @staticmethod
+    def get_domination(df_data, df_item):
+        CODEDIRPATH = os.path.dirname(__file__)
+        feature_domination_path = os.path.join(CODEDIRPATH, "feature_domination.pickle")
+        item_feat_domination = get_sorted_domination_features(df_data, df_item, feature_domination_path)
+        return item_feat_domination
 
     @staticmethod
     def load_user_feat(only_small=False):
@@ -173,7 +185,8 @@ class KuaiEnv(gym.Env):
         df_feat0.feat = df_feat0.feat.map(eval)
 
         list_feat = df_feat0.feat.to_list()
-        df_feat = pd.DataFrame(list_feat, columns=['feat0', 'feat1', 'feat2', 'feat3'], dtype=int)
+        # df_feat = pd.DataFrame(list_feat, columns=['feat0', 'feat1', 'feat2', 'feat3'], dtype=int)
+        df_feat = pd.DataFrame(list_feat, columns=['feat0', 'feat1', 'feat2', 'feat3'])
         df_feat.index.name = "item_id"
         df_feat[df_feat.isna()] = -1
         df_feat = df_feat + 1
