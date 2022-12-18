@@ -122,8 +122,7 @@ def get_args_dataset_specific(envname):
         parser.add_argument('--leave_threshold', default=10, type=float)
         parser.add_argument('--num_leave_compute', default=3, type=int)
     else:
-        raise("envname should be in the following four datasets:\n"
-              "{'CoatEnv-v0', 'YahooEnv-v0', 'KuaiEnv-v0', 'KuaiRand-v0'}")
+        raise("envname should be in the following four datasets: {'CoatEnv-v0', 'YahooEnv-v0', 'KuaiEnv-v0', 'KuaiRand-v0'}")
 
     args = parser.parse_known_args()[0]
     return args

@@ -2,7 +2,7 @@
 # @Time    : 2022/9/15 22:40
 # @Author  : Chongming GAO
 # @FileName: Coat.py
-import collections
+
 import os
 import pickle
 
@@ -10,17 +10,15 @@ import gym
 import torch
 from gym import spaces
 from numba import njit
-from sklearn.preprocessing import LabelEncoder
-from scipy.sparse import csr_matrix
-from collections import Counter
-import itertools
+
 
 import pandas as pd
 import numpy as np
 import random
 
 from tqdm import tqdm
-
+import sys
+sys.path.extend(["./src", "./src/DeepCTR-Torch", "./src/tianshou"])
 from core.util import get_sorted_domination_features
 
 CODEPATH = os.path.dirname(__file__)

@@ -17,6 +17,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 import sys
 
+from core.worldModel.collector_set import CollectorSet
 from policy_utils import prepare_dir_log
 
 # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
@@ -222,6 +223,10 @@ def prepare_envs(args, ensemble_models, alpha_u, beta_i):
     # test_envs = gym.make(args.task)
     test_envs = DummyVectorEnv(
         [lambda: env_task_class(**kwargs_um) for _ in range(args.test_num)])
+    test_envs_NX_0 = DummyVectorEnv(
+        [lambda: env_task_class(**kwargs_um) for _ in range(args.test_num)])
+    test_envs_NX_x = DummyVectorEnv(
+        [lambda: env_task_class(**kwargs_um) for _ in range(args.test_num)])
 
     random.seed(args.seed)
     np.random.seed(args.seed)
@@ -297,7 +302,9 @@ def setup_policy_model(args, ensemble_models, env, train_envs, test_envs):
     )
     policy.set_collector(train_collector)
 
-    return policy, train_collector, test_collector, state_tracker, optim
+    test_collector_set = CollectorSet()
+
+    return policy, train_collector, test_collector_set, state_tracker, optim
 
 def learn_policy(args, policy, train_collector, test_collector, state_tracker, optim, MODEL_SAVE_PATH, logger_path):
     # log

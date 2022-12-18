@@ -51,6 +51,7 @@ def get_args_all():
     parser.add_argument('--no_softmax', dest='is_softmax', action='store_false')
     parser.set_defaults(is_softmax=False)
     parser.add_argument("--num_trajectory", type=int, default=200)
+    parser.add_argument("--force_length", type=int, default=10)
 
     parser.add_argument('--is_deterministic', dest='deterministic', action='store_true')
     parser.add_argument('--no_deterministic', dest='deterministic', action='store_false')
@@ -123,8 +124,7 @@ def get_args_dataset_specific(envname):
         parser.add_argument('--leave_threshold', default=10, type=float)
         parser.add_argument('--num_leave_compute', default=3, type=int)
     else:
-        raise("envname should be in the following four datasets:\n"
-              "{'CoatEnv-v0', 'YahooEnv-v0', 'KuaiEnv-v0', 'KuaiRand-v0'}")
+        raise("envname should be in the following four datasets: {'CoatEnv-v0', 'YahooEnv-v0', 'KuaiEnv-v0', 'KuaiRand-v0'}")
 
     args = parser.parse_known_args()[0]
     return args
@@ -500,7 +500,7 @@ def main(args):
     ensemble_models.compile_RL_test(
         functools.partial(test_static_model_in_RL_env, env=env, dataset_val=dataset_val, is_softmax=args.is_softmax,
                           epsilon=args.epsilon, is_ucb=args.is_ucb, need_transform=args.need_transform,
-                          num_trajectory=args.num_trajectory, item_feat_domination=item_feat_domination))
+                          num_trajectory=args.num_trajectory, item_feat_domination=item_feat_domination, force_length=args.force_length))
 
     # %% 5. Learn and evaluate model
 

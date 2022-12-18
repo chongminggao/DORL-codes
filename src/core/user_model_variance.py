@@ -124,14 +124,15 @@ class UserModel_Variance(nn.Module):
         epoch_logs = {}
         if dataset_val:
             eval_result = self.evaluate_data(dataset_val, batch_size)
-            for name, result in eval_result.items():
-                epoch_logs["val_" + name] = result
+            # for name, result in eval_result.items():
+            #     epoch_logs["val_" + name] = result
+            epoch_logs.update(eval_result)
         if self.RL_eval_fun:
             eval_result_RL = self.RL_eval_fun(self.eval())
             # for name, result in eval_result_RL.items():
             #     epoch_logs["RL_val_" + name] = result
             eval_result.update(eval_result_RL)
-        callbacks.on_epoch_end(-1, epoch_logs)
+        callbacks.on_epoch_end(-1, eval_result)
 
         # Train
         print("Train on {0} samples, validate on {1} samples, {2} steps per epoch".format(
@@ -199,12 +200,15 @@ class UserModel_Variance(nn.Module):
             if dataset_val:
                 eval_result = self.evaluate_data(dataset_val, batch_size)
                 for name, result in eval_result.items():
-                    epoch_logs["val_" + name] = result
+                    # epoch_logs["val_" + name] = result
+                    epoch_logs[name] = result
+
 
             if self.RL_eval_fun:
                 eval_result_RL = self.RL_eval_fun(self.eval())
                 for name, result in eval_result_RL.items():
-                    epoch_logs["RL_val_" + name] = result
+                    # epoch_logs["RL_val_" + name] = result
+                    epoch_logs[name] = result
 
             # verbose
             if verbose > 0:
@@ -220,8 +224,11 @@ class UserModel_Variance(nn.Module):
 
                 if dataset_val:
                     for name in self.metric_fun:
+                        # eval_str += " - " + "val_" + name + \
+                        #             ": {0: .4f}".format(epoch_logs["val_" + name])
                         eval_str += " - " + "val_" + name + \
-                                    ": {0: .4f}".format(epoch_logs["val_" + name])
+                                    ": {0: .4f}".format(epoch_logs[name])
+
                 print(eval_str)
             callbacks.on_epoch_end(epoch, epoch_logs)
             if self.stop_training:
@@ -235,32 +242,33 @@ class UserModel_Variance(nn.Module):
         self.n_rec = n_arm
         self.n_each = np.ones(n_arm)
 
-    def recommend_k_item(self, user, dataset_val, k=1, is_softmax=True, epsilon=0, is_ucb=False, recommended_items=[], lbe_item=None):
+    def recommend_k_item(self, user, dataset_val, k=1, is_softmax=True, epsilon=0, is_ucb=False, recommended_ids=[]):
 
         df_user_val = dataset_val.df_user_val
         df_item_val = dataset_val.df_item_val
 
         item_index = df_item_val.index.to_numpy()
 
-        if not lbe_item is None:
-            recommended_ids = lbe_item.transform(recommended_items)
-        else:
-            recommended_ids = recommended_items
+        # if not lbe_item is None:
+        #     recommended_ids = lbe_item.transform(recommended_items).tolist()
+        # else:
+        #     recommended_ids = recommended_items
+
 
         # the preserved transformed ids.
         indices = np.ones(len(item_index), dtype=bool)
         indices[recommended_ids] = False
-        reserved_ids = np.arange(len(item_index))[indices]
+        preserved_ids = np.arange(len(item_index))[indices]
 
         # the preserved raw ids
-        item_index_reserved = item_index[indices]
-        df_item_val_reserved = df_item_val.iloc[indices]
+        item_index_preserved = item_index[indices]
+        df_item_val_preserved = df_item_val.iloc[indices]
 
         u_all_item = torch.tensor(
-            np.concatenate((np.ones([len(df_item_val_reserved), 1]) * user,
-                            df_user_val.loc[user].to_numpy() * np.array([[1]] * len(df_item_val_reserved)),
-                            np.expand_dims(item_index_reserved, axis=-1),
-                            df_item_val_reserved.values), 1),
+            np.concatenate((np.ones([len(df_item_val_preserved), 1]) * user,
+                            df_user_val.loc[user].to_numpy() * np.array([[1]] * len(df_item_val_preserved)),
+                            np.expand_dims(item_index_preserved, axis=-1),
+                            df_item_val_preserved.values), 1),
             dtype=torch.float, device=self.device, requires_grad=False)
 
         assert u_all_item.shape[1] == len(dataset_val.x_columns)
@@ -283,7 +291,7 @@ class UserModel_Variance(nn.Module):
         mean, var = self.forward(u_all_item)
         u_value = mean.detach().squeeze() # predicted value
 
-        if is_ucb and len(recommended_items) == 0:
+        if is_ucb and len(recommended_ids) == 0:
             if not hasattr(self, "n_rec"):
                 self.compile_UCB(len(u_value))
 
@@ -318,18 +326,18 @@ class UserModel_Variance(nn.Module):
             # # epsilon-greedy activated!!
             index_rec = torch.randint(0, len(u_value), (k,))
 
-        real_id = reserved_ids[index_rec]
+        recommended_id_transform = preserved_ids[index_rec]
 
         if is_ucb:
             self.n_rec += k
-            self.n_each[real_id] += 1
+            self.n_each[recommended_id_transform] += 1
 
         # print(int(index_rec), end=' ')
 
-        recommendation = item_index[real_id]
+        recommended_id_raw = item_index[recommended_id_transform]
         value_rec = u_value.cpu().numpy()[index_rec]
 
-        return recommendation, value_rec
+        return recommended_id_transform, recommended_id_raw, value_rec
 
     def evaluate_data(self, dataset_val, batch_size=256):
 
@@ -338,7 +346,7 @@ class UserModel_Variance(nn.Module):
 
         eval_result = {}
         for name, metric_fun in self.metric_fun.items():
-            eval_result[name] = metric_fun(y, y_predict)
+            eval_result[name] = float(metric_fun(y, y_predict))
 
         if self.metric_fun_ranking is not None:
             ground_truth_positive = dataset_val.ground_truth

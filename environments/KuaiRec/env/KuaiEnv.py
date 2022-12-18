@@ -21,6 +21,8 @@ import random
 
 from tqdm import tqdm
 
+import sys
+sys.path.extend(["./src", "./src/DeepCTR-Torch", "./src/tianshou"])
 from core.util import get_sorted_domination_features
 
 # from core.util import get_similarity_mat, get_distance_mat
