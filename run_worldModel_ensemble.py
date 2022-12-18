@@ -23,7 +23,8 @@ from environments.KuaiRec.env.KuaiEnv import compute_exposure_effect_kuaiRec
 
 sys.path.extend(["./src", "./src/DeepCTR-Torch"])
 from core.evaluation.evaluator import test_static_model_in_RL_env
-from core.configs import get_training_data, get_val_data, get_common_args, get_features, get_true_env
+from core.configs import get_training_data, get_val_data, get_common_args, get_features, get_true_env, \
+    get_training_item_domination
 from core.user_model_ensemble import EnsembleModel
 from core.evaluation.metrics import get_ranking_results
 from core.inputs import SparseFeatP
@@ -493,12 +494,13 @@ def main(args):
     ensemble_models = setup_world_model(args, x_columns, y_columns, ab_columns,
                                         task, task_logit_dim, is_ranking, MODEL_SAVE_PATH)
 
-
     env, env_task_class, kwargs_um = get_true_env(args, read_user_num=None)
 
+    item_feat_domination = get_training_item_domination(args.env)
     ensemble_models.compile_RL_test(
         functools.partial(test_static_model_in_RL_env, env=env, dataset_val=dataset_val, is_softmax=args.is_softmax,
-                          epsilon=args.epsilon, is_ucb=args.is_ucb, need_transform=args.need_transform, num_trajectory=args.num_trajectory))
+                          epsilon=args.epsilon, is_ucb=args.is_ucb, need_transform=args.need_transform,
+                          num_trajectory=args.num_trajectory, item_feat_domination=item_feat_domination))
 
     # %% 5. Learn and evaluate model
 

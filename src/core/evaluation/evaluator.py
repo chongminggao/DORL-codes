@@ -7,14 +7,16 @@ import torch
 from tqdm import tqdm
 
 
-def test_static_model_in_RL_env(model, env, dataset_val, is_softmax=True, epsilon=0, is_ucb=False, k=1,
-                                need_transform=False, num_trajectory=200):
+
+def cannot_overlap(model, env, dataset_val, is_softmax, epsilon, is_ucb, k,
+                   need_transform, num_trajectory, item_feat_domination):
     cumulative_reward = 0
     total_click_loss = 0
     total_turns = 0
 
     all_acts = []
     for i in tqdm(range(num_trajectory), desc=f"evaluate static method in {env.__str__()}"):
+        recommended_items = []
         user = env.reset()
         if need_transform:
             user = env.lbe_user.inverse_transform(user)[0]
@@ -22,10 +24,13 @@ def test_static_model_in_RL_env(model, env, dataset_val, is_softmax=True, epsilo
         acts = []
         done = False
         while not done:
-            recommendation, reward_pred = model.recommend_k_item(user, dataset_val, k=k, is_softmax=is_softmax,
-                                                                 epsilon=epsilon, is_ucb=is_ucb)
+            recommendation, reward_pred = model.recommend_k_item(user, dataset_val, k=1, is_softmax=is_softmax,
+                                                                 epsilon=epsilon, is_ucb=is_ucb,
+                                                                 recommended_items=recommended_items)
+            recommended_items.append(recommendation)
             if need_transform:
                 recommendation = env.lbe_item.transform([recommendation])[0]
+
             acts.append(recommendation)
             state, reward, done, info = env.step(recommendation)
             total_turns += 1
@@ -42,12 +47,53 @@ def test_static_model_in_RL_env(model, env, dataset_val, is_softmax=True, epsilo
     ctr = cumulative_reward / total_turns
     click_loss = total_click_loss / total_turns
 
-    dataset_val.df_item_val
+    hit_item = len(set(all_acts))
+    num_items = len(dataset_val.df_item_val)
+    CV = hit_item / num_items
+    CV_turn = hit_item / len(all_acts)
+
+def test_static_model_in_RL_env(model, env, dataset_val, is_softmax=True, epsilon=0, is_ucb=False, k=1,
+                                need_transform=False, num_trajectory=200, item_feat_domination=None):
+    cumulative_reward = 0
+    total_click_loss = 0
+    total_turns = 0
+    if need_transform:
+        lbe_item = env.lbe_item
+    else:
+        lbe_item = None
+    all_acts = []
+    for i in tqdm(range(num_trajectory), desc=f"evaluate static method in {env.__str__()}"):
+        user = env.reset()
+        if need_transform:
+            user = env.lbe_user.inverse_transform(user)[0]
+
+        acts = []
+        done = False
+        while not done:
+            recommendation, reward_pred = model.recommend_k_item(user, dataset_val, k=k, is_softmax=is_softmax,
+                                                                 epsilon=epsilon, is_ucb=is_ucb, recommended_items=[], lbe_item=lbe_item)
+            if need_transform:
+                recommendation = env.lbe_item.transform([recommendation])[0]
+            acts.append(recommendation)
+            state, reward, done, info = env.step(recommendation)
+            total_turns += 1
+            # metric 1
+            cumulative_reward += reward
+            # metric 2
+            click_loss = np.absolute(reward_pred - reward)
+            total_click_loss += click_loss
+
+            if done:
+                break
+        all_acts.extend(acts)
+    ctr = cumulative_reward / total_turns
+    click_loss = total_click_loss / total_turns
 
     hit_item = len(set(all_acts))
     num_items = len(dataset_val.df_item_val)
     CV = hit_item / num_items
     CV_turn = hit_item / len(all_acts)
+
 
     # eval_result_RL = {"CTR": ctr, "click_loss": click_loss, "trajectory_len": total_turns / num_trajectory,
     #                   "trajectory_reward": cumulative_reward / num_trajectory}

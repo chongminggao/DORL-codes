@@ -235,18 +235,32 @@ class UserModel_Variance(nn.Module):
         self.n_rec = n_arm
         self.n_each = np.ones(n_arm)
 
-    def recommend_k_item(self, user, dataset_val, k=1, is_softmax=True, epsilon=0, is_ucb=False):  # for kuaishou data
+    def recommend_k_item(self, user, dataset_val, k=1, is_softmax=True, epsilon=0, is_ucb=False, recommended_items=[], lbe_item=None):
 
         df_user_val = dataset_val.df_user_val
         df_item_val = dataset_val.df_item_val
 
         item_index = df_item_val.index.to_numpy()
 
+        if not lbe_item is None:
+            recommended_ids = lbe_item.transform(recommended_items)
+        else:
+            recommended_ids = recommended_items
+
+        # the preserved transformed ids.
+        indices = np.ones(len(item_index), dtype=bool)
+        indices[recommended_ids] = False
+        reserved_ids = np.arange(len(item_index))[indices]
+
+        # the preserved raw ids
+        item_index_reserved = item_index[indices]
+        df_item_val_reserved = df_item_val.iloc[indices]
+
         u_all_item = torch.tensor(
-            np.concatenate((np.ones([len(df_item_val), 1]) * user,
-                            df_user_val.loc[user].to_numpy() * np.array([[1]] * len(df_item_val)),
-                            np.expand_dims(item_index, axis=-1),
-                            df_item_val.values), 1),
+            np.concatenate((np.ones([len(df_item_val_reserved), 1]) * user,
+                            df_user_val.loc[user].to_numpy() * np.array([[1]] * len(df_item_val_reserved)),
+                            np.expand_dims(item_index_reserved, axis=-1),
+                            df_item_val_reserved.values), 1),
             dtype=torch.float, device=self.device, requires_grad=False)
 
         assert u_all_item.shape[1] == len(dataset_val.x_columns)
@@ -269,7 +283,7 @@ class UserModel_Variance(nn.Module):
         mean, var = self.forward(u_all_item)
         u_value = mean.detach().squeeze() # predicted value
 
-        if is_ucb:
+        if is_ucb and len(recommended_items) == 0:
             if not hasattr(self, "n_rec"):
                 self.compile_UCB(len(u_value))
 
@@ -280,39 +294,40 @@ class UserModel_Variance(nn.Module):
             # ucb_bound[np.isnan(ucb_bound)] = 0
             # ucb_bound[np.isinf(ucb_bound)] = u_value.max()
 
-            u_value_ucb = u_value + torch.Tensor(ucb_bound).to(u_value.device)
+            u_value = u_value + torch.Tensor(ucb_bound).to(u_value.device)
         else:
-            u_value_ucb = u_value
-
+            u_value = u_value
 
         if is_softmax:
-            value = self.softmax(u_value_ucb)
-            index = torch.multinomial(value, k, replacement=False)
+            value_softmax = self.softmax(u_value)
+            index_rec = torch.multinomial(value_softmax, k, replacement=False)
         else:
             # value = u_value
             # if min(value) < 0:
             #     value = -min(value) + value
             #     value = value / sum(value)
             # Todo:
-            # index = u_value_ucb.argmax() # 预测分数的max
+            # index_rec = u_value.argmax() # 预测分数的max
 
-            # value = u_value_ucb/sum(u_value_ucb)
-            # index = torch.multinomial(value, k, replacement=False)
+            # value = u_value/sum(u_value)
+            # index_rec = torch.multinomial(value, k, replacement=False)
 
-            _, index = torch.topk(u_value_ucb, k)
+            _, index_rec = torch.topk(u_value, k)
 
         if epsilon > 0 and np.random.random() < epsilon:
             # # epsilon-greedy activated!!
-            index = torch.randint(0, len(item_index), (k,))
+            index_rec = torch.randint(0, len(u_value), (k,))
+
+        real_id = reserved_ids[index_rec]
 
         if is_ucb:
             self.n_rec += k
-            self.n_each[index] += 1
+            self.n_each[real_id] += 1
 
-        # print(int(index), end=' ')
+        # print(int(index_rec), end=' ')
 
-        recommendation = item_index[index]
-        value_rec = u_value.cpu().numpy()[index]
+        recommendation = item_index[real_id]
+        value_rec = u_value.cpu().numpy()[index_rec]
 
         return recommendation, value_rec
 

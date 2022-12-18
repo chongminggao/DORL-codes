@@ -43,6 +43,22 @@ def get_training_data(env):
 
     return df_train, df_user, df_item, list_feat
 
+def get_training_item_domination(env):
+    item_feat_domination = None
+    if env == "CoatEnv-v0":
+        from environments.coat.env.Coat import CoatEnv
+        item_feat_domination = CoatEnv.get_domination()
+    elif env == "KuaiRand-v0":
+        from environments.KuaiRand_Pure.env.KuaiRand import KuaiRandEnv
+        item_feat_domination = KuaiRandEnv.get_domination()
+    elif env == "KuaiEnv-v0":
+        from environments.KuaiRec.env.KuaiEnv import KuaiEnv
+        item_feat_domination = KuaiEnv.get_domination()
+    elif env == "YahooEnv-v0":
+        item_feat_domination = None
+
+    return item_feat_domination
+
 
 def get_val_data(env):
     df_train, df_user, df_item, list_feat = None, None, None, None

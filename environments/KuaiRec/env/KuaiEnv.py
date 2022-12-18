@@ -48,7 +48,6 @@ class KuaiEnv(gym.Env):
         else:
             self.mat, self.lbe_user, self.lbe_item, self.list_feat, self.df_video_env, self.df_dist_small = self.load_mat()
 
-
         self.list_feat_small = list(map(lambda x: self.list_feat[x], self.lbe_item.classes_))
 
         # smallmat shape: (1411, 3327)
@@ -62,10 +61,10 @@ class KuaiEnv(gym.Env):
         self.reset()
 
     @staticmethod
-    def get_df_kuairec(name="big_matrix_processed.csv", is_require_feature_domination=False):
+    def get_df_kuairec(name="big_matrix_processed.csv"):
         filename = os.path.join(DATAPATH, name)
         df_data = pd.read_csv(filename,
-                             usecols=['user_id', 'item_id', 'timestamp', 'watch_ratio_normed', 'duration_normed'])
+                              usecols=['user_id', 'item_id', 'timestamp', 'watch_ratio_normed', 'duration_normed'])
 
         # df_data['duration_normed'] = df_data['duration_ms'] / 1000
 
@@ -81,17 +80,24 @@ class KuaiEnv(gym.Env):
 
         df_data = df_data.join(df_feat, on=['item_id'], how="left")
 
-        if is_require_feature_domination:
-            item_feat_domination = KuaiEnv.get_domination(df_data, df_item)
-            return df_data, df_user, df_item, list_feat, item_feat_domination
+        # if is_require_feature_domination:
+        #     item_feat_domination = KuaiEnv.get_domination(df_data, df_item)
+        #     return df_data, df_user, df_item, list_feat, item_feat_domination
 
         return df_data, df_user, df_item, list_feat
 
     @staticmethod
-    def get_domination(df_data, df_item):
+    def get_domination():
+        df_data, _, df_item, _ = KuaiEnv.get_df_kuairec("big_matrix_processed.csv")
         CODEDIRPATH = os.path.dirname(__file__)
         feature_domination_path = os.path.join(CODEDIRPATH, "feature_domination.pickle")
-        item_feat_domination = get_sorted_domination_features(df_data, df_item, feature_domination_path)
+
+        if os.path.isfile(feature_domination_path):
+            item_feat_domination = pickle.load(open(feature_domination_path, 'rb'))
+        else:
+            item_feat_domination = get_sorted_domination_features(
+                df_data, df_item, is_multi_hot=True, yname="watch_ratio_normed", threshold=0.6)
+            pickle.dump(item_feat_domination, open(feature_domination_path, 'wb'))
         return item_feat_domination
 
     @staticmethod
@@ -153,11 +159,12 @@ class KuaiEnv(gym.Env):
 
     @staticmethod
     def get_lbe():
-        if not os.path.isfile(os.path.join(DATAPATH, "user_id_small.csv")) or not os.path.isfile(os.path.join(DATAPATH, "item_id_small.csv")):
+        if not os.path.isfile(os.path.join(DATAPATH, "user_id_small.csv")) or not os.path.isfile(
+                os.path.join(DATAPATH, "item_id_small.csv")):
             small_path = os.path.join(DATAPATH, "small_matrix_processed.csv")
             df_small = pd.read_csv(small_path, header=0, usecols=['user_id', 'item_id'])
 
-            user_id_small = pd.DataFrame(df_small["user_id"].unique(),columns=["user_id_small"])
+            user_id_small = pd.DataFrame(df_small["user_id"].unique(), columns=["user_id_small"])
             item_id_small = pd.DataFrame(df_small["item_id"].unique(), columns=["item_id_small"])
 
             user_id_small.to_csv(os.path.join(DATAPATH, "user_id_small.csv"), index=False)
@@ -173,8 +180,6 @@ class KuaiEnv(gym.Env):
         lbe_item.fit(item_id_small["item_id_small"])
 
         return lbe_user, lbe_item
-
-
 
     @staticmethod
     def load_category():
@@ -209,10 +214,8 @@ class KuaiEnv(gym.Env):
                 "duration_normed"]
             video_mean_duration.to_csv(duration_path, index=False)
 
-        video_mean_duration.index.name="item_id"
+        video_mean_duration.index.name = "item_id"
         return video_mean_duration
-
-
 
     @staticmethod
     def load_mat():
@@ -280,7 +283,6 @@ class KuaiEnv(gym.Env):
         minn = predict_mat.min()
         maxx = predict_mat.max()
 
-
         normed_mat = (predict_mat - minn) / (maxx - minn)
 
         return normed_mat
@@ -306,7 +308,7 @@ class KuaiEnv(gym.Env):
         self.action = action
         t = self.total_turn
         done = self._determine_whether_to_leave(t, action)
-        if t >= (self.max_turn-1):
+        if t >= (self.max_turn - 1):
             done = True
         self._add_action_to_history(t, action)
 
@@ -332,7 +334,7 @@ class KuaiEnv(gym.Env):
 
     def render(self, mode='human', close=False):
         history_action = self.history_action
-        category = {k:self.list_feat_small[v] for k,v in history_action.items()}
+        category = {k: self.list_feat_small[v] for k, v in history_action.items()}
         # category_debug = {k:self.list_feat[v] for k,v in history_action.items()}
         # return history_action, category, category_debug
         return self.cur_user, history_action, category
@@ -372,7 +374,6 @@ class KuaiEnv(gym.Env):
         self.max_history += 1
 
 
-
 # For loading KuaishouRec Data
 @njit
 def find_negative(user_ids, item_ids, mat_small, mat_big, df_negative, max_item):
@@ -399,13 +400,15 @@ def find_negative(user_ids, item_ids, mat_small, mat_big, df_negative, max_item)
                     df_negative[i, 1] = neg
                     break
 
+
 # For loading KuaiRec Data
 def negative_sampling(df_train, df_item, df_user, y_name):
     small_path = os.path.join(DATAPATH, "small_matrix_processed.csv")
     df_small = pd.read_csv(small_path, header=0, usecols=['user_id', 'item_id'])
 
     mat_small = csr_matrix((np.ones(len(df_small)), (df_small['user_id'], df_small['item_id'])),
-                           shape=(df_train['user_id'].max() + 1, df_train['item_id'].max() + 1), dtype=np.bool).toarray()
+                           shape=(df_train['user_id'].max() + 1, df_train['item_id'].max() + 1),
+                           dtype=np.bool).toarray()
     # df_negative = df_train.copy()
     mat_big = csr_matrix((np.ones(len(df_train)), (df_train['user_id'], df_train['item_id'])),
                          shape=(df_train['user_id'].max() + 1, df_train['item_id'].max() + 1), dtype=np.bool).toarray()
@@ -432,6 +435,7 @@ def negative_sampling(df_train, df_item, df_user, y_name):
     df_negative[y_name] = 0.0
 
     return df_train, df_negative
+
 
 def get_similarity_mat(list_feat, DATAPATH):
     similarity_mat_path = os.path.join(DATAPATH, "similarity_mat_video.csv")
@@ -522,6 +526,7 @@ def compute_exposure_effect_kuaiRec(df_x, timestamp, list_feat, tau, MODEL_SAVE_
     exposure_pos_df.to_csv(exposure_path, index=False)
 
     return exposure_pos
+
 
 def get_distance_mat(list_feat, sub_index_list, DATAPATH):
     if sub_index_list is not None:

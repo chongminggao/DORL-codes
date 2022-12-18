@@ -13,18 +13,31 @@ from scipy.sparse import csr_matrix
 from tqdm import tqdm
 
 
-def get_sorted_domination_features(df_data, df_item, feature_domination_path):
-    if os.path.isfile(feature_domination_path):
-        item_feat_domination = pickle.load(open(feature_domination_path, 'rb'))
-    else:
-        item_feat_domination = dict()
+def get_sorted_domination_features(df_data, df_item, is_multi_hot, yname=None, threshold=None):
+    item_feat_domination = dict()
+    if not is_multi_hot: # for coat
         item_feat = df_item.columns.to_list()
         for x in item_feat:
             sorted_count = collections.Counter(df_data[x])
             sorted_percentile = dict(map(lambda x: (x[0], x[1] / len(df_data)), dict(sorted_count).items()))
             sorted_items = sorted(sorted_percentile.items(), key=lambda x: x[1], reverse=True)
             item_feat_domination[x] = sorted_items
-        pickle.dump(item_feat_domination, open(feature_domination_path, 'wb'))
+    else: # for kuairec and kuairand
+        df_item_filtered = df_item.filter(regex="^feat", axis=1)
+
+        # df_item_flat = df_item_filtered.to_numpy().reshape(-1)
+        # df_item_nonzero = df_item_flat[df_item_flat>0]
+
+        feat_train = df_data.loc[df_data[yname] >= threshold, df_item_filtered.columns.to_list()]
+        cats_train = feat_train.to_numpy().reshape(-1)
+        pos_cat_train = cats_train[cats_train > 0]
+
+        sorted_count = collections.Counter(pos_cat_train)
+        sorted_percentile = dict(map(lambda x: (x[0], x[1] / len(df_data)), dict(sorted_count).items()))
+        sorted_items = sorted(sorted_percentile.items(), key=lambda x: x[1], reverse=True)
+
+        item_feat_domination["feat"] = sorted_items
+
     return item_feat_domination
 
 def compute_action_distance(action: np.ndarray, actions_hist: np.ndarray,

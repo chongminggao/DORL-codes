@@ -4,6 +4,7 @@
 # @FileName: Coat.py
 import collections
 import os
+import pickle
 
 import gym
 import torch
@@ -49,7 +50,7 @@ class CoatEnv(gym.Env):
         self.reset()
 
     @staticmethod
-    def get_df_coat(name, is_require_feature_domination=False):
+    def get_df_coat(name):
         # read interaction
         filename = os.path.join(DATAPATH, name)
         mat_train = pd.read_csv(filename, sep="\s+", header=None)
@@ -74,18 +75,20 @@ class CoatEnv(gym.Env):
         df_data = df_data.astype(int)
         list_feat = None
 
-        if is_require_feature_domination:
-            item_feat_domination = CoatEnv.get_domination(df_data, df_item)
-            return df_data, df_user, df_item, list_feat, item_feat_domination
-
         return df_data, df_user, df_item, list_feat
 
-
     @staticmethod
-    def get_domination(df_data, df_item):
+    def get_domination():
+        df_data, _, df_item, _ = CoatEnv.get_df_coat("train.ascii")
         CODEDIRPATH = os.path.dirname(__file__)
         feature_domination_path = os.path.join(CODEDIRPATH, "feature_domination.pickle")
-        item_feat_domination = get_sorted_domination_features(df_data, df_item, feature_domination_path)
+
+        if os.path.isfile(feature_domination_path):
+            item_feat_domination = pickle.load(open(feature_domination_path, 'rb'))
+        else:
+            item_feat_domination = get_sorted_domination_features(
+                df_data, df_item, is_multi_hot=False)
+            pickle.dump(item_feat_domination, open(feature_domination_path, 'wb'))
         return item_feat_domination
 
     @staticmethod
@@ -171,9 +174,6 @@ class CoatEnv(gym.Env):
         df_item.index.name = "item_id"
 
         return df_item
-
-
-
 
     @property
     def state(self):
@@ -267,7 +267,6 @@ class CoatEnv(gym.Env):
         self.max_history += 1
 
 
-
 @njit
 def get_distance_mat1(mat, distance):
     matt = np.transpose(mat)
@@ -275,9 +274,10 @@ def get_distance_mat1(mat, distance):
         vec_i = matt[item_i]
         for item_j in range(len(distance)):
             vec_j = matt[item_j]
-            dist = ((vec_i-vec_j)**2).sum()**0.5
+            dist = ((vec_i - vec_j) ** 2).sum() ** 0.5
             distance[item_i, item_j] = dist
     return distance
+
 
 # @njit
 def get_distance_mat(mat):
@@ -287,7 +287,7 @@ def get_distance_mat(mat):
         vec_i = mat[:, item_i]
         for item_j in range(len(distance)):
             vec_j = mat[:, item_j]
-            dist = np.linalg.norm(vec_i-vec_j)
+            dist = np.linalg.norm(vec_i - vec_j)
             distance[item_i, item_j] = dist
 
     return distance
@@ -296,8 +296,6 @@ def get_distance_mat(mat):
     # sns.histplot(data=distance.reshape([-1]))
     # from matplotlib import pyplot as plt
     # plt.show()
-
-
 
 
 # def negative_sampling(df_train, df_item, df_user, y_name):
@@ -335,13 +333,15 @@ def construct_complete_val_x(dataset_val, user_features, item_features):
     df_x_complete = pd.concat([df_user_complete, df_item_complete], axis=1)
     return df_x_complete
 
+
 def compute_normed_reward_for_all(user_model, dataset_val, user_features, item_features):
     df_x_complete = construct_complete_val_x(dataset_val, user_features, item_features)
     n_user, n_item = df_x_complete[["user_id", "item_id"]].nunique()
     predict_mat = np.zeros((n_user, n_item))
 
     for i, user in tqdm(enumerate(range(n_user)), total=n_user, desc="predict all users' rewards on all items"):
-        ui = torch.tensor(df_x_complete[df_x_complete["user_id"] == user].to_numpy(),dtype=torch.float, device=user_model.device, requires_grad=False)
+        ui = torch.tensor(df_x_complete[df_x_complete["user_id"] == user].to_numpy(), dtype=torch.float,
+                          device=user_model.device, requires_grad=False)
         reward_u = user_model.forward(ui).detach().squeeze().cpu().numpy()
         predict_mat[i] = reward_u
 

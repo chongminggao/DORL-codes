@@ -162,7 +162,7 @@ class KuaiRandEnv(gym.Env):
         return df_user
 
     @staticmethod
-    def get_df_kuairand(name, is_sort=True, is_require_feature_domination=False):
+    def get_df_kuairand(name, is_sort=True):
         filename = os.path.join(DATAPATH, name)
         df_data = pd.read_csv(filename,
                               usecols=['user_id', 'item_id', 'time_ms', 'is_like', 'is_click', 'long_view',
@@ -190,17 +190,21 @@ class KuaiRandEnv(gym.Env):
             df_data.sort_values(["user_id", "time_ms"], inplace=True)
             df_data.reset_index(drop=True, inplace=True)
 
-        if is_require_feature_domination:
-            item_feat_domination = KuaiRandEnv.get_domination(df_data, df_item)
-            return df_data, df_user, df_item, list_feat, item_feat_domination
-
         return df_data, df_user, df_item, list_feat
 
+
     @staticmethod
-    def get_domination(df_data, df_item):
+    def get_domination():
+        df_data, _, df_item, _ = KuaiRandEnv.get_df_kuairand("train_processed.csv")
         CODEDIRPATH = os.path.dirname(__file__)
         feature_domination_path = os.path.join(CODEDIRPATH, "feature_domination.pickle")
-        item_feat_domination = get_sorted_domination_features(df_data, df_item, feature_domination_path)
+
+        if os.path.isfile(feature_domination_path):
+            item_feat_domination = pickle.load(open(feature_domination_path, 'rb'))
+        else:
+            item_feat_domination = get_sorted_domination_features(
+                df_data, df_item, is_multi_hot=True, yname="is_click", threshold=1)
+            pickle.dump(item_feat_domination, open(feature_domination_path, 'wb'))
         return item_feat_domination
 
     @staticmethod

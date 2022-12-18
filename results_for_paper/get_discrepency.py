@@ -182,6 +182,9 @@ def get_distribution(threshold, item_features, multi_feat, envname):
     # if threshold > 0:
     feat_train = df_train.loc[df_train[yname] >= threshold, item_features[1:]]
     feat_test = df_test.loc[df_test[yname] >= threshold, item_features[1:]]
+    # feat_train = df_train[item_features[1:]]
+    # feat_test = df_test[item_features[1:]]
+
     feat_num = feat_train.nunique()
 
     if multi_feat:  # for kuairand and kuairec
@@ -237,7 +240,7 @@ def main(args, df_train, df_test, envname, lossname, yname, popbin):
 def get_data(dataset):
     if dataset == "CoatEnv":
         from environments.coat.env.Coat import CoatEnv
-        df_train, _, _, _, item_feat_items = CoatEnv.get_df_coat("train.ascii", is_require_feature_domination=True)
+        df_train, _, _, _ = CoatEnv.get_df_coat("train.ascii")
         df_test = CoatEnv.get_df_coat("test.ascii")[0]
         envname = "CoatEnv-v0"
         yname = "rating"
@@ -259,8 +262,7 @@ def get_data(dataset):
 
     if dataset == "KuaiRandEnv":
         from environments.KuaiRand_Pure.env.KuaiRand import KuaiRandEnv
-        df_train, _, _, _, item_feat_items = KuaiRandEnv.get_df_kuairand("train_processed.csv",
-                                                                         is_require_feature_domination=True)
+        df_train, _, _, _ = KuaiRandEnv.get_df_kuairand("train_processed.csv")
         df_test = KuaiRandEnv.get_df_kuairand("test_processed.csv")[0]
         envname = "KuaiRand-v0"
         yname = "is_click"
@@ -271,7 +273,7 @@ def get_data(dataset):
 
     if dataset == "KuaiEnv":
         from environments.KuaiRec.env.KuaiEnv import KuaiEnv
-        df_train, _, _, _, item_feat_items = KuaiEnv.get_df_kuairec("big_matrix_processed.csv", is_require_feature_domination=True)
+        df_train, _, _, _ = KuaiEnv.get_df_kuairec("big_matrix_processed.csv")
         df_test = KuaiEnv.get_df_kuairec("small_matrix_processed.csv")[0]
         envname = "KuaiEnv-v0"
         yname = "watch_ratio_normed"
