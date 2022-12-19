@@ -82,10 +82,11 @@ class LoggerCallback_RL(LoggerCallback_Update):
 
 
 class LoggerCallback_Policy():
-    def __init__(self, logger_path):
+    def __init__(self, logger_path, force_length):
         self.LOCAL_PATH = logger_path
         self.REMOTE_ROOT = REMOTE_ROOT
         self.REMOTE_PATH = os.path.join(REMOTE_ROOT, os.path.dirname(logger_path))
+        self.force_length = force_length
 
     def on_epoch_begin(self, epoch, **kwargs):
         pass
@@ -97,21 +98,43 @@ class LoggerCallback_Policy():
         pass
 
     def on_epoch_end(self, epoch, results=None, **kwargs):
-        num_test = results["n/ep"]
-        len_tra = results["n/st"] / num_test
-        R_tra = results["rew"]
-        ctr = R_tra / len_tra
 
-        result = dict()
-        result['num_test'] = num_test
-        result['CV'] = f"{results['CV']:.3f}"
-        result['CV_turn'] = f"{results['CV_turn']:.3f}"
-        result['ctr'] = f"{ctr:.3f}"
-        result['len_tra'] = len_tra
-        result['R_tra'] = R_tra
+        import re
+        def find_item_domination_results(prefix):
+            pattern = re.compile(prefix + "ifeat_")
+            res_domination = {}
+            for k,v in results.items():
+                res_search = re.match(pattern, k)
+                # print(k, res_search)
+                if res_search:
+                    res_domination[k] = v
+            return res_domination
+
+        def get_one_result(prefix):
+            num_test = results["n/ep"]
+            len_tra = results[prefix + "n/st"] / num_test
+            R_tra = results[prefix + "rew"]
+            ctr = R_tra / len_tra
+
+            res = dict()
+            res['num_test'] = num_test
+            res[prefix + 'CV'] = f"{results[prefix + 'CV']:.3f}"
+            res[prefix + 'CV_turn'] = f"{results[prefix + 'CV_turn']:.3f}"
+            res[prefix + 'ctr'] = f"{ctr:.3f}"
+            res[prefix + 'len_tra'] = len_tra
+            res[prefix + 'R_tra'] = R_tra
+
+            return res
+
+        results_all = {}
+        for prefix in ["", "NX_0_", f"NX_{self.force_length}_"]:
+            res = get_one_result(prefix)
+            res_domination = find_item_domination_results(prefix)
+            results_all.update(res)
+            results_all.update(res_domination)
 
         # 1. write logger
-        logger.info("Epoch: [{}], Info: [{}]".format(epoch, result))
+        logger.info("Epoch: [{}], Info: [{}]".format(epoch, results_all))
 
         # 2. upload logger
         # self.upload_logger()

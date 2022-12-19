@@ -16,16 +16,16 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 
 import sys
+sys.path.extend(["./src", "./src/DeepCTR-Torch", "./src/tianshou"])
 
-from core.worldModel.collector_set import CollectorSet
 from policy_utils import prepare_dir_log
 
 # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
-sys.path.extend(["./src", "./src/DeepCTR-Torch", "./src/tianshou"])
+from core.worldModel.collector_set import CollectorSet
 from core.evaluation.evaluator import Callback_Coverage_Count
 from core.user_model_ensemble import EnsembleModel
-from core.configs import get_features, get_true_env, get_common_args
+from core.configs import get_features, get_true_env, get_common_args, get_val_data, get_training_item_domination
 from core.collector2 import Collector
 from core.inputs import get_dataset_columns
 from core.policy.a2c2 import A2CPolicy_withEmbedding
@@ -91,6 +91,8 @@ def get_args_all():
     parser.add_argument('--no_freeze_emb', dest='freeze_emb', action='store_false')
     parser.set_defaults(freeze_emb=False)
 
+    parser.add_argument('--force_length', type=int, default=10)
+
     # Env
     parser.add_argument("--version", type=str, default="v1")
     parser.add_argument('--tau', default=100, type=float)
@@ -144,7 +146,6 @@ def prepare_user_model_and_env(args):
     # MODEL_MAT_PATH = os.path.join(UM_SAVE_PATH, "mats", f"[{args.read_message}]_mat.pickle")
     MODEL_PARAMS_PATH = os.path.join(UM_SAVE_PATH, "params", f"[{args.read_message}]_params.pickle")
 
-
     with open(MODEL_PARAMS_PATH, "rb") as file:
         model_params = pickle.load(file)
 
@@ -166,6 +167,8 @@ def prepare_user_model_and_env(args):
     return ensemble_models, alpha_u, beta_i
 
     # %% 3. prepare envs
+
+
 def prepare_envs(args, ensemble_models, alpha_u, beta_i):
     env, env_task_class, kwargs_um = get_true_env(args)
 
@@ -193,14 +196,13 @@ def prepare_envs(args, ensemble_models, alpha_u, beta_i):
     with open(ensemble_models.VAR_MAT_PATH, "rb") as file:
         maxvar_mat = pickle.load(file)
 
-
     kwargs = {
-        "ensemble_models":ensemble_models,
+        "ensemble_models": ensemble_models,
         # "dataset_val": dataset_val,
         # "need_transform": args.need_transform,
-        "env_task_class":env_task_class,
+        "env_task_class": env_task_class,
         # "user_model": user_model,
-        "use_exposure_intervention":args.use_exposure_intervention,
+        "use_exposure_intervention": args.use_exposure_intervention,
         "task_env_param": kwargs_um,
         "task_name": args.env,
         "version": args.version,
@@ -209,8 +211,8 @@ def prepare_envs(args, ensemble_models, alpha_u, beta_i):
         "beta_i": beta_i,
         "lambda_entropy": args.lambda_entropy,
         "lambda_variance": args.lambda_variance,
-        "predicted_mat":predicted_mat,
-        "maxvar_mat":maxvar_mat,
+        "predicted_mat": predicted_mat,
+        "maxvar_mat": maxvar_mat,
         "entropy_dict": entropy_dict,
         "entropy_window": args.entropy_window,
         "gamma_exposure": args.gamma_exposure,
@@ -228,17 +230,20 @@ def prepare_envs(args, ensemble_models, alpha_u, beta_i):
     test_envs_NX_x = DummyVectorEnv(
         [lambda: env_task_class(**kwargs_um) for _ in range(args.test_num)])
 
+    test_envs_dict = {"FB": test_envs, "NX_0": test_envs_NX_0, f"NX_{args.force_length}": test_envs_NX_x}
+
     random.seed(args.seed)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     train_envs.seed(args.seed)
     # test_envs.seed(args.seed)
 
-    return env, train_envs, test_envs
-
+    return env, train_envs, test_envs_dict
 
     # %% 4. Setup model
-def setup_policy_model(args, ensemble_models, env, train_envs, test_envs):
+
+
+def setup_policy_model(args, ensemble_models, env, train_envs, test_envs_dict):
     saved_embedding = ensemble_models.load_val_user_item_embedding(freeze_emb=args.freeze_emb)
 
     user_columns, action_columns, feedback_columns, have_user_embedding, have_action_embedding, have_feedback_embedding = \
@@ -294,35 +299,45 @@ def setup_policy_model(args, ensemble_models, env, train_envs, test_envs):
         preprocess_fn=state_tracker.build_state,
         exploration_noise=args.exploration_noise,
     )
-    test_collector = Collector(
-        policy, test_envs,
-        VectorReplayBuffer(args.buffer_size, len(test_envs)),
-        preprocess_fn=state_tracker.build_state,
-        exploration_noise=args.exploration_noise,
-    )
+    # test_collector = Collector(
+    #     policy, test_envs_dict,
+    #     VectorReplayBuffer(args.buffer_size, len(test_envs)),
+    #     preprocess_fn=state_tracker.build_state,
+    #     exploration_noise=args.exploration_noise,
+    # )
     policy.set_collector(train_collector)
 
-    test_collector_set = CollectorSet()
+    test_collector_set = CollectorSet(policy, test_envs_dict, args.buffer_size, args.test_num,
+                                      preprocess_fn=state_tracker.build_state,
+                                      exploration_noise=args.exploration_noise,
+                                      force_length=args.force_length)
 
     return policy, train_collector, test_collector_set, state_tracker, optim
 
-def learn_policy(args, policy, train_collector, test_collector, state_tracker, optim, MODEL_SAVE_PATH, logger_path):
+
+def learn_policy(args, env, policy, train_collector, test_collector_set, state_tracker, optim, MODEL_SAVE_PATH, logger_path):
     # log
-    log_path = os.path.join(args.logdir, args.env, 'a2c')
-    writer = SummaryWriter(log_path)
-    logger1 = TensorboardLogger(writer)
+    # log_path = os.path.join(args.logdir, args.env, 'a2c')
+    # writer = SummaryWriter(log_path)
+    # logger1 = TensorboardLogger(writer)
 
-    def save_best_fn(policy):
-        torch.save(policy.state_dict(), os.path.join(log_path, 'policy.pth'))
+    # def save_best_fn(policy):
+    #     torch.save(policy.state_dict(), os.path.join(log_path, 'policy.pth'))
 
-    policy.callbacks = [Callback_Coverage_Count(test_collector), LoggerCallback_Policy(logger_path)]
+    # env = test_collector_set.env
+    df_val, df_user_val, df_item_val, list_feat = get_val_data(args.env)
+    item_feat_domination = get_training_item_domination(args.env)
+    policy.callbacks = [
+        Callback_Coverage_Count(test_collector_set, df_item_val, args.need_transform, item_feat_domination,
+                                lbe_item=env.lbe_item if args.need_transform else None),
+        LoggerCallback_Policy(logger_path, args.force_length)]
     model_save_path = os.path.join(MODEL_SAVE_PATH, "{}_{}.pt".format(args.model_name, args.message))
 
     # trainer
     result = onpolicy_trainer(
         policy,
         train_collector,
-        test_collector,
+        test_collector_set,
         args.epoch,
         args.step_per_epoch,
         args.repeat_per_collect,
@@ -330,8 +345,8 @@ def learn_policy(args, policy, train_collector, test_collector, state_tracker, o
         args.batch_size,
         episode_per_collect=args.episode_per_collect,
         # stop_fn=stop_fn,
-        save_best_fn=save_best_fn,
-        logger=logger1,
+        # save_best_fn=save_best_fn,
+        # logger=logger1,
         save_model_fn=functools.partial(save_model_fn,
                                         model_save_path=model_save_path,
                                         state_tracker=state_tracker,
@@ -351,13 +366,14 @@ def main(args):
 
     # %% 2. Prepare user model and environment
     ensemble_models, alpha_u, beta_i = prepare_user_model_and_env(args)
-    env, train_envs, test_envs = prepare_envs(args, ensemble_models, alpha_u, beta_i)
+    env, train_envs, test_envs_dict = prepare_envs(args, ensemble_models, alpha_u, beta_i)
 
     # %% 3. Setup policy
-    policy, train_collector, test_collector, state_tracker, optim = setup_policy_model(args, ensemble_models, env, train_envs, test_envs)
+    policy, train_collector, test_collector_set, state_tracker, optim = setup_policy_model(args, ensemble_models, env,
+                                                                                           train_envs, test_envs_dict)
 
     # %% 4. Learn policy
-    learn_policy(args, policy, train_collector, test_collector, state_tracker, optim, MODEL_SAVE_PATH, logger_path)
+    learn_policy(args, env, policy, train_collector, test_collector_set, state_tracker, optim, MODEL_SAVE_PATH, logger_path)
 
 
 if __name__ == '__main__':

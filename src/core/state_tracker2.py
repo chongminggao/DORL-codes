@@ -135,7 +135,7 @@ class StateTrackerAvg2(StateTracker_Base):
             self.ffn_user = nn.Linear(compute_input_dim(self.user_columns), self.dim_model, device=self.device)
 
     def forward(self, buffer=None, indices=None, obs=None,
-                reset=None, is_obs=None):
+                reset=None, is_obs=None, return_recommended_ids=False):
 
         if reset:  # get user embedding
 
@@ -154,7 +154,9 @@ class StateTrackerAvg2(StateTracker_Base):
             else:
                 s0 = e_i
 
-            return s0
+
+            recommended_ids = None
+            return s0, recommended_ids
 
         else:
             index = indices
@@ -171,7 +173,10 @@ class StateTrackerAvg2(StateTracker_Base):
             Logic: Always use obs_next(t) and reward(t) to construct state(t+1), since obs_next(t) == obs(t+1).
             Note: The inital obs(0) == obs_next(-1) and reward(-1) are not recorded. So we have to initialize them.  
             '''
-            while not all(flag_has_init) and len(live_mat) < self.window_size:
+            while not all(flag_has_init):
+                if not return_recommended_ids and len(live_mat) >= self.window_size:
+                    break
+
                 if is_obs or not first_flag:
                     live_id_prev = buffer.prev(index) != index
                     index = buffer.prev(index)
@@ -191,9 +196,14 @@ class StateTrackerAvg2(StateTracker_Base):
                 live_id_prev[ind_init] = True
 
                 live_mat = np.vstack([live_mat, live_id_prev])
-
                 obs_all = np.concatenate([obs_all, obs_prev])
                 rew_all = np.concatenate([rew_all, rew_prev])
+
+            item_all_complete = np.expand_dims(obs_all[:, 1], -1)
+            if len(live_mat) > self.window_size:
+                live_mat = live_mat[:self.window_size, :]
+                obs_all = obs_all[:len(index) * self.window_size, :]
+                rew_all = rew_all[:len(index) * self.window_size]
 
             user_all = np.expand_dims(obs_all[:, 0], -1)
             item_all = np.expand_dims(obs_all[:, 1], -1)
@@ -218,7 +228,11 @@ class StateTrackerAvg2(StateTracker_Base):
             state_sum = state_masked.sum(dim=0)
             state_final = state_sum / torch.from_numpy(np.expand_dims(live_mat.sum(0), -1)).to(self.device)
 
-            return state_final
+            if return_recommended_ids:
+                recommended_ids = item_all_complete.reshape(-1, len(index)).T
+                return state_final, recommended_ids
+            else:
+                return state_final, None
 
 
 class StateTracker_Caser(StateTracker_Base):

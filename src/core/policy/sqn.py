@@ -69,7 +69,7 @@ class SQN(DiscreteBCQPolicy):
         act = self(batch, buffer, indices=indices, is_obs=False, input="obs_next").act
 
         obs = batch["obs_next"]
-        obs_emb = get_emb(self.state_tracker, buffer, indices=indices, obs=obs, is_obs=False)
+        obs_emb, recommended_ids = get_emb(self.state_tracker, buffer, indices=indices, obs=obs, is_obs=False)
         target_q, _ = self.model_old(obs_emb)
 
         # target_q, _ = self.model_old(batch.obs_next)
@@ -89,7 +89,7 @@ class SQN(DiscreteBCQPolicy):
         # assert input == "obs"
         is_obs = True if input == "obs" else False
         obs = batch[input]
-        obs_emb = get_emb(self.state_tracker, buffer, indices=indices, obs=obs, is_obs=is_obs)
+        obs_emb, recommended_ids = get_emb(self.state_tracker, buffer, indices=indices, obs=obs, is_obs=is_obs)
 
         q_value, state = self.model(obs_emb, state=state, info=batch.info)
         if not hasattr(self, "max_action_num"):

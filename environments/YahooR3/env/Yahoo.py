@@ -162,8 +162,8 @@ class YahooEnv(gym.Env):
         self.cum_reward += reward
         self.total_turn += 1
 
-        if done:
-            self.cur_user = self.__user_generator()
+        # if done:
+        #     self.cur_user = self.__user_generator()
 
         return self.state, reward, done, {'cum_reward': self.cum_reward}
 

@@ -7,16 +7,16 @@ import torch
 from tqdm import tqdm
 
 
-def get_feat_dominate_dict(env, dataset_val, all_acts, need_transform, item_feat_domination):
-    if item_feat_domination is None: # for yahoo
+def get_feat_dominate_dict(df_item_val, all_acts_origin, item_feat_domination):
+    if item_feat_domination is None:  # for yahoo
         return dict()
-    if need_transform:
-        all_acts_origin = env.lbe_item.inverse_transform(all_acts)
-    else:
-        all_acts_origin = all_acts
+    # if need_transform:
+    #     all_acts_origin = lbe_item.inverse_transform(all_acts)
+    # else:
+    #     all_acts_origin = all_acts
 
     feat_dominate_dict = {}
-    recommended_item_features = dataset_val.df_item_val.loc[all_acts_origin]
+    recommended_item_features = df_item_val.loc[all_acts_origin]
 
     if "feat" in item_feat_domination:  # for kuairec and kuairand
         sorted_items = item_feat_domination["feat"]
@@ -32,8 +32,10 @@ def get_feat_dominate_dict(env, dataset_val, all_acts, need_transform, item_feat
             feat_dominate_dict["ifeat_" + feat_name] = rate
 
     return feat_dominate_dict
-def cannot_overlap_evaluation(model, env, dataset_val, is_softmax, epsilon, is_ucb, k,
-                              need_transform, num_trajectory, item_feat_domination, force_length=0):
+
+
+def interactive_evaluation(model, env, dataset_val, is_softmax, epsilon, is_ucb, k, need_transform,
+                           num_trajectory, item_feat_domination, remove_recommended, force_length=0):
     cumulative_reward = 0
     total_click_loss = 0
     total_turns = 0
@@ -51,7 +53,8 @@ def cannot_overlap_evaluation(model, env, dataset_val, is_softmax, epsilon, is_u
         done = False
         while not done:
             recommended_id_transform, recommended_id_raw, reward_pred = model.recommend_k_item(
-                user, dataset_val, k=k, is_softmax=is_softmax, epsilon=epsilon, is_ucb=is_ucb, recommended_ids=acts)
+                user, dataset_val, k=k, is_softmax=is_softmax, epsilon=epsilon, is_ucb=is_ucb,
+                recommended_ids=acts if remove_recommended else [])
             # if need_transform:
             #     recommendation = env.lbe_item.transform([recommendation])[0]
             acts.append(recommended_id_transform)
@@ -73,8 +76,6 @@ def cannot_overlap_evaluation(model, env, dataset_val, is_softmax, epsilon, is_u
 
         all_acts.extend(acts)
 
-
-
     ctr = cumulative_reward / total_turns
     click_loss = total_click_loss / total_turns
 
@@ -93,82 +94,40 @@ def cannot_overlap_evaluation(model, env, dataset_val, is_softmax, epsilon, is_u
         "len_tra": total_turns / num_trajectory,
         "R_tra": cumulative_reward / num_trajectory}
 
-    feat_dominate_dict = get_feat_dominate_dict(env, dataset_val, all_acts, need_transform, item_feat_domination)
+    if need_transform:
+        all_acts_origin = env.lbe_item.inverse_transform(all_acts)
+    else:
+        all_acts_origin = all_acts
+    feat_dominate_dict = get_feat_dominate_dict(dataset_val.df_item_val, all_acts_origin, item_feat_domination)
     eval_result_RL.update(feat_dominate_dict)
 
-    eval_result_RL = {f"NX_{force_length}_" + k: v for k, v in eval_result_RL.items()}
+    if remove_recommended:
+        eval_result_RL = {f"NX_{force_length}_" + k: v for k, v in eval_result_RL.items()}
 
     return eval_result_RL
 
 
-
-
 def test_static_model_in_RL_env(model, env, dataset_val, is_softmax=True, epsilon=0, is_ucb=False, k=1,
-                                need_transform=False, num_trajectory=200, item_feat_domination=None, force_length=10):
-    cumulative_reward = 0
-    total_click_loss = 0
-    total_turns = 0
+                                need_transform=False, num_trajectory=100, item_feat_domination=None, force_length=10):
+    eval_result_RL = {}
 
-    all_acts = []
-    for i in tqdm(range(num_trajectory), desc=f"evaluate static method in {env.__str__()}"):
-        user = env.reset()
-        if need_transform:
-            user = env.lbe_user.inverse_transform(user)[0]
-
-        acts = []
-        done = False
-        while not done:
-            recommended_id_transform, recommended_id_raw, reward_pred = model.recommend_k_item(
-                user, dataset_val, k=k, is_softmax=is_softmax, epsilon=epsilon, is_ucb=is_ucb, recommended_ids=[])
-            # if need_transform:
-            #     recommendation = env.lbe_item.transform([recommendation])[0]
-            acts.append(recommended_id_transform)
-            state, reward, done, info = env.step(recommended_id_transform)
-            total_turns += 1
-            # metric 1
-            cumulative_reward += reward
-            # metric 2
-            click_loss = np.absolute(reward_pred - reward)
-            total_click_loss += click_loss
-
-            if done:
-                break
-        all_acts.extend(acts)
-
-    ctr = cumulative_reward / total_turns
-    click_loss = total_click_loss / total_turns
-
-    hit_item = len(set(all_acts))
-    num_items = len(dataset_val.df_item_val)
-    CV = hit_item / num_items
-    CV_turn = hit_item / len(all_acts)
-
-    # eval_result_RL = {"CTR": ctr, "click_loss": click_loss, "trajectory_len": total_turns / num_trajectory,
-    #                   "trajectory_reward": cumulative_reward / num_trajectory}
-    eval_result_RL = {"num_test": num_trajectory,
-                      "click_loss": click_loss,
-                      "CV": f"{CV:.3f}",
-                      "CV_turn": f"{CV_turn:.3f}",
-                      "ctr": ctr,
-                      "len_tra": total_turns / num_trajectory,
-                      "R_tra": cumulative_reward / num_trajectory}
-
-    feat_dominate_dict = get_feat_dominate_dict(env, dataset_val, all_acts, need_transform, item_feat_domination)
-    eval_result_RL.update(feat_dominate_dict)
+    eval_result_standard = interactive_evaluation(model, env, dataset_val, is_softmax, epsilon, is_ucb, k,
+                                                  need_transform, num_trajectory, item_feat_domination,
+                                                  remove_recommended=False, force_length=0)
 
     # No overlap and end with the env rule
-    eval_result_NX_0 = cannot_overlap_evaluation(model, env, dataset_val, is_softmax, epsilon, is_ucb, k,
-                              need_transform, num_trajectory, item_feat_domination, force_length=0)
+    eval_result_NX_0 = interactive_evaluation(model, env, dataset_val, is_softmax, epsilon, is_ucb, k,
+                                              need_transform, num_trajectory, item_feat_domination,
+                                              remove_recommended=True, force_length=0)
 
     # No overlap and end with explicit length
-    eval_result_NX_x = cannot_overlap_evaluation(model, env, dataset_val, is_softmax, epsilon, is_ucb, k,
-                              need_transform, num_trajectory, item_feat_domination, force_length=force_length)
+    eval_result_NX_x = interactive_evaluation(model, env, dataset_val, is_softmax, epsilon, is_ucb, k,
+                                              need_transform, num_trajectory, item_feat_domination,
+                                              remove_recommended=True, force_length=force_length)
 
+    eval_result_RL.update(eval_result_standard)
     eval_result_RL.update(eval_result_NX_0)
     eval_result_RL.update(eval_result_NX_x)
-
-    # if is_ucb:
-    #     eval_result_RL.update({"ucb_n": model.n_each})
 
     return eval_result_RL
 
@@ -221,9 +180,15 @@ def test_taobao(model, env, epsilon=0):
 
 
 class Callback_Coverage_Count():
-    def __init__(self, test_collector):
-        self.test_collector = test_collector
-        self.num_items = self.test_collector.env.get_env_attr("mat")[0].shape[1]
+    def __init__(self, test_collector_set, df_item_val, need_transform, item_feat_domination, lbe_item):
+        self.collector_dict = test_collector_set.collector_dict
+        self.num_items = test_collector_set.env.get_env_attr("mat")[0].shape[1]
+
+        # self.env = env
+        self.df_item_val = df_item_val
+        self.need_transform = need_transform
+        self.item_feat_domination = item_feat_domination
+        self.lbe_item = lbe_item
 
     def on_epoch_begin(self, epoch):
         pass
@@ -235,18 +200,84 @@ class Callback_Coverage_Count():
         pass
 
     def on_epoch_end(self, epoch, results=None, **kwargs):
-        buffer = self.test_collector.buffer
-        live_ind = np.ones([results["n/ep"]], dtype=bool)
-        inds = buffer.last_index
-        all_acts = []
-        while any(live_ind):
-            acts = buffer[inds].act
-            # print(acts)
-            all_acts.extend(acts)
 
-            live_ind = buffer.prev(inds) != inds
-            inds = buffer.prev(inds[live_ind])
+        def get_actions(buffer, indices):
 
-        hit_item = len(set(all_acts))
-        results["CV"] = hit_item / self.num_items
-        results["CV_turn"] = hit_item / len(all_acts)
+            num_tests = len(indices)
+            live_mat = np.zeros([0, num_tests], dtype=bool)
+            act_mat = np.zeros([0, num_tests], dtype=bool)
+
+            is_end = np.zeros([num_tests], dtype=bool)
+
+            # indices = results["idxs"]
+            while not all(is_end) and len(live_mat) < 100:
+                acts = buffer.act[indices]
+                done = buffer.done[indices]
+
+                act_mat = np.vstack([act_mat, acts])
+                live_mat = np.vstack([live_mat, ~is_end])
+
+                is_end[done] = True
+                indices = buffer.next(indices)
+
+            all_acts = act_mat[live_mat]
+
+            if self.need_transform:
+                all_acts_origin = self.lbe_item.inverse_transform(all_acts)
+            else:
+                all_acts_origin = all_acts
+            feat_dominate_dict = get_feat_dominate_dict(self.df_item_val, all_acts_origin, self.item_feat_domination)
+
+            return feat_dominate_dict
+
+        def get_count_results_for_one_collector(buffer):
+            live_ind = np.ones([results["n/ep"]], dtype=bool)
+            inds = buffer.last_index
+            all_acts = []
+            res = {}
+            while any(live_ind):
+                acts = buffer[inds].act
+                # print(acts)
+                all_acts.extend(acts)
+
+                live_ind = buffer.prev(inds) != inds
+                inds = buffer.prev(inds[live_ind])
+
+            hit_item = len(set(all_acts))
+            res["CV"] = hit_item / self.num_items
+            res["CV_turn"] = hit_item / len(all_acts)
+            return res
+
+        results_all = {}
+        for name, collector in self.collector_dict.items():
+            buffer = collector.buffer
+            res = get_count_results_for_one_collector(buffer)
+            res_k = {name + "_" + k: v for k, v in res.items()} if name != "FB" else res
+            results_all.update(res_k)
+
+            indices = results[name + "_idxs"] if name != "FB" else results["idxs"]
+            feat_dominate_dict = get_actions(buffer, indices)
+            feat_dominate_dict_k = {name + "_" + k: v for k, v in
+                                    feat_dominate_dict.items()} if name != "FB" else feat_dominate_dict
+            results_all.update(feat_dominate_dict_k)
+
+        results.update(results_all)
+
+        return results
+
+        # buffer = self.collector_dict.buffer
+        # live_ind = np.ones([results["n/ep"]], dtype=bool)
+        # inds = buffer.last_index
+        # all_acts = []
+        # while any(live_ind):
+        #     acts = buffer[inds].act
+        #     # print(acts)
+        #     all_acts.extend(acts)
+        #
+        #     live_ind = buffer.prev(inds) != inds
+        #     inds = buffer.prev(inds[live_ind])
+        #
+        # hit_item = len(set(all_acts))
+        # results["CV"] = hit_item / self.num_items
+        # results["CV_turn"] = hit_item / len(all_acts)
+        # return results

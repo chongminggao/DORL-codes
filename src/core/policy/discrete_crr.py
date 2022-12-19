@@ -73,7 +73,7 @@ class DiscreteCRRPolicy_withEmbedding(DiscreteCRRPolicy):
         **kwargs: Any,
     ) -> Batch:
 
-        obs_emb = get_emb(self.state_tracker, buffer, indices=indices, obs=batch.obs, is_obs=is_obs)
+        obs_emb, recommended_ids = get_emb(self.state_tracker, buffer, indices=indices, obs=batch.obs, is_obs=is_obs)
         logits, hidden = self.actor(obs_emb, state=state)
         if isinstance(logits, tuple):
             dist = self.dist_fn(*logits)
@@ -93,8 +93,8 @@ class DiscreteCRRPolicy_withEmbedding(DiscreteCRRPolicy):
             self.sync_weight()
         self.optim.zero_grad()
 
-        obs_emb = get_emb(self.state_tracker, self.buffer, batch.indices, is_obs=True)
-        obs_next_emb = get_emb(self.state_tracker, self.buffer, batch.indices, is_obs=False)
+        obs_emb, recommended_ids = get_emb(self.state_tracker, self.buffer, batch.indices, is_obs=True)
+        obs_next_emb, recommended_ids = get_emb(self.state_tracker, self.buffer, batch.indices, is_obs=False)
 
         q_t = self.critic(obs_emb)
         # q_t = self.critic(batch.obs)

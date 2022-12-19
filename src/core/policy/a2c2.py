@@ -5,7 +5,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from core.policy.utils import get_emb
+from core.policy.utils import get_emb, removed_recommended_id_from_embedding
 from tianshou.data import Batch, ReplayBuffer, to_torch_as
 from tianshou.policy import A2CPolicy
 from tianshou.utils.net.common import ActorCritic
@@ -52,18 +52,18 @@ class A2CPolicy_withEmbedding(A2CPolicy):
     """
 
     def __init__(
-        self,
-        actor: torch.nn.Module,
-        critic: torch.nn.Module,
-        optim: torch.optim.Optimizer,
-        dist_fn: Type[torch.distributions.Distribution],
-        state_tracker,
-        vf_coef: float = 0.5,
-        ent_coef: float = 0.01,
-        max_grad_norm: Optional[float] = None,
-        gae_lambda: float = 0.95,
-        max_batchsize: int = 256,
-        **kwargs: Any
+            self,
+            actor: torch.nn.Module,
+            critic: torch.nn.Module,
+            optim: torch.optim.Optimizer,
+            dist_fn: Type[torch.distributions.Distribution],
+            state_tracker,
+            vf_coef: float = 0.5,
+            ent_coef: float = 0.01,
+            max_grad_norm: Optional[float] = None,
+            gae_lambda: float = 0.95,
+            max_batchsize: int = 256,
+            **kwargs: Any
     ) -> None:
         super().__init__(actor, critic, optim, dist_fn, vf_coef=vf_coef, ent_coef=ent_coef, max_grad_norm=max_grad_norm,
                          gae_lambda=gae_lambda, max_batchsize=max_batchsize, **kwargs)
@@ -80,16 +80,16 @@ class A2CPolicy_withEmbedding(A2CPolicy):
     #     return batch
 
     def _compute_returns(
-        self, batch: Batch, buffer: ReplayBuffer, indices: np.ndarray
+            self, batch: Batch, buffer: ReplayBuffer, indices: np.ndarray
     ) -> Batch:
         v_s, v_s_ = [], []
         with torch.no_grad():
             batch.indices = indices
             for minibatch in batch.split(self._batch, shuffle=False, merge_last=True):
-                obs_emb = get_emb(self.state_tracker, buffer, minibatch.indices, is_obs=True)
+                obs_emb, recommended_ids = get_emb(self.state_tracker, buffer, minibatch.indices, is_obs=True)
                 # v_s.append(self.critic(minibatch.obs))
                 v_s.append(self.critic(obs_emb))
-                obs_next_emb = get_emb(self.state_tracker, buffer, minibatch.indices, is_obs=False)
+                obs_next_emb, recommended_ids = get_emb(self.state_tracker, buffer, minibatch.indices, is_obs=False)
                 # v_s_.append(self.critic(minibatch.obs_next))
                 v_s_.append(self.critic(obs_next_emb))
         batch.v_s = torch.cat(v_s, dim=0).flatten()  # old value
@@ -113,7 +113,7 @@ class A2CPolicy_withEmbedding(A2CPolicy):
         )
         if self._rew_norm:
             batch.returns = unnormalized_returns / \
-                np.sqrt(self.ret_rms.var + self._eps)
+                            np.sqrt(self.ret_rms.var + self._eps)
             self.ret_rms.update(unnormalized_returns)
         else:
             batch.returns = unnormalized_returns
@@ -121,15 +121,15 @@ class A2CPolicy_withEmbedding(A2CPolicy):
         batch.adv = to_torch_as(advantages, batch.v_s)
         return batch
 
-
     def forward(
-        self,
-        batch: Batch,
-        buffer: ReplayBuffer,
-        indices: np.ndarray = None,
-        is_obs = None,
-        state: Optional[Union[dict, Batch, np.ndarray]] = None,
-        **kwargs: Any,
+            self,
+            batch: Batch,
+            buffer: ReplayBuffer,
+            indices: np.ndarray = None,
+            is_obs=None,
+            return_recommended_ids=False,
+            state: Optional[Union[dict, Batch, np.ndarray]] = None,
+            **kwargs: Any,
     ) -> Batch:
         """Compute action over the given batch data.
 
@@ -146,24 +146,43 @@ class A2CPolicy_withEmbedding(A2CPolicy):
             more detailed explanation.
         """
 
-        obs_emb = get_emb(self.state_tracker, buffer, indices=indices, obs=batch.obs, is_obs=is_obs)
+        obs_emb, recommended_ids = get_emb(self.state_tracker, buffer, indices=indices, obs=batch.obs, is_obs=is_obs,
+                                           return_recommended_ids=return_recommended_ids)
+
         logits, hidden = self.actor(obs_emb, state=state)
 
-        if isinstance(logits, tuple):
-            dist = self.dist_fn(*logits)
+        logits_masked, indices_masked = removed_recommended_id_from_embedding(logits, recommended_ids)
+        if isinstance(logits_masked, tuple):
+            dist = self.dist_fn(*logits_masked)
         else:
-            dist = self.dist_fn(logits)
+            dist = self.dist_fn(logits_masked)
         if self._deterministic_eval and not self.training:
             if self.action_type == "discrete":
-                act = logits.argmax(-1)
+                act = logits_masked.argmax(-1)
             elif self.action_type == "continuous":
-                act = logits[0]
+                act = logits_masked[0]
         else:
             act = dist.sample()
-        return Batch(logits=logits, act=act, state=hidden, dist=dist)
+
+        act_unsqueezed = act.unsqueeze(-1)
+        act_ori = indices_masked.gather(dim=1, index=act_unsqueezed).squeeze(1)
+
+        # if isinstance(logits, tuple):
+        #     dist = self.dist_fn(*logits)
+        # else:
+        #     dist = self.dist_fn(logits)
+        # if self._deterministic_eval and not self.training:
+        #     if self.action_type == "discrete":
+        #         act = logits.argmax(-1)
+        #     elif self.action_type == "continuous":
+        #         act = logits[0]
+        # else:
+        #     act = dist.sample()
+
+        return Batch(logits=logits, act=act_ori, state=hidden, dist=dist)
 
     def learn(  # type: ignore
-        self, batch: Batch, batch_size: int, repeat: int, **kwargs: Any
+            self, batch: Batch, batch_size: int, repeat: int, **kwargs: Any
     ) -> Dict[str, List[float]]:
         losses, actor_losses, vf_losses, ent_losses = [], [], [], []
 
@@ -175,19 +194,18 @@ class A2CPolicy_withEmbedding(A2CPolicy):
                 # dist = self(minibatch).dist
                 dist = self.forward(minibatch, self.train_collector.buffer, indices=minibatch.indices, is_obs=True).dist
 
-
                 log_prob = dist.log_prob(minibatch.act)
                 log_prob = log_prob.reshape(len(minibatch.adv), -1).transpose(0, 1)
                 actor_loss = -(log_prob * minibatch.adv).mean()
                 # calculate loss for critic
 
-                obs_emb = get_emb(self.state_tracker, self.train_collector.buffer, minibatch.indices, is_obs=True)
+                obs_emb, recommended_ids = get_emb(self.state_tracker, self.train_collector.buffer, minibatch.indices, is_obs=True)
                 value = self.critic(obs_emb).flatten()
                 vf_loss = F.mse_loss(minibatch.returns, value)
                 # calculate regularization and overall loss
                 ent_loss = dist.entropy().mean()
                 loss = actor_loss + self._weight_vf * vf_loss \
-                    - self._weight_ent * ent_loss
+                       - self._weight_ent * ent_loss
                 optim_RL.zero_grad()
                 optim_state.zero_grad()
                 loss.backward()
@@ -203,7 +221,6 @@ class A2CPolicy_withEmbedding(A2CPolicy):
                 ent_losses.append(ent_loss.item())
                 losses.append(loss.item())
 
-
         return {
             "loss": losses,
             "loss/actor": actor_losses,
@@ -211,15 +228,14 @@ class A2CPolicy_withEmbedding(A2CPolicy):
             "loss/ent": ent_losses,
         }
 
-
     def set_eps(self, eps: float) -> None:
         """Set the eps for epsilon-greedy exploration."""
         self.eps = eps
 
     def exploration_noise(
-        self,
-        act: Union[np.ndarray, Batch],
-        batch: Batch,
+            self,
+            act: Union[np.ndarray, Batch],
+            batch: Batch,
     ) -> Union[np.ndarray, Batch]:
         if isinstance(act, np.ndarray) and not np.isclose(self.eps, 0.0):
             bsz = len(act)
