@@ -135,7 +135,7 @@ class StateTrackerAvg2(StateTracker_Base):
             self.ffn_user = nn.Linear(compute_input_dim(self.user_columns), self.dim_model, device=self.device)
 
     def forward(self, buffer=None, indices=None, obs=None,
-                reset=None, is_obs=None, return_recommended_ids=False):
+                reset=None, is_obs=None, remove_recommended_ids=False):
 
         if reset:  # get user embedding
 
@@ -174,7 +174,7 @@ class StateTrackerAvg2(StateTracker_Base):
             Note: The inital obs(0) == obs_next(-1) and reward(-1) are not recorded. So we have to initialize them.  
             '''
             while not all(flag_has_init):
-                if not return_recommended_ids and len(live_mat) >= self.window_size:
+                if not remove_recommended_ids and len(live_mat) >= self.window_size:
                     break
 
                 if is_obs or not first_flag:
@@ -228,7 +228,7 @@ class StateTrackerAvg2(StateTracker_Base):
             state_sum = state_masked.sum(dim=0)
             state_final = state_sum / torch.from_numpy(np.expand_dims(live_mat.sum(0), -1)).to(self.device)
 
-            if return_recommended_ids:
+            if remove_recommended_ids:
                 recommended_ids = item_all_complete.reshape(-1, len(index)).T
                 return state_final, recommended_ids
             else:

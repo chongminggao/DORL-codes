@@ -2,17 +2,17 @@ import numpy as np
 import torch
 
 
-def get_emb(state_tracker, buffer, indices=None, is_obs=None, obs=None, return_recommended_ids=False):
+def get_emb(state_tracker, buffer, indices=None, is_obs=None, obs=None, remove_recommended_ids=False):
     if len(buffer) == 0:
         obs_emb, recommended_ids = state_tracker.forward(obs=obs, reset=True,
-                                                         return_recommended_ids=return_recommended_ids)
+                                                         remove_recommended_ids=remove_recommended_ids)
     else:
         if indices is None:  # collector collects data
             indices = buffer.last_index[~buffer[buffer.last_index].done]
             is_obs = False
 
         obs_emb, recommended_ids = state_tracker.forward(buffer=buffer, indices=indices, reset=False, is_obs=is_obs,
-                                                         return_recommended_ids=return_recommended_ids)
+                                                         remove_recommended_ids=remove_recommended_ids)
 
     return obs_emb, recommended_ids
 

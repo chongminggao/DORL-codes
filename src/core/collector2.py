@@ -25,7 +25,7 @@ class Collector(object):
             buffer: Optional[ReplayBuffer] = None,
             preprocess_fn: Optional[Callable[..., Batch]] = None,
             exploration_noise: bool = False,
-            return_recommended_ids=False,
+            remove_recommended_ids=False,
             force_length=0,
     ) -> None:
         super().__init__()
@@ -42,7 +42,7 @@ class Collector(object):
         # avoid creating attribute outside __init__
         self.reset()
 
-        self.return_recommended_ids = return_recommended_ids
+        self.remove_recommended_ids = remove_recommended_ids
         self.force_length = force_length
 
     """Revised tianshou.data.collector class.
@@ -231,9 +231,9 @@ class Collector(object):
                 if no_grad:
                     with torch.no_grad():  # faster than retain_grad version
                         # self.data.obs will be used by agent to get result
-                        result = self.policy(self.data, self.buffer, state=last_state, return_recommended_ids=self.return_recommended_ids)
+                        result = self.policy(self.data, self.buffer, state=last_state, remove_recommended_ids=self.remove_recommended_ids)
                 else:
-                    result = self.policy(self.data, self.buffer, state=last_state, return_recommended_ids=self.return_recommended_ids)
+                    result = self.policy(self.data, self.buffer, state=last_state, remove_recommended_ids=self.remove_recommended_ids)
                 # update state / act / policy into self.data
                 policy = result.get("policy", Batch())  # Todo: 这里在pg下是空的！
                 assert isinstance(policy, Batch)

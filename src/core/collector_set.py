@@ -25,7 +25,7 @@ class CollectorSet(object):
                  force_length=10):
         self.collector_dict = {}
 
-        return_recommended_ids_dict = {"FB": False, "NX_0": True, f"NX_{force_length}": True}
+        remove_recommended_ids_dict = {"FB": False, "NX_0": True, f"NX_{force_length}": True}
         force_length_dict = {"FB": 0, "NX_0": 0, f"NX_{force_length}": force_length}
 
         for name, envs in envs_dict.items():
@@ -34,7 +34,7 @@ class CollectorSet(object):
                 VectorReplayBuffer(buffer_size, env_num),
                 preprocess_fn=preprocess_fn,
                 exploration_noise=exploration_noise if name == "FB" else False,
-                return_recommended_ids=return_recommended_ids_dict[name],
+                remove_recommended_ids=remove_recommended_ids_dict[name],
                 force_length=force_length_dict[name]
             )
             self.collector_dict[name] = collector

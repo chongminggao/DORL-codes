@@ -131,8 +131,8 @@ class UserModel_Variance(nn.Module):
             eval_result_RL = self.RL_eval_fun(self.eval())
             # for name, result in eval_result_RL.items():
             #     epoch_logs["RL_val_" + name] = result
-            eval_result.update(eval_result_RL)
-        callbacks.on_epoch_end(-1, eval_result)
+            epoch_logs.update(eval_result_RL)
+        callbacks.on_epoch_end(-1, epoch_logs)
 
         # Train
         print("Train on {0} samples, validate on {1} samples, {2} steps per epoch".format(
@@ -202,8 +202,6 @@ class UserModel_Variance(nn.Module):
                 for name, result in eval_result.items():
                     # epoch_logs["val_" + name] = result
                     epoch_logs[name] = result
-
-
             if self.RL_eval_fun:
                 eval_result_RL = self.RL_eval_fun(self.eval())
                 for name, result in eval_result_RL.items():

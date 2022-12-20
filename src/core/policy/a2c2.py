@@ -127,7 +127,7 @@ class A2CPolicy_withEmbedding(A2CPolicy):
         buffer: ReplayBuffer,
         indices: np.ndarray = None,
         is_obs=None,
-        return_recommended_ids=False,
+        remove_recommended_ids=False,
         state: Optional[Union[dict, Batch, np.ndarray]] = None,
         **kwargs: Any,
     ) -> Batch:
@@ -147,7 +147,7 @@ class A2CPolicy_withEmbedding(A2CPolicy):
         """
 
         obs_emb, recommended_ids = get_emb(self.state_tracker, buffer, indices=indices, obs=batch.obs, is_obs=is_obs,
-                                           return_recommended_ids=return_recommended_ids)
+                                           remove_recommended_ids=remove_recommended_ids)
 
         logits, hidden = self.actor(obs_emb, state=state)
 
