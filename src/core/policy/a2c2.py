@@ -122,14 +122,14 @@ class A2CPolicy_withEmbedding(A2CPolicy):
         return batch
 
     def forward(
-            self,
-            batch: Batch,
-            buffer: ReplayBuffer,
-            indices: np.ndarray = None,
-            is_obs=None,
-            return_recommended_ids=False,
-            state: Optional[Union[dict, Batch, np.ndarray]] = None,
-            **kwargs: Any,
+        self,
+        batch: Batch,
+        buffer: ReplayBuffer,
+        indices: np.ndarray = None,
+        is_obs=None,
+        return_recommended_ids=False,
+        state: Optional[Union[dict, Batch, np.ndarray]] = None,
+        **kwargs: Any,
     ) -> Batch:
         """Compute action over the given batch data.
 
@@ -152,6 +152,7 @@ class A2CPolicy_withEmbedding(A2CPolicy):
         logits, hidden = self.actor(obs_emb, state=state)
 
         logits_masked, indices_masked = removed_recommended_id_from_embedding(logits, recommended_ids)
+
         if isinstance(logits_masked, tuple):
             dist = self.dist_fn(*logits_masked)
         else:

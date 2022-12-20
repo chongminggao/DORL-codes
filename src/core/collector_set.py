@@ -1,7 +1,7 @@
-# -*- exploration_noise=Noneime    : 2022/12/19 00:02
+
 # @Author  : Chongming GAO
 # @FileName: collector_set.py
-from functools import partial
+
 from typing import Callable, Optional, Dict, Any, Union, List
 from tianshou.data import Batch, VectorReplayBuffer, ReplayBuffer
 

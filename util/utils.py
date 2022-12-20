@@ -11,6 +11,7 @@ import os
 from tensorflow.python.keras.callbacks import Callback
 
 from util.upload import my_upload
+import re
 
 
 def create_dir(create_dirs):
@@ -98,8 +99,6 @@ class LoggerCallback_Policy():
         pass
 
     def on_epoch_end(self, epoch, results=None, **kwargs):
-
-        import re
         def find_item_domination_results(prefix):
             pattern = re.compile(prefix + "ifeat_")
             res_domination = {}

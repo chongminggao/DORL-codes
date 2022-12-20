@@ -68,7 +68,7 @@ def get_args_all():
 
     parser.add_argument('--is_exploration_noise', dest='exploration_noise', action='store_true')
     parser.add_argument('--no_exploration_noise', dest='exploration_noise', action='store_false')
-    parser.set_defaults(exploration_noise=True)
+    parser.set_defaults(exploration_noise=False)
 
     # State_tracker
     parser.add_argument("--embedding_dim", type=int, default=64)

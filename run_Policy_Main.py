@@ -1,19 +1,15 @@
 import argparse
-import datetime
 import functools
-import json
 import os
 import pickle
 import pprint
 import random
-import time
 import traceback
 
 import numpy as np
 import pandas as pd
 # import pytest
 import torch
-from torch.utils.tensorboard import SummaryWriter
 
 import sys
 sys.path.extend(["./src", "./src/DeepCTR-Torch", "./src/tianshou"])
@@ -22,10 +18,10 @@ from policy_utils import prepare_dir_log
 
 # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
-from core.worldModel.collector_set import CollectorSet
+from core.collector_set import CollectorSet
 from core.evaluation.evaluator import Callback_Coverage_Count
 from core.user_model_ensemble import EnsembleModel
-from core.configs import get_features, get_true_env, get_common_args, get_val_data, get_training_item_domination
+from core.configs import get_true_env, get_common_args, get_val_data, get_training_item_domination
 from core.collector2 import Collector
 from core.inputs import get_dataset_columns
 from core.policy.a2c2 import A2CPolicy_withEmbedding
@@ -36,12 +32,11 @@ from core.worldModel.simulated_env import SimulatedEnv
 from tianshou.data import VectorReplayBuffer
 from tianshou.env import DummyVectorEnv
 
-from tianshou.utils import TensorboardLogger
 from tianshou.utils.net.common import ActorCritic, Net
 from tianshou.utils.net.discrete import Actor, Critic
 
 # from util.upload import my_upload
-from util.utils import create_dir, LoggerCallback_Policy, save_model_fn
+from util.utils import LoggerCallback_Policy, save_model_fn
 import logzero
 from logzero import logger
 
@@ -80,7 +75,7 @@ def get_args_all():
 
     parser.add_argument('--is_exploration_noise', dest='exploration_noise', action='store_true')
     parser.add_argument('--no_exploration_noise', dest='exploration_noise', action='store_false')
-    parser.set_defaults(exploration_noise=True)
+    parser.set_defaults(exploration_noise=False)
     parser.add_argument('--eps', default=0.1, type=float)
 
     parser.add_argument('--is_all_item_ranking', dest='is_all_item_ranking', action='store_true')

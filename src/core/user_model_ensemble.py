@@ -55,6 +55,7 @@ class EnsembleModel():
         for model in self.user_models:
             model.train(*args, **kwargs)
         return self.user_models
+
     def eval(self, *args, **kwargs):
         for model in self.user_models:
             model.eval(*args, **kwargs)
@@ -134,7 +135,6 @@ class EnsembleModel():
 
         return mean_mat_list, var_mat_list
 
-
     def get_prediction_and_maxvar(self, mean_mat_list, var_mat_list, deterministic):
         if deterministic:
             prediction = np.stack(mean_mat_list).mean(0)
@@ -151,7 +151,7 @@ class EnsembleModel():
                 for j in range(len(prediction[0])):
                     # mean_sampled[i][j] = mean_tensor[ind_mat[i][j],i,j]
                     # var_sampled[i][j] = var_tensor[ind_mat[i][j], i, j]
-                    prediction[i][j] = mean_tensor[ind_mat[i][j],i,j] + \
+                    prediction[i][j] = mean_tensor[ind_mat[i][j], i, j] + \
                                        np.sqrt(var_tensor[ind_mat[i][j], i, j]) * np.random.normal()
 
         var_max = np.stack(var_mat_list).max(0)
@@ -177,8 +177,6 @@ class EnsembleModel():
             return entropy
 
         if 0 in args.entropy_window:
-
-
             df_train = df_train.sort_values("user_id")
             interaction_list = df_train[["user_id", "item_id"]].groupby("user_id").agg(list)
             entropy_user = interaction_list["item_id"].map(partial(get_entropy))
@@ -219,50 +217,23 @@ class EnsembleModel():
             for k, v in tqdm(map_hist_count.items(), total=len(map_hist_count), desc="compute entropy..."):
                 map_entropy[k] = get_entropy(v, need_count=False)
 
-
             a = 1
-            for k,v in tqdm(map_entropy.items(), total=len(map_entropy)):
+            for k, v in tqdm(map_entropy.items(), total=len(map_entropy)):
                 a = map_entropy[k]
 
             savepath = os.path.join(self.Entropy_PATH, "map_entropy.pickle")
             pickle.dump(map_entropy, open(savepath, 'wb'))
 
-
-
             print(map_hist_count)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         return entropy_user
-
-
-
-
-
-
-
-
-
 
     def save_all_models(self, dataset_val, x_columns, y_columns, df_user, df_item, df_user_val, df_item_val,
                         user_features, item_features, deterministic):
 
         # (1) Compute and save Mat
         mean_mat_list, var_mat_list = self.compute_mean_var(dataset_val, df_user, df_item, user_features, item_features,
-                                      x_columns, y_columns)
+                                                            x_columns, y_columns)
 
         prediction, var_max = self.get_prediction_and_maxvar(mean_mat_list, var_mat_list, deterministic)
 
@@ -339,6 +310,7 @@ def get_detailed_path(Path_old, num):
     Path_new = ".".join(path_list_new)
     return Path_new
 
+
 def construct_complete_val_x(dataset_val, df_user, df_item, user_features, item_features):
     user_ids = np.unique(dataset_val.x_numpy[:, dataset_val.user_col].astype(int))
     item_ids = np.unique(dataset_val.x_numpy[:, dataset_val.item_col].astype(int))
@@ -351,6 +323,7 @@ def construct_complete_val_x(dataset_val, df_user, df_item, user_features, item_
 
     df_x_complete = pd.concat([df_user_complete, df_item_complete], axis=1)
     return df_x_complete
+
 
 def get_one_predicted_res(model, df_x_complete, test_loader, steps_per_epoch):
     mean_all = []
@@ -381,7 +354,8 @@ def get_one_predicted_res(model, df_x_complete, test_loader, steps_per_epoch):
         lbe_item.fit(df_x_complete["item_id"])
 
         mean_mat = csr_matrix(
-            (mean_all_cat, (lbe_user.transform(df_x_complete["user_id"]), lbe_item.transform(df_x_complete["item_id"]))),
+            (
+            mean_all_cat, (lbe_user.transform(df_x_complete["user_id"]), lbe_item.transform(df_x_complete["item_id"]))),
             shape=(num_user, num_item)).toarray()
 
         var_mat = csr_matrix(

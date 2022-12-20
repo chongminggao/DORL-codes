@@ -267,11 +267,11 @@ class Collector(object):
             # obs_next, rew, done, info = self.env.step(action_k, ready_env_ids) # type: ignore
 
             # self.env.get_env_attr("cur_user")
-            cnt_loop += 1
 
             obs_next, rew, done, info = self.env.step(
                 action_remap, ready_env_ids)
 
+            cnt_loop += 1
             if self.force_length > 0:
                 if cnt_loop >= self.force_length:
                     done = np.ones_like(done, dtype=bool)

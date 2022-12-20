@@ -210,7 +210,7 @@ class Callback_Coverage_Count():
             is_end = np.zeros([num_tests], dtype=bool)
 
             # indices = results["idxs"]
-            while not all(is_end) and len(live_mat) < 100:
+            while not all(is_end):
                 acts = buffer.act[indices]
                 done = buffer.done[indices]
 
