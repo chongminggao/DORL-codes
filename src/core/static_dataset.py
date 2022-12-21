@@ -22,9 +22,11 @@ class StaticDataset(Dataset):
 
     def set_df_user_val(self, df_user_val):
         self.df_user_val = df_user_val
+        self.df_user_val.sort_index(inplace=True)
 
     def set_df_item_val(self, df_item_val):  # for kuaishou data
         self.df_item_val = df_item_val
+        self.df_item_val.sort_index(inplace=True)
 
     def set_ground_truth(self, ground_truth):  # for kuaishou data
         self.ground_truth = ground_truth
