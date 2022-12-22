@@ -7,7 +7,7 @@ import torch
 from tqdm import tqdm
 
 
-def get_feat_dominate_dict(df_item_val, all_acts_origin, item_feat_domination):
+def get_feat_dominate_dict(df_item_val, all_acts_origin, item_feat_domination, topk=10):
     if item_feat_domination is None:  # for yahoo
         return dict()
     # if need_transform:
@@ -27,6 +27,8 @@ def get_feat_dominate_dict(df_item_val, all_acts_origin, item_feat_domination):
         feat_dominate_dict["ifeat_feat"] = rate
     else:  # for coat
         for feat_name, sorted_items in item_feat_domination.items():
+            values = np.array([pair[1] for pair in sorted_items])
+            assert sum(values) == 1
             dominated_value = sorted_items[0][0]
             rate = (recommended_item_features[feat_name] == dominated_value).sum() / len(recommended_item_features)
             feat_dominate_dict["ifeat_" + feat_name] = rate
@@ -88,8 +90,8 @@ def interactive_evaluation(model, env, dataset_val, is_softmax, epsilon, is_ucb,
     #                   "trajectory_reward": cumulative_reward / num_trajectory}
     eval_result_RL = {
         "click_loss": click_loss,
-        "CV": f"{CV:.3f}",
-        "CV_turn": f"{CV_turn:.3f}",
+        "CV": f"{CV:.5f}",
+        "CV_turn": f"{CV_turn:.5f}",
         "ctr": ctr,
         "len_tra": total_turns / num_trajectory,
         "R_tra": cumulative_reward / num_trajectory}
