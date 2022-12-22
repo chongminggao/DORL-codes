@@ -8,7 +8,7 @@ import logzero
 import torch
 from logzero import logger
 import os
-from tensorflow.python.keras.callbacks import Callback
+# from tensorflow.python.keras.callbacks import Callback
 
 from util.upload import my_upload
 import re
@@ -29,12 +29,21 @@ def create_dir(create_dirs):
 
 # my nas docker path
 REMOTE_ROOT = "/root/Rethink_RL4RS"
-class LoggerCallback_Update(Callback):
+class LoggerCallback_Update():
     def __init__(self, logger_path):
         super().__init__()
         self.LOCAL_PATH = logger_path
         self.REMOTE_ROOT = REMOTE_ROOT
         self.REMOTE_PATH = os.path.join(REMOTE_ROOT, os.path.dirname(logger_path))
+
+    def on_epoch_begin(self, epoch, **kwargs):
+        pass
+
+    def on_train_begin(self, **kwargs):
+        pass
+
+    def on_train_end(self, **kwargs):
+        pass
 
     def on_epoch_end(self, epoch, logs=None):
         # 1. write logger
@@ -49,14 +58,7 @@ class LoggerCallback_Update(Callback):
         except Exception:
             print("Failed: Uploading file [{}] to remote path [{}]".format(self.LOCAL_PATH, self.REMOTE_PATH))
 
-class Callback_saveEmbedding(Callback):
-    def __init__(self, save_path):
-        super().__init__()
-        self.save_path = save_path
 
-    def on_train_end(self, model):
-        torch.save(model.state_dict(), self.save_path)
-        logger.info("Model embedding has been saved at {}".format(self.save_path))
 
 
 class LoggerCallback_RL(LoggerCallback_Update):

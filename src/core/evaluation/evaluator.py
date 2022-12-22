@@ -57,8 +57,8 @@ def interactive_evaluation(model, env, dataset_val, is_softmax, epsilon, is_ucb,
             recommended_id_transform, recommended_id_raw, reward_pred = model.recommend_k_item(
                 user, dataset_val, k=k, is_softmax=is_softmax, epsilon=epsilon, is_ucb=is_ucb,
                 recommended_ids=acts if remove_recommended else [])
-            # if need_transform:
-            #     recommendation = env.lbe_item.transform([recommendation])[0]
+            if need_transform:
+                assert recommended_id_transform == env.lbe_item.transform([recommended_id_raw])[0]
             acts.append(recommended_id_transform)
             state, reward, done, info = env.step(recommended_id_transform)
             total_turns += 1
@@ -71,9 +71,11 @@ def interactive_evaluation(model, env, dataset_val, is_softmax, epsilon, is_ucb,
             if done:
                 if force_length > 0:  # do not end here
                     env.cur_user = user_ori
+                    done = False
                 else:
                     break
             if force_length > 0 and len(acts) >= force_length:
+                done = True
                 break
 
         all_acts.extend(acts)

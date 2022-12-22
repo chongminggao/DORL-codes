@@ -18,10 +18,10 @@ from core.inputs import SparseFeatP, create_embedding_matrix
 from core.layers import Linear
 
 
-try:
-    from tensorflow.python.keras.callbacks import CallbackList
-except ImportError:
-    from tensorflow.python.keras._impl.keras.callbacks import CallbackList
+# try:
+#     from tensorflow.python.keras.callbacks import CallbackList
+# except ImportError:
+#     from tensorflow.python.keras._impl.keras.callbacks import CallbackList
 
 from deepctr_torch.inputs import build_input_features, DenseFeat, VarLenSparseFeat
 from deepctr_torch.callbacks import History
@@ -111,14 +111,16 @@ class UserModel_Variance(nn.Module):
         steps_per_epoch = (sample_num - 1) // batch_size + 1
 
         # configure callbacks
-        callbacks = (callbacks or []) + [self.history]  # add history callback
-        callbacks = CallbackList(callbacks)
-        callbacks.set_model(self)
-        callbacks.on_train_begin()
+        # callbacks = (callbacks or []) + [self.history]  # add history callback
+        # callbacks = CallbackList(callbacks)
         # callbacks.set_model(self)
-        if not hasattr(callbacks, 'model'):  # for tf1.4
-            callbacks.__setattr__('model', self)
-        callbacks.model.stop_training = False
+        # callbacks.on_train_begin()
+        # # callbacks.set_model(self)
+        # if not hasattr(callbacks, 'model'):  # for tf1.4
+        #     callbacks.__setattr__('model', self)
+        # callbacks.model.stop_training = False
+        for callback in callbacks:
+            callback.on_train_begin()
 
 
         epoch_logs = {}
@@ -132,14 +134,18 @@ class UserModel_Variance(nn.Module):
             # for name, result in eval_result_RL.items():
             #     epoch_logs["RL_val_" + name] = result
             epoch_logs.update(eval_result_RL)
-        callbacks.on_epoch_end(-1, epoch_logs)
+        # callbacks.on_epoch_end(-1, epoch_logs)
+        for callback in callbacks:
+            callback.on_epoch_end(-1, epoch_logs)
 
         # Train
         print("Train on {0} samples, validate on {1} samples, {2} steps per epoch".format(
             len(dataset_train), 0 if dataset_val is None else len(dataset_val), steps_per_epoch))
         for epoch in range(initial_epoch, epochs):
             print("Training the {}/{} epoch".format(epoch, epochs))
-            callbacks.on_epoch_begin(epoch)
+            # callbacks.on_epoch_begin(epoch)
+            for callback in callbacks:
+                callback.on_epoch_begin(epoch)
             epoch_logs = {}
             start_time = time.time()
             loss_epoch = 0
@@ -228,11 +234,15 @@ class UserModel_Variance(nn.Module):
                                     ": {0: .4f}".format(epoch_logs[name])
 
                 print(eval_str)
-            callbacks.on_epoch_end(epoch, epoch_logs)
-            if self.stop_training:
-                break
+            # callbacks.on_epoch_end(epoch, epoch_logs)
+            for callback in callbacks:
+                callback.on_epoch_end(epoch, epoch_logs)
+            # if self.stop_training:
+            #     break
 
-        callbacks.on_train_end()
+        # callbacks.on_train_end()
+        for callback in callbacks:
+            callback.on_train_end()
 
         return self.history
 

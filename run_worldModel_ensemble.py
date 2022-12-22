@@ -506,7 +506,7 @@ def main(args):
 
     history_list = ensemble_models.fit_data(dataset_train, dataset_val,
                                             batch_size=args.batch_size, epochs=args.epoch, shuffle=True,
-                                            callbacks=[[LoggerCallback_Update(logger_path)]])
+                                            callbacks=[LoggerCallback_Update(logger_path)])
 
     # %% 6. Save model
     ensemble_models.get_save_entropy_mat(args)
