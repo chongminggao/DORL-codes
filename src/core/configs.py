@@ -147,6 +147,8 @@ def get_common_args(args):
         parser.add_argument('--max_turn', default=30, type=int)
         parser.add_argument('--window_size', default=3, type=int)
 
+    parser.add_argument('--force_length', type=int, default=10)
+    parser.add_argument("--top_rate", type=float, default=0.6)
 
     args_new = parser.parse_known_args()[0]
     args.__dict__.update(args_new.__dict__)

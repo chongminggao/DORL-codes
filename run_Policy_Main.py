@@ -86,7 +86,6 @@ def get_args_all():
     parser.add_argument('--no_freeze_emb', dest='freeze_emb', action='store_false')
     parser.set_defaults(freeze_emb=False)
 
-    parser.add_argument('--force_length', type=int, default=10)
 
     # Env
     parser.add_argument("--version", type=str, default="v1")
@@ -324,7 +323,7 @@ def learn_policy(args, env, policy, train_collector, test_collector_set, state_t
     item_feat_domination = get_training_item_domination(args.env)
     policy.callbacks = [
         Callback_Coverage_Count(test_collector_set, df_item_val, args.need_transform, item_feat_domination,
-                                lbe_item=env.lbe_item if args.need_transform else None),
+                                lbe_item=env.lbe_item if args.need_transform else None, top_rate=args.top_rate),
         LoggerCallback_Policy(logger_path, args.force_length)]
     model_save_path = os.path.join(MODEL_SAVE_PATH, "{}_{}.pt".format(args.model_name, args.message))
 
