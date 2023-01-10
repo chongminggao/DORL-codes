@@ -2,21 +2,15 @@
 # @Time    : 2021/7/26 9:49 上午
 # @Author  : Chongming GAO
 # @FileName: state_tracker.py
-import math
 
 import numpy as np
 import torch
-
-from core.inputs import SparseFeatP, input_from_feature_columns, create_embedding_matrix
-from deepctr_torch.inputs import varlen_embedding_lookup, get_varlen_pooling_list, \
-    VarLenSparseFeat, DenseFeat, combined_dnn_input
-
-from torch import nn, Tensor
-from torch.nn import TransformerEncoderLayer, TransformerEncoder
-
-from core.layers import PositionalEncoding
-from core.user_model import build_input_features, compute_input_dim
 import torch.nn.functional as F
+from torch import nn, Tensor
+
+from core.inputs import input_from_feature_columns
+from core.user_model import build_input_features, compute_input_dim
+from deepctr_torch.inputs import combined_dnn_input
 
 FLOAT = torch.FloatTensor
 
@@ -135,7 +129,7 @@ class StateTrackerAvg2(StateTracker_Base):
             self.ffn_user = nn.Linear(compute_input_dim(self.user_columns), self.dim_model, device=self.device)
 
     def forward(self, buffer=None, indices=None, obs=None,
-                reset=None, is_obs=None, remove_recommended_ids=False):
+                reset=None, is_obs=None):
 
         if reset:  # get user embedding
 
@@ -714,6 +708,6 @@ class StateTracker_SASRec(StateTracker_Base):
         ff_out_3 = self.ln_3(ff_out_masked)
 
         # state_final = ff_out_3[:, 0, :]
-        state_final = extract_axis_1(ff_out_3, len_states - 1).squeeze()
+        state_final = extract_axis_1(ff_out_3, len_states - 1).squeeze(1)
 
         return state_final

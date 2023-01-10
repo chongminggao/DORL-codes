@@ -22,7 +22,6 @@ from core.inputs import get_dataset_columns
 
 from core.state_tracker2 import StateTrackerAvg2
 
-
 from tianshou.utils.net.common import ActorCritic, Net
 from tianshou.utils.net.discrete import Actor
 
@@ -35,6 +34,7 @@ try:
     import envpool
 except ImportError:
     envpool = None
+
 
 def get_args_all():
     parser = argparse.ArgumentParser()

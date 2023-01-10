@@ -87,8 +87,7 @@ class DiscreteBCQPolicy_withEmbedding(DiscreteBCQPolicy):
         # assert input == "obs"
         is_obs = True if input == "obs" else False
         obs = batch[input]
-        obs_emb = get_emb(self.state_tracker, buffer, indices=indices, obs=obs, is_obs=is_obs,
-                          remove_recommended_ids=remove_recommended_ids)
+        obs_emb = get_emb(self.state_tracker, buffer, indices=indices, obs=obs, is_obs=is_obs)
         recommended_ids = get_recommended_ids(buffer) if remove_recommended_ids else None
 
         # if recommended_ids is None:

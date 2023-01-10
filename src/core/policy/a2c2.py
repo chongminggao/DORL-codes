@@ -146,8 +146,7 @@ class A2CPolicy_withEmbedding(A2CPolicy):
             more detailed explanation.
         """
 
-        obs_emb = get_emb(self.state_tracker, buffer, indices=indices, obs=batch.obs, is_obs=is_obs,
-                                           remove_recommended_ids=remove_recommended_ids)
+        obs_emb = get_emb(self.state_tracker, buffer, indices=indices, obs=batch.obs, is_obs=is_obs)
         recommended_ids = get_recommended_ids(buffer) if remove_recommended_ids else None
 
         logits, hidden = self.actor(obs_emb, state=state)

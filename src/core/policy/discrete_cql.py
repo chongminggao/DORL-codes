@@ -67,8 +67,7 @@ class DiscreteCQLPolicy_withEmbedding(DiscreteCQLPolicy):
     ) -> Batch:
         model = getattr(self, model)
 
-        obs_emb = get_emb(self.state_tracker, buffer, indices=indices, obs=batch.obs, is_obs=is_obs,
-                          remove_recommended_ids=remove_recommended_ids)
+        obs_emb = get_emb(self.state_tracker, buffer, indices=indices, obs=batch.obs, is_obs=is_obs)
         recommended_ids = get_recommended_ids(buffer) if remove_recommended_ids else None
 
         logits, hidden = model(obs_emb, state=state, info=batch.info)
