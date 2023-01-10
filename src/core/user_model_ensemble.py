@@ -158,8 +158,8 @@ class EnsembleModel():
 
         return prediction, var_max
 
-    def get_save_entropy_mat(self, args):
-        df_train, df_user, df_item, list_feat = get_training_data(args.env)
+    def get_save_entropy_mat(self, envname, entropy_window):
+        df_train, df_user, df_item, list_feat = get_training_data(envname)
 
         num_item = df_train["item_id"].nunique()
 
@@ -176,7 +176,9 @@ class EnsembleModel():
             entropy = - np.sum(log_prob * prob) / np.log2(len(cnt_dict) + 1)
             return entropy
 
-        if 0 in args.entropy_window:
+        entropy_user, map_entropy = None, None
+
+        if 0 in entropy_window:
             df_train = df_train.sort_values("user_id")
             interaction_list = df_train[["user_id", "item_id"]].groupby("user_id").agg(list)
             entropy_user = interaction_list["item_id"].map(partial(get_entropy))
@@ -184,7 +186,7 @@ class EnsembleModel():
             savepath = os.path.join(self.Entropy_PATH, "user_entropy.csv")
             entropy_user.to_csv(savepath, index=True)
 
-        if len(set(args.entropy_window) - set([0])):
+        if len(set(entropy_window) - set([0])):
 
             df_uit = df_train[["user_id", "item_id", "timestamp"]].sort_values(["user_id", "timestamp"])
 
@@ -209,7 +211,7 @@ class EnsembleModel():
                     lastuser = user
                     hist_tra = []
 
-                for require_len in set(args.entropy_window) - set([0]):
+                for require_len in set(entropy_window) - set([0]):
                     update_map(map_hist_count, hist_tra, item, require_len)
                 hist_tra.append(item)
 
@@ -217,16 +219,12 @@ class EnsembleModel():
             for k, v in tqdm(map_hist_count.items(), total=len(map_hist_count), desc="compute entropy..."):
                 map_entropy[k] = get_entropy(v, need_count=False)
 
-            a = 1
-            for k, v in tqdm(map_entropy.items(), total=len(map_entropy)):
-                a = map_entropy[k]
-
             savepath = os.path.join(self.Entropy_PATH, "map_entropy.pickle")
             pickle.dump(map_entropy, open(savepath, 'wb'))
 
             print(map_hist_count)
 
-        return entropy_user
+        return entropy_user, map_entropy
 
     def save_all_models(self, dataset_val, x_columns, y_columns, df_user, df_item, df_user_val, df_item_val,
                         user_features, item_features, deterministic):

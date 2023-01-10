@@ -5,7 +5,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from core.policy.utils import get_emb
+from core.policy.utils import get_emb, get_recommended_ids, removed_recommended_id_from_embedding
 from tianshou.data import Batch, ReplayBuffer, to_torch
 from tianshou.policy import DiscreteBCQPolicy
 
@@ -69,7 +69,7 @@ class SQN(DiscreteBCQPolicy):
         act = self(batch, buffer, indices=indices, is_obs=False, input="obs_next").act
 
         obs = batch["obs_next"]
-        obs_emb, recommended_ids = get_emb(self.state_tracker, buffer, indices=indices, obs=obs, is_obs=False)
+        obs_emb = get_emb(self.state_tracker, buffer, indices=indices, obs=obs, is_obs=False)
         target_q, _ = self.model_old(obs_emb)
 
         # target_q, _ = self.model_old(batch.obs_next)
@@ -82,6 +82,7 @@ class SQN(DiscreteBCQPolicy):
             buffer: ReplayBuffer,
             indices: np.ndarray = None,
             is_obs=None,
+            remove_recommended_ids=False,
             state: Optional[Union[dict, Batch, np.ndarray]] = None,
             input: str = "obs",
             **kwargs: Any,
@@ -89,26 +90,35 @@ class SQN(DiscreteBCQPolicy):
         # assert input == "obs"
         is_obs = True if input == "obs" else False
         obs = batch[input]
-        obs_emb, recommended_ids = get_emb(self.state_tracker, buffer, indices=indices, obs=obs, is_obs=is_obs)
+        obs_emb = get_emb(self.state_tracker, buffer, indices=indices, obs=batch.obs, is_obs=is_obs,
+                          remove_recommended_ids=remove_recommended_ids)
+        recommended_ids = get_recommended_ids(buffer) if remove_recommended_ids else None
 
         q_value, state = self.model(obs_emb, state=state, info=batch.info)
         if not hasattr(self, "max_action_num"):
             self.max_action_num = q_value.shape[1]
         imitation_logits, _ = self.imitator(obs_emb, state=state, info=batch.info)
 
+        q_value_masked, indices_masked = removed_recommended_id_from_embedding(q_value, recommended_ids)
+        imitation_logits_masked, indices_masked = removed_recommended_id_from_embedding(imitation_logits, recommended_ids)
+
+
         if self.which_head == "bcq":
             # BCQ way
-            ratio = imitation_logits - imitation_logits.max(dim=-1, keepdim=True).values
+            ratio = imitation_logits_masked - imitation_logits_masked.max(dim=-1, keepdim=True).values
             mask = (ratio < self._log_tau).float()
-            act = (q_value - np.inf * mask).argmax(dim=-1)
+            act = (q_value_masked - np.inf * mask).argmax(dim=-1)
         elif self.which_head == "shead":
             # Supervised head
-            act = imitation_logits.argmax(dim=-1)
+            act = imitation_logits_masked.argmax(dim=-1)
         elif self.which_head == "qhead":
-            act = q_value.argmax(dim=-1)
+            act = q_value_masked.argmax(dim=-1)
+
+        act_unsqueezed = act.unsqueeze(-1)
+        act_ori = indices_masked.gather(dim=1, index=act_unsqueezed).squeeze(1)
 
         return Batch(
-            act=act, state=state, q_value=q_value, imitation_logits=imitation_logits
+            act=act_ori, state=state, q_value=q_value, imitation_logits=imitation_logits
         )
 
     def learn(self, batch: Batch, **kwargs: Any) -> Dict[str, float]:

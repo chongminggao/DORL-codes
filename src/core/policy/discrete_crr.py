@@ -6,7 +6,7 @@ import torch
 import torch.nn.functional as F
 from torch.distributions import Categorical
 
-from core.policy.utils import get_emb
+from core.policy.utils import get_emb, get_recommended_ids, removed_recommended_id_from_embedding
 from tianshou.data import Batch, to_torch, to_torch_as, ReplayBuffer
 from tianshou.policy import DiscreteCRRPolicy
 
@@ -40,20 +40,20 @@ class DiscreteCRRPolicy_withEmbedding(DiscreteCRRPolicy):
     """
 
     def __init__(
-        self,
-        actor: torch.nn.Module,
-        critic: torch.nn.Module,
-        optim: torch.optim.Optimizer,
-        discount_factor: float = 0.99,
-        policy_improvement_mode: str = "exp",
-        ratio_upper_bound: float = 20.0,
-        beta: float = 1.0,
-        min_q_weight: float = 10.0,
-        target_update_freq: int = 0,
-        reward_normalization: bool = False,
-        state_tracker=None,
-        buffer=None,
-        **kwargs: Any,
+            self,
+            actor: torch.nn.Module,
+            critic: torch.nn.Module,
+            optim: torch.optim.Optimizer,
+            discount_factor: float = 0.99,
+            policy_improvement_mode: str = "exp",
+            ratio_upper_bound: float = 20.0,
+            beta: float = 1.0,
+            min_q_weight: float = 10.0,
+            target_update_freq: int = 0,
+            reward_normalization: bool = False,
+            state_tracker=None,
+            buffer=None,
+            **kwargs: Any,
     ) -> None:
         super().__init__(
             actor, critic, optim, discount_factor, policy_improvement_mode, ratio_upper_bound,
@@ -62,39 +62,48 @@ class DiscreteCRRPolicy_withEmbedding(DiscreteCRRPolicy):
         self.state_tracker = state_tracker
         self.buffer = buffer
 
-
     def forward(
-        self,
-        batch: Batch,
-        buffer: ReplayBuffer,
-        indices: np.ndarray = None,
-        is_obs=None,
-        state: Optional[Union[dict, Batch, np.ndarray]] = None,
-        **kwargs: Any,
+            self,
+            batch: Batch,
+            buffer: ReplayBuffer,
+            indices: np.ndarray = None,
+            is_obs=None,
+            remove_recommended_ids=False,
+            state: Optional[Union[dict, Batch, np.ndarray]] = None,
+            **kwargs: Any,
     ) -> Batch:
 
-        obs_emb, recommended_ids = get_emb(self.state_tracker, buffer, indices=indices, obs=batch.obs, is_obs=is_obs)
+        obs_emb = get_emb(self.state_tracker, buffer, indices=indices, obs=batch.obs, is_obs=is_obs,
+                          remove_recommended_ids=remove_recommended_ids)
+        recommended_ids = get_recommended_ids(buffer) if remove_recommended_ids else None
+
         logits, hidden = self.actor(obs_emb, state=state)
-        if isinstance(logits, tuple):
-            dist = self.dist_fn(*logits)
+
+        logits_masked, indices_masked = removed_recommended_id_from_embedding(logits, recommended_ids)
+
+        if isinstance(logits_masked, tuple):
+            dist = self.dist_fn(*logits_masked)
         else:
-            dist = self.dist_fn(logits)
+            dist = self.dist_fn(logits_masked)
         if self._deterministic_eval and not self.training:
             if self.action_type == "discrete":
-                act = logits.argmax(-1)
+                act = logits_masked.argmax(-1)
             elif self.action_type == "continuous":
-                act = logits[0]
+                act = logits_masked[0]
         else:
             act = dist.sample()
-        return Batch(logits=logits, act=act, state=hidden, dist=dist)
+
+        act_unsqueezed = act.unsqueeze(-1)
+        act_ori = indices_masked.gather(dim=1, index=act_unsqueezed).squeeze(1)
+        return Batch(logits=logits, act=act_ori, state=hidden, dist=dist)
 
     def learn(self, batch: Batch, **kwargs: Any) -> Dict[str, float]:  # type: ignore
         if self._target and self._iter % self._freq == 0:
             self.sync_weight()
         self.optim.zero_grad()
 
-        obs_emb, recommended_ids = get_emb(self.state_tracker, self.buffer, batch.indices, is_obs=True)
-        obs_next_emb, recommended_ids = get_emb(self.state_tracker, self.buffer, batch.indices, is_obs=False)
+        obs_emb = get_emb(self.state_tracker, self.buffer, batch.indices, is_obs=True)
+        obs_next_emb = get_emb(self.state_tracker, self.buffer, batch.indices, is_obs=False)
 
         q_t = self.critic(obs_emb)
         # q_t = self.critic(batch.obs)

@@ -5,7 +5,6 @@ import random
 import time
 from collections import defaultdict
 
-
 import numpy as np
 import pandas as pd
 import torch
@@ -61,7 +60,8 @@ def construct_buffer_from_offline_data(args, df_train, env):
             if int(item) in env.lbe_item.classes_:
                 indices[k] = True
         df_filtered = df_train[["user_id", "item_id", args.yfeat]].loc[indices]
-        df_filtered["user_id"] = dummy_user = 0 # set to dummy user. Since these users are not in the evaluational environment.
+        df_filtered[
+            "user_id"] = dummy_user = 0  # set to dummy user. Since these users are not in the evaluational environment.
         df_filtered = df_filtered.reset_index(drop=True)
         # df_user_items = df_filtered.groupby("user_id").agg(list)
 
@@ -72,8 +72,9 @@ def construct_buffer_from_offline_data(args, df_train, env):
         buffer_size = num_each * num_bins
         buffer = VectorReplayBuffer(buffer_size, num_bins)
 
-        ind_pair = zip(np.arange(0,buffer_size,num_each), np.arange(num_each,buffer_size + num_each,num_each))
-        for ind_buffer, (left, right) in tqdm(enumerate(ind_pair), total=num_bins, desc="preparing offline data into buffer..."):
+        ind_pair = zip(np.arange(0, buffer_size, num_each), np.arange(num_each, buffer_size + num_each, num_each))
+        for ind_buffer, (left, right) in tqdm(enumerate(ind_pair), total=num_bins,
+                                              desc="preparing offline data into buffer..."):
             seq = df_filtered.iloc[int(left):int(right)]
 
             items = [-1] + seq["item_id"].to_list()
@@ -165,10 +166,16 @@ def prepare_buffer_via_offline_data(args):
 
     test_envs = DummyVectorEnv(
         [lambda: env_task_class(**kwargs_um) for _ in range(args.test_num)])
+    test_envs_NX_0 = DummyVectorEnv(
+        [lambda: env_task_class(**kwargs_um) for _ in range(args.test_num)])
+    test_envs_NX_x = DummyVectorEnv(
+        [lambda: env_task_class(**kwargs_um) for _ in range(args.test_num)])
+
+    test_envs_dict = {"FB": test_envs, "NX_0": test_envs_NX_0, f"NX_{args.force_length}": test_envs_NX_x}
 
     args.device = torch.device("cuda:{}".format(args.cuda) if torch.cuda.is_available() else "cpu")
     # seed
     np.random.seed(args.seed)
     random.seed(args.seed)
 
-    return env, buffer, test_envs
+    return env, buffer, test_envs_dict

@@ -148,7 +148,7 @@ def get_common_args(args):
         parser.add_argument('--window_size', default=3, type=int)
 
     parser.add_argument('--force_length', type=int, default=10)
-    parser.add_argument("--top_rate", type=float, default=0.6)
+    parser.add_argument("--top_rate", type=float, default=0.8)
 
     args_new = parser.parse_known_args()[0]
     args.__dict__.update(args_new.__dict__)
@@ -156,6 +156,7 @@ def get_common_args(args):
         args.use_userEmbedding = False
 
     return args
+
 
 def get_true_env(args, read_user_num=None):
     if args.env == "CoatEnv-v0":

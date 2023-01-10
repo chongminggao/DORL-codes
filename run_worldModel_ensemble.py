@@ -52,7 +52,7 @@ def get_args_all():
     parser.set_defaults(is_softmax=False)
     parser.add_argument("--num_trajectory", type=int, default=200)
     parser.add_argument("--force_length", type=int, default=10)
-    parser.add_argument("--top_rate", type=float, default=0.6)
+    parser.add_argument("--top_rate", type=float, default=0.8)
 
     parser.add_argument('--is_deterministic', dest='deterministic', action='store_true')
     parser.add_argument('--no_deterministic', dest='deterministic', action='store_false')
@@ -511,7 +511,7 @@ def main(args):
                                             callbacks=[LoggerCallback_Update(logger_path)])
 
     # %% 6. Save model
-    ensemble_models.get_save_entropy_mat(args)
+    ensemble_models.get_save_entropy_mat(args.env, args.entropy_window)
     ensemble_models.save_all_models(dataset_val, x_columns, y_columns, df_user, df_item, df_user_val, df_item_val,
                                     user_features, item_features, args.deterministic)
 

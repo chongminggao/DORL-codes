@@ -4,7 +4,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from core.policy.utils import get_emb
+from core.policy.utils import get_emb, get_recommended_ids, removed_recommended_id_from_embedding
 from tianshou.data import Batch, to_torch, to_numpy, ReplayBuffer
 from tianshou.policy import DiscreteCQLPolicy
 
@@ -59,6 +59,7 @@ class DiscreteCQLPolicy_withEmbedding(DiscreteCQLPolicy):
         buffer: ReplayBuffer,
         indices: np.ndarray = None,
         is_obs=None,
+        remove_recommended_ids=False,
         state: Optional[Union[dict, Batch, np.ndarray]] = None,
         model: str = "model",
         input: str = "obs",
@@ -66,7 +67,10 @@ class DiscreteCQLPolicy_withEmbedding(DiscreteCQLPolicy):
     ) -> Batch:
         model = getattr(self, model)
 
-        obs_emb, recommended_ids = get_emb(self.state_tracker, buffer, indices=indices, obs=batch.obs, is_obs=is_obs)
+        obs_emb = get_emb(self.state_tracker, buffer, indices=indices, obs=batch.obs, is_obs=is_obs,
+                          remove_recommended_ids=remove_recommended_ids)
+        recommended_ids = get_recommended_ids(buffer) if remove_recommended_ids else None
+
         logits, hidden = model(obs_emb, state=state, info=batch.info)
 
         assert not hasattr(batch.obs, "obs")
@@ -78,8 +82,15 @@ class DiscreteCQLPolicy_withEmbedding(DiscreteCQLPolicy):
         q = self.compute_q_value(logits, getattr(obs_emb, "mask", None))
         if not hasattr(self, "max_action_num"):
             self.max_action_num = q.shape[1]
-        act = to_numpy(q.max(dim=1)[1])
-        return Batch(logits=logits, act=act, state=hidden)
+
+        logits_masked, indices_masked = removed_recommended_id_from_embedding(q, recommended_ids)
+        # act = to_numpy(q.max(dim=1)[1])
+        act = logits_masked.max(dim=1)[1]
+
+        act_unsqueezed = act.unsqueeze(-1)
+        act_ori = indices_masked.gather(dim=1, index=act_unsqueezed).squeeze(1)
+
+        return Batch(logits=logits, act=act_ori, state=hidden)
 
     def _target_q(self, buffer: ReplayBuffer, indices: np.ndarray) -> torch.Tensor:
         batch = buffer[indices]  # batch.obs_next: s_{t+n}

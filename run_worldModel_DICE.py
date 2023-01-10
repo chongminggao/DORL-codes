@@ -517,7 +517,7 @@ def main(args):
                                             callbacks=[[LoggerCallback_Update(logger_path)]])
 
     # %% 6. Save model
-    ensemble_models.get_save_entropy_mat(args)
+    ensemble_models.get_save_entropy_mat(args.env, args.entropy_window)
     ensemble_models.save_all_models(dataset_val, x_columns, y_columns, df_user, df_item, df_user_val, df_item_val,
                                     user_features, item_features, args.deterministic)
 

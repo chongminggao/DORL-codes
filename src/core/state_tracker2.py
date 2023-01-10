@@ -155,8 +155,8 @@ class StateTrackerAvg2(StateTracker_Base):
                 s0 = e_i
 
 
-            recommended_ids = None
-            return s0, recommended_ids
+            # recommended_ids = None
+            return s0
 
         else:
             index = indices
@@ -173,9 +173,9 @@ class StateTrackerAvg2(StateTracker_Base):
             Logic: Always use obs_next(t) and reward(t) to construct state(t+1), since obs_next(t) == obs(t+1).
             Note: The inital obs(0) == obs_next(-1) and reward(-1) are not recorded. So we have to initialize them.  
             '''
-            while not all(flag_has_init):
-                if not remove_recommended_ids and len(live_mat) >= self.window_size:
-                    break
+            while not all(flag_has_init) and len(live_mat) < self.window_size:
+                # if not remove_recommended_ids and len(live_mat) >= self.window_size:
+                #     break
 
                 if is_obs or not first_flag:
                     live_id_prev = buffer.prev(index) != index
@@ -228,11 +228,13 @@ class StateTrackerAvg2(StateTracker_Base):
             state_sum = state_masked.sum(dim=0)
             state_final = state_sum / torch.from_numpy(np.expand_dims(live_mat.sum(0), -1)).to(self.device)
 
-            if remove_recommended_ids:
-                recommended_ids = item_all_complete.reshape(-1, len(index)).T
-                return state_final, recommended_ids
-            else:
-                return state_final, None
+            # if remove_recommended_ids:
+            #     recommended_ids = item_all_complete.reshape(-1, len(index)).T
+            #     return state_final, recommended_ids
+            # else:
+            #     return state_final, None
+
+            return state_final
 
 
 class StateTracker_Caser(StateTracker_Base):

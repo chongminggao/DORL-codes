@@ -5,7 +5,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from core.policy.utils import get_emb
+from core.policy.utils import get_emb, removed_recommended_id_from_embedding, get_recommended_ids
 from tianshou.data import Batch, ReplayBuffer, to_torch
 from tianshou.policy import DiscreteBCQPolicy
 
@@ -38,28 +38,27 @@ class DiscreteBCQPolicy_withEmbedding(DiscreteBCQPolicy):
     """
 
     def __init__(
-        self,
-        model: torch.nn.Module,
-        imitator: torch.nn.Module,
-        optim: torch.optim.Optimizer,
-        discount_factor: float = 0.99,
-        estimation_step: int = 1,
-        target_update_freq: int = 8000,
-        eval_eps: float = 1e-3,
-        unlikely_action_threshold: float = 0.3,
-        imitation_logits_penalty: float = 1e-2,
-        reward_normalization: bool = False,
-        state_tracker = None,
-        buffer = None,
-        **kwargs: Any,
+            self,
+            model: torch.nn.Module,
+            imitator: torch.nn.Module,
+            optim: torch.optim.Optimizer,
+            discount_factor: float = 0.99,
+            estimation_step: int = 1,
+            target_update_freq: int = 8000,
+            eval_eps: float = 1e-3,
+            unlikely_action_threshold: float = 0.3,
+            imitation_logits_penalty: float = 1e-2,
+            reward_normalization: bool = False,
+            state_tracker=None,
+            buffer=None,
+            **kwargs: Any,
     ) -> None:
         super().__init__(
-            model,imitator,optim,discount_factor,estimation_step,target_update_freq,eval_eps,
-            unlikely_action_threshold,imitation_logits_penalty,reward_normalization, **kwargs
+            model, imitator, optim, discount_factor, estimation_step, target_update_freq, eval_eps,
+            unlikely_action_threshold, imitation_logits_penalty, reward_normalization, **kwargs
         )
         self.state_tracker = state_tracker
-        self.buffer=buffer
-
+        self.buffer = buffer
 
     def _target_q(self, buffer: ReplayBuffer, indices: np.ndarray) -> torch.Tensor:
         batch = buffer[indices]  # batch.obs_next: s_{t+n}
@@ -67,7 +66,7 @@ class DiscreteBCQPolicy_withEmbedding(DiscreteBCQPolicy):
         act = self(batch, buffer, indices=indices, is_obs=False, input="obs_next").act
 
         obs = batch["obs_next"]
-        obs_emb, recommended_ids = get_emb(self.state_tracker, buffer, indices=indices, obs=obs, is_obs=False)
+        obs_emb = get_emb(self.state_tracker, buffer, indices=indices, obs=obs, is_obs=False)
         target_q, _ = self.model_old(obs_emb)
 
         # target_q, _ = self.model_old(batch.obs_next)
@@ -75,32 +74,51 @@ class DiscreteBCQPolicy_withEmbedding(DiscreteBCQPolicy):
         return target_q
 
     def forward(  # type: ignore
-        self,
-        batch: Batch,
-        buffer: ReplayBuffer,
-        indices: np.ndarray = None,
-        is_obs=None,
-        state: Optional[Union[dict, Batch, np.ndarray]] = None,
-        input: str = "obs",
-        **kwargs: Any,
+            self,
+            batch: Batch,
+            buffer: ReplayBuffer,
+            indices: np.ndarray = None,
+            is_obs=None,
+            remove_recommended_ids=False,
+            state: Optional[Union[dict, Batch, np.ndarray]] = None,
+            input: str = "obs",
+            **kwargs: Any,
     ) -> Batch:
         # assert input == "obs"
         is_obs = True if input == "obs" else False
         obs = batch[input]
-        obs_emb, recommended_ids = get_emb(self.state_tracker, buffer, indices=indices, obs=obs, is_obs=is_obs)
+        obs_emb = get_emb(self.state_tracker, buffer, indices=indices, obs=obs, is_obs=is_obs,
+                          remove_recommended_ids=remove_recommended_ids)
+        recommended_ids = get_recommended_ids(buffer) if remove_recommended_ids else None
+
+        # if recommended_ids is None:
+        #     assert recommended_ids1 is None
+        #         # print(1)
+        # else:
+        #     assert (recommended_ids == recommended_ids1).all()
 
         q_value, state = self.model(obs_emb, state=state, info=batch.info)
+
         if not hasattr(self, "max_action_num"):
             self.max_action_num = q_value.shape[1]
+
         imitation_logits, _ = self.imitator(obs_emb, state=state, info=batch.info)
 
         # mask actions for argmax
         ratio = imitation_logits - imitation_logits.max(dim=-1, keepdim=True).values
         mask = (ratio < self._log_tau).float()
-        act = (q_value - np.inf * mask).argmax(dim=-1)
+
+        final_logits = q_value - np.inf * mask
+        logits_masked, indices_masked = removed_recommended_id_from_embedding(final_logits, recommended_ids)
+
+        # act = (q_value - np.inf * mask).argmax(dim=-1)
+        act = logits_masked.argmax(dim=-1)
+
+        act_unsqueezed = act.unsqueeze(-1)
+        act_ori = indices_masked.gather(dim=1, index=act_unsqueezed).squeeze(1)
 
         return Batch(
-            act=act, state=state, q_value=q_value, imitation_logits=imitation_logits
+            act=act_ori, state=state, q_value=q_value, imitation_logits=imitation_logits
         )
 
     def learn(self, batch: Batch, **kwargs: Any) -> Dict[str, float]:
@@ -129,7 +147,6 @@ class DiscreteBCQPolicy_withEmbedding(DiscreteBCQPolicy):
             "loss/i": i_loss.item(),
             "loss/reg": reg_loss.item(),
         }
-
 
     def update(self, sample_size: int, buffer: Optional[ReplayBuffer],
                **kwargs: Any) -> Dict[str, Any]:

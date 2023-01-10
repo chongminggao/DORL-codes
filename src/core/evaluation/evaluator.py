@@ -7,7 +7,7 @@ import torch
 from tqdm import tqdm
 
 
-def get_feat_dominate_dict(df_item_val, all_acts_origin, item_feat_domination, top_rate=0.6):
+def get_feat_dominate_dict(df_item_val, all_acts_origin, item_feat_domination, top_rate=0.8):
     if item_feat_domination is None:  # for yahoo
         return dict()
     # if need_transform:
@@ -80,7 +80,7 @@ def get_feat_dominate_dict(df_item_val, all_acts_origin, item_feat_domination, t
 
 
 def interactive_evaluation(model, env, dataset_val, is_softmax, epsilon, is_ucb, k, need_transform,
-                           num_trajectory, item_feat_domination, remove_recommended, force_length=0, top_rate=0.6):
+                           num_trajectory, item_feat_domination, remove_recommended, force_length=0, top_rate=0.8):
     cumulative_reward = 0
     total_click_loss = 0
     total_turns = 0
@@ -155,7 +155,7 @@ def interactive_evaluation(model, env, dataset_val, is_softmax, epsilon, is_ucb,
 
 
 def test_static_model_in_RL_env(model, env, dataset_val, is_softmax=True, epsilon=0, is_ucb=False, k=1,
-                                need_transform=False, num_trajectory=100, item_feat_domination=None, force_length=10, top_rate=0.6):
+                                need_transform=False, num_trajectory=100, item_feat_domination=None, force_length=10, top_rate=0.8):
     eval_result_RL = {}
 
     eval_result_standard = interactive_evaluation(model, env, dataset_val, is_softmax, epsilon, is_ucb, k,

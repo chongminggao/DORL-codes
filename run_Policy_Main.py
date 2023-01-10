@@ -52,7 +52,7 @@ def get_args_all():
     parser.add_argument("--user_model_name", type=str, default="DeepFM")
     parser.add_argument("--model_name", type=str, default="A2C_with_emb")
     parser.add_argument('--seed', default=2022, type=int)
-    parser.add_argument('--cuda', default=1, type=int)
+    parser.add_argument('--cuda', default=0, type=int)
 
     parser.add_argument('--is_ab', dest='is_ab', action='store_true')
     parser.add_argument('--no_ab', dest='is_ab', action='store_false')
@@ -171,6 +171,8 @@ def prepare_envs(args, ensemble_models, alpha_u, beta_i):
 
     # dataset_val, df_user_val, df_item_val = load_dataset_val(args, user_features, item_features, reward_features, embedding_dim, embedding_dim)
 
+    # entropy_user, map_entropy = ensemble_models.get_save_entropy_mat(args.env, args.entropy_window)
+
     entropy_dict = dict()
     if 0 in args.entropy_window:
         entropy_path = os.path.join(ensemble_models.Entropy_PATH, "user_entropy.csv")
@@ -210,7 +212,8 @@ def prepare_envs(args, ensemble_models, alpha_u, beta_i):
         "entropy_dict": entropy_dict,
         "entropy_window": args.entropy_window,
         "gamma_exposure": args.gamma_exposure,
-        "step_n_actions": max(args.entropy_window)}
+        "step_n_actions": max(args.entropy_window)
+    }
 
     # simulatedEnv = SimulatedEnv(**kwargs)
 
