@@ -104,11 +104,17 @@ class StateTracker_Base(nn.Module):
 
 
 class StateTrackerAvg2(StateTracker_Base):
-    def __init__(self, user_columns, action_columns, feedback_columns, dim_model, saved_embedding, device="cpu",
-                 use_userEmbedding=False, window_size=10):
+    def __init__(self, user_columns, action_columns, feedback_columns, dim_model, saved_embedding,
+                 test_max, test_min,
+                 device="cpu", use_userEmbedding=False, window_size=10):
         super(StateTrackerAvg2, self).__init__(user_columns=user_columns, action_columns=action_columns,
                                                feedback_columns=feedback_columns, dim_model=dim_model, device=device,
                                                window_size=window_size)
+
+        self.test_min = test_min
+        self.test_max = test_max
+        # self.train_min = train_min
+        # self.train_max = train_max
 
         assert saved_embedding is not None
         self.embedding_dict = saved_embedding.to(device)
@@ -129,7 +135,7 @@ class StateTrackerAvg2(StateTracker_Base):
             self.ffn_user = nn.Linear(compute_input_dim(self.user_columns), self.dim_model, device=self.device)
 
     def forward(self, buffer=None, indices=None, obs=None,
-                reset=None, is_obs=None):
+                reset=None, is_obs=None, is_train=True):
 
         if reset:  # get user embedding
 
@@ -213,7 +219,16 @@ class StateTrackerAvg2(StateTracker_Base):
             else:
                 s_t = e_i
 
-            state_flat = s_t * e_r
+            if is_train:
+                # r_max = 1
+                # r_min = -1
+                normed_r = e_r
+            else:
+                r_max = self.test_max
+                r_min = self.test_min
+                normed_r = (e_r - r_min) / (r_max - r_min) * 2 - 1
+
+            state_flat = s_t * normed_r
             state_cube = state_flat.reshape((-1, len(index), state_flat.shape[-1]))
 
             mask = torch.from_numpy(np.expand_dims(live_mat, -1)).to(self.device)

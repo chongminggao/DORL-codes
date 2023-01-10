@@ -2,23 +2,29 @@
 #python run_worldModel_coat.py --tau 0  --cuda 1  --message "point"  --loss "point" &
 #python run_worldModel_coat.py --tau 0  --cuda 2  --message "pair"  --loss "pair" &
 #python run_worldModel_coat.py --tau 0  --cuda 3  --message "pp"  --loss "pp" &
-python run_worldModel_coat.py --tau 0  --cuda 0  --message "pointneg"  --loss "pointneg" &
+#python run_worldModel_coat.py --tau 0  --cuda 0  --message "pointneg"  --loss "pointneg" &
 
 #python run_worldModel_yahoo.py --tau 0 --cuda 0   --message "point"  --loss "point" &
 #python run_worldModel_yahoo.py --tau 0 --cuda 0   --message "pair"  --loss "pair" &
 #python run_worldModel_yahoo.py --tau 0 --cuda 2   --message "pp"  --loss "pp" &
-python run_worldModel_yahoo.py --tau 0 --cuda 1   --message "pointneg"  --loss "pointneg" &
+#python run_worldModel_yahoo.py --tau 0 --cuda 1   --message "pointneg"  --loss "pointneg" &
 #
 # # lab9 ================================
 #python run_worldModel_kuairand.py --tau 0  --cuda 6   --message "point"  --loss "point" &
 #python run_worldModel_kuairand.py --tau 0  --cuda 4   --message "pair"  --loss "pair" &
 #python run_worldModel_kuairand.py --tau 0  --cuda 5   --message "pp"  --loss "pp" &
-python run_worldModel_kuairand.py --tau 0  --cuda 2   --message "pointneg"  --loss "pointneg" &
+#python run_worldModel_kuairand.py --tau 0  --cuda 2   --message "pointneg"  --loss "pointneg" &
 
 #python run_worldModel_kuairec.py  --tau 0  --cuda 3   --message "point"  --loss "point" &
 #python run_worldModel_kuairec.py  --tau 0  --cuda 4   --message "pair"  --loss "pair" &
 #python run_worldModel_kuairec.py  --tau 0  --cuda 5   --message "pp"  --loss "pp" &
-python run_worldModel_kuairec.py  --tau 0  --cuda 3   --message "pointneg"  --loss "pointneg" &
+#python run_worldModel_kuairec.py  --tau 0  --cuda 3   --message "pointneg"  --loss "pointneg" &
+
+python run_worldModel_ensemble.py --env CoatEnv-v0  --cuda 0 --tau 0 --loss "pointneg" --message "pointneg" &
+python run_worldModel_ensemble.py --env YahooEnv-v0 --cuda 1 --tau 0 --loss "pointneg" --message "pointneg" &
+python run_worldModel_ensemble.py --env KuaiRand-v0 --cuda 6 --tau 0 --loss "pointneg" --message "pointneg" &
+python run_worldModel_ensemble.py --env KuaiEnv-v0  --cuda 7 --tau 0 --loss "pointneg" --message "pointneg" &
+
 
 
 

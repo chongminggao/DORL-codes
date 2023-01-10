@@ -18,7 +18,7 @@ import torch
 #         recommended_ids = recommended_ids[:, :-1]
 #     return obs_emb, recommended_ids
 
-def get_emb(state_tracker, buffer, indices=None, is_obs=None, obs=None):
+def get_emb(state_tracker, buffer, indices=None, is_obs=None, obs=None, is_train=True):
     if len(buffer) == 0:
         obs_emb = state_tracker.forward(obs=obs, reset=True)
     else:
@@ -26,7 +26,7 @@ def get_emb(state_tracker, buffer, indices=None, is_obs=None, obs=None):
             indices = buffer.last_index[~buffer[buffer.last_index].done]
             is_obs = False
 
-        obs_emb = state_tracker.forward(buffer=buffer, indices=indices, reset=False, is_obs=is_obs)
+        obs_emb = state_tracker.forward(buffer=buffer, indices=indices, reset=False, is_obs=is_obs, is_train=is_train)
 
     return obs_emb
 

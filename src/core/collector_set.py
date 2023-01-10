@@ -77,7 +77,7 @@ class CollectorSet(object):
     ) -> Dict[str, Any]:
         all_res = {}
         for name, collector in self.collector_dict.items():
-            res = collector.collect(n_step, n_episode, random, render, no_grad)
+            res = collector.collect(n_step, n_episode, random, render, no_grad, is_train=False)
             res_k = {name + "_" + k: v for k, v in res.items()} if name != "FB" else res
             all_res.update(res_k)
         self.collect_step = self.collector_dict["FB"].collect_step

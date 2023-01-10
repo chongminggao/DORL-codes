@@ -253,8 +253,14 @@ def setup_policy_model(args, ensemble_models, env, train_envs, test_envs_dict):
     else:
         args.state_dim = action_columns[0].embedding_dim
 
-    state_tracker = StateTrackerAvg2(user_columns, action_columns, feedback_columns, args.state_dim,
-                                     saved_embedding, device=args.device, window_size=args.window_size,
+    # train_max = train_envs.get_env_attr("predicted_mat")[0].max()
+    # train_min = train_envs.get_env_attr("predicted_mat")[0].min() - train_envs.get_env_attr("normed_term")[0]
+    test_max = test_envs_dict['FB'].get_env_attr("mat")[0].max()
+    test_min = test_envs_dict['FB'].get_env_attr("mat")[0].min()
+
+    state_tracker = StateTrackerAvg2(user_columns, action_columns, feedback_columns, args.state_dim, saved_embedding,
+                                     test_max, test_min,
+                                     device=args.device, window_size=args.window_size,
                                      use_userEmbedding=args.use_userEmbedding).to(args.device)
 
     if args.cpu:

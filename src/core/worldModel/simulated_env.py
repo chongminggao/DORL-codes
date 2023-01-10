@@ -13,7 +13,7 @@ from tqdm import tqdm
 from core.util import compute_action_distance, clip0, compute_exposure
 # from virtualTB.model.UserModel import UserModel
 
-from environments.VirtualTaobao.virtualTB.utils import *
+# from environments.VirtualTaobao.virtualTB.utils import *
 
 
 class SimulatedEnv(gym.Env):
@@ -59,17 +59,22 @@ class SimulatedEnv(gym.Env):
         self._reset_history()
 
         entropy_min = 0
+        entropy_max = 0
         if 0 in self.entropy_window:
             entropy_min = self.entropy_dict["on_user"].min()
+            entropy_max = self.entropy_dict["on_user"].max()
 
-        # entropy_set = set(self.entropy_window) - set([0])
-        # if len(entropy_set):
-        #     for entropy_term in entropy_set:
-        #         entropy_min += min([v for k, v in self.entropy_dict["map"].items() if len(k) == entropy_term])
+        # todo: comments
+        entropy_set = set(self.entropy_window) - set([0])
+        if len(entropy_set):
+            for entropy_term in entropy_set:
+                entropy_min += min([v for k, v in self.entropy_dict["map"].items() if len(k) == entropy_term])
+                entropy_max += max([v for k, v in self.entropy_dict["map"].items() if len(k) == entropy_term])
 
         self.lambda_variance = lambda_variance
         self.lambda_entropy = lambda_entropy
-        self.normed_term = predicted_mat.min() - lambda_variance * maxvar_mat.max() + lambda_entropy * entropy_min
+        self.MIN_R = predicted_mat.min() - lambda_variance * maxvar_mat.max() + lambda_entropy * entropy_min
+        self.MAX_R = predicted_mat.max() - lambda_variance * maxvar_mat.min() + lambda_entropy * entropy_max
 
     # def compile(self, num_env=1):
     #     self.env_list = DummyVectorEnv([lambda: gym.make(self.env_task) for _ in range(num_env)])
@@ -134,8 +139,9 @@ class SimulatedEnv(gym.Env):
                     if action_set in self.entropy_dict["map"]:
                         entropy += self.entropy_dict["map"][action_set]
 
-            penalized_reward = pred_reward - self.lambda_variance * max_var + \
-                               self.lambda_entropy * (entropy_u + entropy) - self.normed_term
+            penalized_reward = (pred_reward - self.lambda_variance * max_var + \
+                               self.lambda_entropy * (entropy_u + entropy) - self.MIN_R) /\
+                               (self.MAX_R - self.MIN_R) * 2 - 1
 
         if self.version == "v1":
             # version 1
