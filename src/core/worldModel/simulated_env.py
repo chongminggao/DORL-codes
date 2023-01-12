@@ -144,9 +144,9 @@ class SimulatedEnv(gym.Env):
                     if action_set in self.entropy_dict["map"]:
                         entropy += self.entropy_dict["map"][action_set]
                     else:
-                        entropy += 1 # todo!
+                        entropy += 1 # todo! 补足差额
                 if len(action_reverse) < self.step_n_actions:
-                    entropy += self.step_n_actions - len(action_reverse) # todo
+                    entropy += self.step_n_actions - len(action_reverse) # todo 补足差额
             penalized_reward = pred_reward - self.lambda_variance * max_var + \
                                self.lambda_entropy * entropy - self.MIN_R
 

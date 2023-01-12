@@ -170,64 +170,24 @@
 
 #python run_Policy_Main.py --env CoatEnv-v0  --cuda 6  --lambda_variance 0 --lambda_entropy 0 --window_size 3 --read_message "pointneg"  --message "newR"  &
 #python run_Policy_Main.py --env YahooEnv-v0 --cuda 6  --lambda_variance 0 --lambda_entropy 0 --window_size 3 --read_message "pointneg"  --message "newR"  &
-python run_Policy_Main.py --env KuaiRand-v0 --cuda 5  --lambda_variance 0 --lambda_entropy 0 --window_size 3 --read_message "pointneg"  --message "newR"  &
-python run_Policy_Main.py --env KuaiEnv-v0  --cuda 5  --lambda_variance 0 --lambda_entropy 0 --window_size 3 --read_message "pointneg"  --message "newR"  &
+#python run_Policy_Main.py --env KuaiRand-v0 --cuda 2  --lambda_variance 0 --lambda_entropy 0 --window_size 3 --read_message "pointneg"  --message "newR"  &
+#python run_Policy_Main.py --env KuaiEnv-v0  --cuda 3  --lambda_variance 0 --lambda_entropy 0 --window_size 3 --read_message "pointneg"  --message "newR"  &
 #
 #python run_Policy_BCQ.py --env CoatEnv-v0  --cuda 6 --window_size 3  --read_message "pointneg"  --message "debug" &
 #python run_Policy_BCQ.py --env YahooEnv-v0 --cuda 6 --window_size 3  --read_message "pointneg"  --message "debug" &
 #python run_Policy_BCQ.py --env KuaiRand-v0 --cuda 6 --window_size 3  --read_message "pointneg"  --message "debug" &
 #python run_Policy_BCQ.py --env KuaiEnv-v0  --cuda 6 --window_size 3  --read_message "pointneg"  --message "debug" &
 #
-#python run_Policy_CQL.py --env CoatEnv-v0  --cuda 4 --window_size 3  --read_message "pointneg"  --message "debug" &
-#python run_Policy_CQL.py --env YahooEnv-v0 --cuda 4 --window_size 3  --read_message "pointneg"  --message "debug" &
-#python run_Policy_CQL.py --env KuaiRand-v0 --cuda 4 --window_size 3  --read_message "pointneg"  --message "debug" &
-#python run_Policy_CQL.py --env KuaiEnv-v0  --cuda 4 --window_size 3  --read_message "pointneg"  --message "debug" &
+#python run_Policy_CQL.py --env CoatEnv-v0  --cuda 5 --window_size 3  --read_message "pointneg"  --message "debug" &
+#python run_Policy_CQL.py --env YahooEnv-v0 --cuda 5 --window_size 3  --read_message "pointneg"  --message "debug" &
+#python run_Policy_CQL.py --env KuaiRand-v0 --cuda 5 --window_size 3  --read_message "pointneg"  --message "debug" &
+#python run_Policy_CQL.py --env KuaiEnv-v0  --cuda 5 --window_size 3  --read_message "pointneg"  --message "debug" &
 #
 #python run_Policy_CRR.py --env CoatEnv-v0  --cuda 5 --window_size 3  --read_message "pointneg"  --message "debug" &
 #python run_Policy_CRR.py --env YahooEnv-v0 --cuda 5 --window_size 3  --read_message "pointneg"  --message "debug" &
 #python run_Policy_CRR.py --env KuaiRand-v0 --cuda 5 --window_size 3  --read_message "pointneg"  --message "debug" &
 #python run_Policy_CRR.py --env KuaiEnv-v0  --cuda 5 --window_size 3  --read_message "pointneg"  --message "debug" &
 
-
-#python run_Policy_SQN.py --env CoatEnv-v0  --cuda 7 --window_sqn 10 --which_tracker caser  --message "sqn_caser_win10" &
-#python run_Policy_SQN.py --env YahooEnv-v0 --cuda 7 --window_sqn 10 --which_tracker caser  --message "sqn_caser_win10" &
-#python run_Policy_SQN.py --env KuaiRand-v0 --cuda 7 --window_sqn 10 --which_tracker caser  --message "sqn_caser_win10" &
-#python run_Policy_SQN.py --env KuaiEnv-v0  --cuda 7 --window_sqn 10 --which_tracker caser  --message "sqn_caser_win10" &
-#
-#python run_Policy_SQN.py --env CoatEnv-v0  --cuda 7 --window_sqn 5 --which_tracker caser  --message "sqn_caser_win5" &
-#python run_Policy_SQN.py --env YahooEnv-v0 --cuda 7 --window_sqn 5 --which_tracker caser  --message "sqn_caser_win5" &
-#python run_Policy_SQN.py --env KuaiRand-v0 --cuda 7 --window_sqn 5 --which_tracker caser  --message "sqn_caser_win5" &
-#python run_Policy_SQN.py --env KuaiEnv-v0  --cuda 7 --window_sqn 5 --which_tracker caser  --message "sqn_caser_win5" &
-#
-#python run_Policy_SQN.py --env CoatEnv-v0  --cuda 7 --window_sqn 3 --which_tracker gru  --message "sqn_gru_win3" &
-#python run_Policy_SQN.py --env YahooEnv-v0 --cuda 7 --window_sqn 3 --which_tracker gru  --message "sqn_gru_win3" &
-#python run_Policy_SQN.py --env KuaiRand-v0 --cuda 7 --window_sqn 3 --which_tracker gru  --message "sqn_gru_win3" &
-#python run_Policy_SQN.py --env KuaiEnv-v0  --cuda 7 --window_sqn 3 --which_tracker gru  --message "sqn_gru_win3" &
-#
-#python run_Policy_SQN.py --env CoatEnv-v0  --cuda 7 --window_sqn 5 --which_tracker gru  --message "sqn_gru_win5" &
-#python run_Policy_SQN.py --env YahooEnv-v0 --cuda 7 --window_sqn 5 --which_tracker gru  --message "sqn_gru_win5" &
-#python run_Policy_SQN.py --env KuaiRand-v0 --cuda 7 --window_sqn 5 --which_tracker gru  --message "sqn_gru_win5" &
-#python run_Policy_SQN.py --env KuaiEnv-v0  --cuda 7 --window_sqn 5 --which_tracker gru  --message "sqn_gru_win5" &
-#
-#python run_Policy_SQN.py --env CoatEnv-v0  --cuda 7 --window_sqn 10 --which_tracker gru  --message "sqn_gru_win10" &
-#python run_Policy_SQN.py --env YahooEnv-v0 --cuda 7 --window_sqn 10 --which_tracker gru  --message "sqn_gru_win10" &
-#python run_Policy_SQN.py --env KuaiRand-v0 --cuda 7 --window_sqn 10 --which_tracker gru  --message "sqn_gru_win10" &
-#python run_Policy_SQN.py --env KuaiEnv-v0  --cuda 7 --window_sqn 10 --which_tracker gru  --message "sqn_gru_win10" &
-#
-#python run_Policy_SQN.py --env CoatEnv-v0  --cuda 7 --window_sqn 3 --which_tracker sasrec  --message "sqn_sasrec_win3" &
-#python run_Policy_SQN.py --env YahooEnv-v0 --cuda 7 --window_sqn 3 --which_tracker sasrec  --message "sqn_sasrec_win3" &
-#python run_Policy_SQN.py --env KuaiRand-v0 --cuda 7 --window_sqn 3 --which_tracker sasrec  --message "sqn_sasrec_win3" &
-#python run_Policy_SQN.py --env KuaiEnv-v0  --cuda 7 --window_sqn 3 --which_tracker sasrec  --message "sqn_sasrec_win3" &
-#
-#python run_Policy_SQN.py --env CoatEnv-v0  --cuda 7 --window_sqn 5 --which_tracker sasrec  --message "sqn_sasrec_win5" &
-#python run_Policy_SQN.py --env YahooEnv-v0 --cuda 7 --window_sqn 5 --which_tracker sasrec  --message "sqn_sasrec_win5" &
-#python run_Policy_SQN.py --env KuaiRand-v0 --cuda 7 --window_sqn 5 --which_tracker sasrec  --message "sqn_sasrec_win5" &
-#python run_Policy_SQN.py --env KuaiEnv-v0  --cuda 7 --window_sqn 5 --which_tracker sasrec  --message "sqn_sasrec_win5" &
-#
-#python run_Policy_SQN.py --env CoatEnv-v0  --cuda 7 --window_sqn 10 --which_tracker sasrec  --message "sqn_sasrec_win10" &
-#python run_Policy_SQN.py --env YahooEnv-v0 --cuda 7 --window_sqn 10 --which_tracker sasrec  --message "sqn_sasrec_win10" &
-#python run_Policy_SQN.py --env KuaiRand-v0 --cuda 7 --window_sqn 10 --which_tracker sasrec  --message "sqn_sasrec_win10" &
-#python run_Policy_SQN.py --env KuaiEnv-v0  --cuda 7 --window_sqn 10 --which_tracker sasrec  --message "sqn_sasrec_win10" &
 
 
 #python run_Policy_Main.py --env CoatEnv-v0  --cuda 0  --lambda_variance 0 --lambda_entropy 0 --window_size 3 --read_message "pointneg"  --message "noR"  &
@@ -276,58 +236,49 @@ python run_Policy_Main.py --env KuaiEnv-v0  --cuda 5  --lambda_variance 0 --lamb
 #python run_Policy_Main.py --env KuaiRand-v0 --cuda 4  --lambda_variance 10 --lambda_entropy 0 --window_size 3 --read_message "pointneg"  --message "var10_ent0_win3"  &
 #python run_Policy_Main.py --env KuaiEnv-v0  --cuda 4  --lambda_variance 10 --lambda_entropy 0 --window_size 3 --read_message "pointneg"  --message "var10_ent0_win3"  &
 
+
+
+
+
+
+
+
+#python run_Policy_SQN.py --env CoatEnv-v0  --cuda 4 --window_sqn 10 --which_tracker caser  --message "sqn_caser_win10" &
+#python run_Policy_SQN.py --env YahooEnv-v0 --cuda 4 --window_sqn 10 --which_tracker caser  --message "sqn_caser_win10" &
+#python run_Policy_SQN.py --env KuaiRand-v0 --cuda 4 --window_sqn 10 --which_tracker caser  --message "sqn_caser_win10" &
+#python run_Policy_SQN.py --env KuaiEnv-v0  --cuda 4 --window_sqn 10 --which_tracker caser  --message "sqn_caser_win10" &
 #
+#python run_Policy_SQN.py --env CoatEnv-v0  --cuda 5 --window_sqn 5 --which_tracker caser  --message "sqn_caser_win5" &
+#python run_Policy_SQN.py --env YahooEnv-v0 --cuda 5 --window_sqn 5 --which_tracker caser  --message "sqn_caser_win5" &
+#python run_Policy_SQN.py --env KuaiRand-v0 --cuda 5 --window_sqn 5 --which_tracker caser  --message "sqn_caser_win5" &
+#python run_Policy_SQN.py --env KuaiEnv-v0  --cuda 5 --window_sqn 5 --which_tracker caser  --message "sqn_caser_win5" &
 #
-##
-#python run_Policy_BCQ.py  --read_message "pointneg" --cuda 1 --env CoatEnv-v0  --message "CoatEnv"  &
-#python run_Policy_BCQ.py  --read_message "pointneg" --cuda 2 --env YahooEnv-v0 --message "YahooEnv" &
-#python run_Policy_BCQ.py  --read_message "pointneg" --cuda 4 --env KuaiRand-v0 --message "KuaiRand" &
-#python run_Policy_BCQ.py  --read_message "pointneg" --cuda 3 --env KuaiEnv-v0  --message "1" &
-##
-#python run_Policy_CQL.py  --read_message "pointneg" --cuda 1 --env CoatEnv-v0  --message "CoatEnv"  &
-#python run_Policy_CQL.py  --read_message "pointneg" --cuda 2 --env YahooEnv-v0 --message "YahooEnv" &
-#python run_Policy_CQL.py  --read_message "pointneg" --cuda 4 --env KuaiRand-v0 --message "KuaiRand" &
-#python run_Policy_CQL.py  --read_message "pointneg" --cuda 4 --env KuaiEnv-v0  --message "1" &
-##
-##python run_Policy_CRR.py  --read_message "pointneg" --cuda 4 --env CoatEnv-v0  --message "CoatEnv"  &
-##python run_Policy_CRR.py  --read_message "pointneg" --cuda 1 --env YahooEnv-v0 --message "YahooEnv" &
-##python run_Policy_CRR.py  --read_message "pointneg" --cuda 6 --env KuaiRand-v0 --message "KuaiRand" &
-#python run_Policy_CRR.py  --read_message "pointneg" --cuda 3 --env KuaiEnv-v0  --message "1" &
+#python run_Policy_SQN.py --env CoatEnv-v0  --cuda 6 --window_sqn 3 --which_tracker gru  --message "sqn_gru_win3" &
+#python run_Policy_SQN.py --env YahooEnv-v0 --cuda 6 --window_sqn 3 --which_tracker gru  --message "sqn_gru_win3" &
+#python run_Policy_SQN.py --env KuaiRand-v0 --cuda 6 --window_sqn 3 --which_tracker gru  --message "sqn_gru_win3" &
+#python run_Policy_SQN.py --env KuaiEnv-v0  --cuda 6 --window_sqn 3 --which_tracker gru  --message "sqn_gru_win3" &
 #
+#python run_Policy_SQN.py --env CoatEnv-v0  --cuda 7 --window_sqn 5 --which_tracker gru  --message "sqn_gru_win5" &
+#python run_Policy_SQN.py --env YahooEnv-v0 --cuda 7 --window_sqn 5 --which_tracker gru  --message "sqn_gru_win5" &
+#python run_Policy_SQN.py --env KuaiRand-v0 --cuda 7 --window_sqn 5 --which_tracker gru  --message "sqn_gru_win5" &
+#python run_Policy_SQN.py --env KuaiEnv-v0  --cuda 7 --window_sqn 5 --which_tracker gru  --message "sqn_gru_win5" &
 #
-##python run_Policy_Main.py --read_message "pointneg" --cuda 1 --env CoatEnv-v0  --message "CoatEnv"  &
-##python run_Policy_Main.py --read_message "pointneg" --cuda 2 --env YahooEnv-v0 --message "YahooEnv" &
-##python run_Policy_Main.py --read_message "pointneg" --cuda 6 --env KuaiRand-v0 --message "KuaiRand" &
-##python run_Policy_Main.py --read_message "pointneg" --cuda 7 --env KuaiEnv-v0  --message "KuaiRand" &
+#python run_Policy_SQN.py --env CoatEnv-v0  --cuda 4 --window_sqn 10 --which_tracker gru  --message "sqn_gru_win10" &
+#python run_Policy_SQN.py --env YahooEnv-v0 --cuda 4 --window_sqn 10 --which_tracker gru  --message "sqn_gru_win10" &
+#python run_Policy_SQN.py --env KuaiRand-v0 --cuda 4 --window_sqn 10 --which_tracker gru  --message "sqn_gru_win10" &
+#python run_Policy_SQN.py --env KuaiEnv-v0  --cuda 4 --window_sqn 10 --which_tracker gru  --message "sqn_gru_win10" &
 #
-#python run_Policy_SQN.py  --cuda 1 --which_tracker caser --which_head shead --env CoatEnv-v0  --message "caser_shead" &
-#python run_Policy_SQN.py  --cuda 2 --which_tracker caser --which_head shead --env YahooEnv-v0 --message "caser_shead" &
-#python run_Policy_SQN.py  --cuda 1 --which_tracker caser --which_head shead --env KuaiRand-v0 --message "caser_shead" &
-#python run_Policy_SQN.py  --cuda 2 --which_tracker caser --which_head shead --env KuaiEnv-v0  --message "caser_shead" &
+#python run_Policy_SQN.py --env CoatEnv-v0  --cuda 5 --window_sqn 3 --which_tracker sasrec  --message "sqn_sasrec_win3" &
+#python run_Policy_SQN.py --env YahooEnv-v0 --cuda 5 --window_sqn 3 --which_tracker sasrec  --message "sqn_sasrec_win3" &
+#python run_Policy_SQN.py --env KuaiRand-v0 --cuda 5 --window_sqn 3 --which_tracker sasrec  --message "sqn_sasrec_win3" &
+#python run_Policy_SQN.py --env KuaiEnv-v0  --cuda 5 --window_sqn 3 --which_tracker sasrec  --message "sqn_sasrec_win3" &
 #
-#python run_Policy_SQN.py  --cuda 1 --which_tracker caser --which_head qhead --env CoatEnv-v0  --message "caser_qhead" &
-#python run_Policy_SQN.py  --cuda 2 --which_tracker caser --which_head qhead --env YahooEnv-v0 --message "caser_qhead" &
-#python run_Policy_SQN.py  --cuda 1 --which_tracker caser --which_head qhead --env KuaiRand-v0 --message "caser_qhead" &
-#python run_Policy_SQN.py  --cuda 4 --which_tracker caser --which_head qhead --env KuaiEnv-v0  --message "caser_qhead" &
+#python run_Policy_SQN.py --env CoatEnv-v0  --cuda 6 --window_sqn 5 --which_tracker sasrec  --message "sqn_sasrec_win5" &
+#python run_Policy_SQN.py --env YahooEnv-v0 --cuda 6 --window_sqn 5 --which_tracker sasrec  --message "sqn_sasrec_win5" &
+#python run_Policy_SQN.py --env KuaiRand-v0 --cuda 6 --window_sqn 5 --which_tracker sasrec  --message "sqn_sasrec_win5" &
+#python run_Policy_SQN.py --env KuaiEnv-v0  --cuda 6 --window_sqn 5 --which_tracker sasrec  --message "sqn_sasrec_win5" &
 #
-#
-#python run_Policy_SQN.py  --cuda 4 --which_tracker gru --which_head shead --env CoatEnv-v0  --message "gru_shead" &
-#python run_Policy_SQN.py  --cuda 5 --which_tracker gru --which_head shead --env YahooEnv-v0 --message "gru_shead" &
-#python run_Policy_SQN.py  --cuda 4 --which_tracker gru --which_head shead --env KuaiRand-v0 --message "gru_shead" &
-#python run_Policy_SQN.py  --cuda 5 --which_tracker gru --which_head shead --env KuaiEnv-v0  --message "gru_shead" &
-##
-#python run_Policy_SQN.py  --cuda 3 --which_tracker sasrec --which_head qhead --env CoatEnv-v0  --message "sasrec_qhead" &
-#python run_Policy_SQN.py  --cuda 6 --which_tracker sasrec --which_head qhead --env YahooEnv-v0 --message "sasrec_qhead" &
-#python run_Policy_SQN.py  --cuda 3 --which_tracker sasrec --which_head qhead --env KuaiRand-v0 --message "sasrec_qhead" &
-#python run_Policy_SQN.py  --cuda 1 --which_tracker sasrec --which_head qhead --env KuaiEnv-v0  --message "sasrec_qhead" &
-##
-##
-#python run_Policy_SQN.py  --cuda 6 --which_tracker gru --which_head qhead --env CoatEnv-v0  --message "gru_qhead" &
-#python run_Policy_SQN.py  --cuda 7 --which_tracker gru --which_head qhead --env YahooEnv-v0 --message "gru_qhead" &
-#python run_Policy_SQN.py  --cuda 4 --which_tracker gru --which_head qhead --env KuaiRand-v0 --message "gru_qhead" &
-#python run_Policy_SQN.py  --cuda 2 --which_tracker gru --which_head qhead --env KuaiEnv-v0  --message "gru_qhead" &
-###
-#python run_Policy_SQN.py  --cuda 6 --which_tracker gru --which_head bcq --env CoatEnv-v0  --message "gru_bcq" &
-#python run_Policy_SQN.py  --cuda 7 --which_tracker gru --which_head bcq --env YahooEnv-v0 --message "gru_bcq" &
-#python run_Policy_SQN.py  --cuda 4 --which_tracker gru --which_head bcq --env KuaiRand-v0 --message "gru_bcq" &
-#python run_Policy_SQN.py  --cuda 5 --which_tracker gru --which_head bcq --env KuaiEnv-v0  --message "gru_bcq" &
+#python run_Policy_SQN.py --env CoatEnv-v0  --cuda 7 --window_sqn 10 --which_tracker sasrec  --message "sqn_sasrec_win10" &
+#python run_Policy_SQN.py --env YahooEnv-v0 --cuda 7 --window_sqn 10 --which_tracker sasrec  --message "sqn_sasrec_win10" &
+#python run_Policy_SQN.py --env KuaiRand-v0 --cuda 7 --window_sqn 10 --which_tracker sasrec  --message "sqn_sasrec_win10" &
+#python run_Policy_SQN.py --env KuaiEnv-v0  --cuda 7 --window_sqn 10 --which_tracker sasrec  --message "sqn_sasrec_win10" &
