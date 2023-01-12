@@ -2,21 +2,15 @@
 # @Time    : 2021/7/26 9:49 上午
 # @Author  : Chongming GAO
 # @FileName: state_tracker.py
-import math
 
 import numpy as np
 import torch
-
-from core.inputs import SparseFeatP, input_from_feature_columns, create_embedding_matrix
-from deepctr_torch.inputs import varlen_embedding_lookup, get_varlen_pooling_list, \
-    VarLenSparseFeat, DenseFeat, combined_dnn_input
-
-from torch import nn, Tensor
-from torch.nn import TransformerEncoderLayer, TransformerEncoder
-
-from core.layers import PositionalEncoding
-from core.user_model import build_input_features, compute_input_dim
 import torch.nn.functional as F
+from torch import nn, Tensor
+
+from core.inputs import input_from_feature_columns
+from core.user_model import build_input_features, compute_input_dim
+from deepctr_torch.inputs import combined_dnn_input
 
 FLOAT = torch.FloatTensor
 
@@ -110,11 +104,17 @@ class StateTracker_Base(nn.Module):
 
 
 class StateTrackerAvg2(StateTracker_Base):
-    def __init__(self, user_columns, action_columns, feedback_columns, dim_model, saved_embedding, device="cpu",
-                 use_userEmbedding=False, window_size=10):
+    def __init__(self, user_columns, action_columns, feedback_columns, dim_model, saved_embedding,
+                 train_max=None, train_min=None, test_max=None, test_min=None,
+                 device="cpu", use_userEmbedding=False, window_size=10):
         super(StateTrackerAvg2, self).__init__(user_columns=user_columns, action_columns=action_columns,
                                                feedback_columns=feedback_columns, dim_model=dim_model, device=device,
                                                window_size=window_size)
+
+        self.test_min = test_min
+        self.test_max = test_max
+        self.train_min = train_min
+        self.train_max = train_max
 
         assert saved_embedding is not None
         self.embedding_dict = saved_embedding.to(device)
@@ -134,8 +134,7 @@ class StateTrackerAvg2(StateTracker_Base):
         if self.use_userEmbedding:
             self.ffn_user = nn.Linear(compute_input_dim(self.user_columns), self.dim_model, device=self.device)
 
-    def forward(self, buffer=None, indices=None, obs=None,
-                reset=None, is_obs=None, remove_recommended_ids=False):
+    def forward(self, buffer=None, indices=None, obs=None, reset=None, is_obs=None, is_train=True):
 
         if reset:  # get user embedding
 
@@ -199,7 +198,7 @@ class StateTrackerAvg2(StateTracker_Base):
                 obs_all = np.concatenate([obs_all, obs_prev])
                 rew_all = np.concatenate([rew_all, rew_prev])
 
-            item_all_complete = np.expand_dims(obs_all[:, 1], -1)
+            # item_all_complete = np.expand_dims(obs_all[:, 1], -1)
             if len(live_mat) > self.window_size:
                 live_mat = live_mat[:self.window_size, :]
                 obs_all = obs_all[:len(index) * self.window_size, :]
@@ -219,7 +218,21 @@ class StateTrackerAvg2(StateTracker_Base):
             else:
                 s_t = e_i
 
-            state_flat = s_t * e_r
+            if is_train:
+                r_max = self.train_max
+                r_min = self.train_min
+            else:
+                r_max = self.test_max
+                r_min = self.test_min
+
+            if r_max is not None and r_min is not None:
+                normed_r = (e_r - r_min) / (r_max - r_min)
+                if not (all(normed_r<=1) and all(normed_r>=0)):
+                    a = 1
+            else:
+                normed_r = e_r
+
+            state_flat = s_t * normed_r
             state_cube = state_flat.reshape((-1, len(index), state_flat.shape[-1]))
 
             mask = torch.from_numpy(np.expand_dims(live_mat, -1)).to(self.device)
@@ -357,7 +370,7 @@ class StateTracker_Caser(StateTracker_Base):
 
             return emb_state
 
-    def forward(self, buffer=None, indices=None, obs=None, reset=None, is_obs=None):
+    def forward(self, buffer=None, indices=None, obs=None, reset=None, is_obs=None, **kwargs):
 
         emb_state = self.convert_to_k_state_embedding(buffer, indices, obs, reset, is_obs)
 
@@ -481,7 +494,7 @@ class StateTracker_GRU(StateTracker_Base):
                                                                  batch_first=True, enforce_sorted=False)
             return emb_packed
 
-    def forward(self, buffer=None, indices=None, obs=None, reset=None, is_obs=None):
+    def forward(self, buffer=None, indices=None, obs=None, reset=None, is_obs=None, **kwargs):
 
         emb_packed = self.convert_to_k_state_embedding(buffer, indices, obs, reset, is_obs)
 
@@ -702,7 +715,7 @@ class StateTracker_SASRec(StateTracker_Base):
 
             return seq_reverse, mask, len_states
 
-    def forward(self, buffer=None, indices=None, obs=None, reset=None, is_obs=None):
+    def forward(self, buffer=None, indices=None, obs=None, reset=None, is_obs=None, **kwargs):
 
         seq, mask, len_states = self.convert_to_k_state_embedding(buffer, indices, obs, reset, is_obs)
 
@@ -714,6 +727,6 @@ class StateTracker_SASRec(StateTracker_Base):
         ff_out_3 = self.ln_3(ff_out_masked)
 
         # state_final = ff_out_3[:, 0, :]
-        state_final = extract_axis_1(ff_out_3, len_states - 1).squeeze()
+        state_final = extract_axis_1(ff_out_3, len_states - 1).squeeze(1)
 
         return state_final

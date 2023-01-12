@@ -152,6 +152,7 @@ class Collector(object):
             random: bool = False,
             render: Optional[float] = None,
             no_grad: bool = True,
+            is_train=True,
     ) -> Dict[str, Any]:
         """Collect a specified number of step or episode. Revised from tianshou.data.collector
 
@@ -231,9 +232,9 @@ class Collector(object):
                 if no_grad:
                     with torch.no_grad():  # faster than retain_grad version
                         # self.data.obs will be used by agent to get result
-                        result = self.policy(self.data, self.buffer, state=last_state, remove_recommended_ids=self.remove_recommended_ids)
+                        result = self.policy(self.data, self.buffer, state=last_state, remove_recommended_ids=self.remove_recommended_ids, is_train=is_train)
                 else:
-                    result = self.policy(self.data, self.buffer, state=last_state, remove_recommended_ids=self.remove_recommended_ids)
+                    result = self.policy(self.data, self.buffer, state=last_state, remove_recommended_ids=self.remove_recommended_ids, is_train=is_train)
                 # update state / act / policy into self.data
                 policy = result.get("policy", Batch())  # Todo: 这里在pg下是空的！
                 assert isinstance(policy, Batch)

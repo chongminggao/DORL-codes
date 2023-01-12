@@ -162,29 +162,31 @@ class EnsembleModel():
         df_train, df_user, df_item, list_feat = get_training_data(envname)
 
         num_item = df_train["item_id"].nunique()
-
         if not "timestamp" in df_train.columns:
             df_train.rename(columns={"time_ms": "timestamp"}, inplace=True)
 
         def get_entropy(mylist, need_count=True):
+            if len(mylist) <= 1:
+                return 1
             if need_count:
                 cnt_dict = Counter(mylist)
             else:
                 cnt_dict = mylist
             prob = np.array(list(cnt_dict.values())) / sum(cnt_dict.values())
             log_prob = np.log2(prob)
-            entropy = - np.sum(log_prob * prob) / np.log2(len(cnt_dict) + 1)
+            entropy = - np.sum(log_prob * prob) / np.log2(len(cnt_dict))
+            # entropy = - np.sum(log_prob * prob) / np.log2(len(cnt_dict) + 1)
             return entropy
 
         entropy_user, map_entropy = None, None
 
-        if 0 in entropy_window:
-            df_train = df_train.sort_values("user_id")
-            interaction_list = df_train[["user_id", "item_id"]].groupby("user_id").agg(list)
-            entropy_user = interaction_list["item_id"].map(partial(get_entropy))
-
-            savepath = os.path.join(self.Entropy_PATH, "user_entropy.csv")
-            entropy_user.to_csv(savepath, index=True)
+        # if 0 in entropy_window:
+        #     df_train = df_train.sort_values("user_id")
+        #     interaction_list = df_train[["user_id", "item_id"]].groupby("user_id").agg(list)
+        #     entropy_user = interaction_list["item_id"].map(partial(get_entropy))
+        #
+        #     savepath = os.path.join(self.Entropy_PATH, "user_entropy.csv")
+        #     entropy_user.to_csv(savepath, index=True)
 
         if len(set(entropy_window) - set([0])):
 
@@ -222,7 +224,7 @@ class EnsembleModel():
             savepath = os.path.join(self.Entropy_PATH, "map_entropy.pickle")
             pickle.dump(map_entropy, open(savepath, 'wb'))
 
-            print(map_hist_count)
+            # print(map_hist_count)
 
         return entropy_user, map_entropy
 

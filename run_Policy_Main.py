@@ -130,7 +130,6 @@ def get_args_all():
     args = parser.parse_known_args()[0]
     return args
 
-
 def prepare_user_model_and_env(args):
     args.device = torch.device("cuda:{}".format(args.cuda) if torch.cuda.is_available() else "cpu")
     np.random.seed(args.seed)
@@ -174,17 +173,24 @@ def prepare_envs(args, ensemble_models, alpha_u, beta_i):
     # entropy_user, map_entropy = ensemble_models.get_save_entropy_mat(args.env, args.entropy_window)
 
     entropy_dict = dict()
-    if 0 in args.entropy_window:
-        entropy_path = os.path.join(ensemble_models.Entropy_PATH, "user_entropy.csv")
-        entropy = pd.read_csv(entropy_path)
-        entropy.set_index("user_id", inplace=True)
-        entropy_mat_0 = entropy.to_numpy().reshape([-1])
-        entropy_dict.update({"on_user": entropy_mat_0})
-
+    # if 0 in args.entropy_window:
+    #     entropy_path = os.path.join(ensemble_models.Entropy_PATH, "user_entropy.csv")
+    #     entropy = pd.read_csv(entropy_path)
+    #     entropy.set_index("user_id", inplace=True)
+    #     entropy_mat_0 = entropy.to_numpy().reshape([-1])
+    #     entropy_dict.update({"on_user": entropy_mat_0})
     if len(set(args.entropy_window) - set([0])):
         savepath = os.path.join(ensemble_models.Entropy_PATH, "map_entropy.pickle")
         map_entropy = pickle.load(open(savepath, 'rb'))
         entropy_dict.update({"map": map_entropy})
+
+    entropy_set = set(args.entropy_window)
+    entropy_min = 0
+    entropy_max = 0
+    if len(entropy_set):
+        for entropy_term in entropy_set:
+            entropy_min += min([v for k, v in entropy_dict["map"].items() if len(k) == entropy_term])
+            entropy_max += max([v for k, v in entropy_dict["map"].items() if len(k) == entropy_term])
 
     with open(ensemble_models.PREDICTION_MAT_PATH, "rb") as file:
         predicted_mat = pickle.load(file)
@@ -212,10 +218,13 @@ def prepare_envs(args, ensemble_models, alpha_u, beta_i):
         "entropy_dict": entropy_dict,
         "entropy_window": args.entropy_window,
         "gamma_exposure": args.gamma_exposure,
-        "step_n_actions": max(args.entropy_window)
+        "step_n_actions": max(args.entropy_window) if len(args.entropy_window) else 0,
+        "entropy_min": entropy_min,
+        "entropy_max": entropy_max,
     }
 
     # simulatedEnv = SimulatedEnv(**kwargs)
+
 
     train_envs = DummyVectorEnv(
         [lambda: SimulatedEnv(**kwargs) for _ in range(args.training_num)])
@@ -253,8 +262,14 @@ def setup_policy_model(args, ensemble_models, env, train_envs, test_envs_dict):
     else:
         args.state_dim = action_columns[0].embedding_dim
 
-    state_tracker = StateTrackerAvg2(user_columns, action_columns, feedback_columns, args.state_dim,
-                                     saved_embedding, device=args.device, window_size=args.window_size,
+    train_max = train_envs.get_env_attr("MAX_R")[0] - train_envs.get_env_attr("MIN_R")[0]
+    train_min = 0
+    test_max = test_envs_dict['FB'].get_env_attr("mat")[0].max()
+    test_min = test_envs_dict['FB'].get_env_attr("mat")[0].min()
+
+    state_tracker = StateTrackerAvg2(user_columns, action_columns, feedback_columns, args.state_dim, saved_embedding,
+                                     train_max, train_min, test_max, test_min,
+                                     device=args.device, window_size=args.window_size,
                                      use_userEmbedding=args.use_userEmbedding).to(args.device)
 
     if args.cpu:

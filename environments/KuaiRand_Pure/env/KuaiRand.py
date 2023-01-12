@@ -91,6 +91,8 @@ class KuaiRandEnv(gym.Env):
 
         num_user = df_mat_part['user_id'].nunique()
         num_item = df_mat_part['item_id'].nunique()
+        assert num_user == 27285
+        assert num_item == 7583
 
         mat = csr_matrix((df_mat_part["value"], (df_mat_part['user_id'], df_mat_part['item_id'])),
                          shape=(num_user, num_item)).toarray()
@@ -218,7 +220,7 @@ class KuaiRandEnv(gym.Env):
 
         list_feat = df_item['tag'].to_list()
 
-        df_feat = pd.DataFrame(list_feat, columns=['feat0', 'feat1', 'feat2'], dtype=int)
+        df_feat = pd.DataFrame(list_feat, columns=['feat0', 'feat1', 'feat2'])
         df_feat.index.name = "item_id"
         df_feat[df_feat.isna()] = -1
         df_feat = df_feat + 1

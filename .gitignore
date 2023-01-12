@@ -22,6 +22,7 @@ results_for_paper/*.pdf
 *.pdf
 *.pth
 *.png
+results_for_paper
 
 *.egg*
 events.*

@@ -97,7 +97,7 @@ def get_common_args(args):
         parser.set_defaults(is_binarize=True)
         parser.set_defaults(need_transform=False)
         # args.entropy_on_user = True
-        parser.add_argument("--entropy_window", type=int, nargs="*", default=[0])
+        parser.add_argument("--entropy_window", type=int, nargs="*", default=[])
         parser.add_argument("--rating_threshold", type=float, default=4)
         parser.add_argument("--yfeat", type=str, default="rating")
 
@@ -111,7 +111,7 @@ def get_common_args(args):
         parser.set_defaults(is_binarize=True)
         parser.set_defaults(need_transform=False)
         # args.entropy_on_user = True
-        parser.add_argument("--entropy_window", type=int, nargs="*", default=[0])
+        parser.add_argument("--entropy_window", type=int, nargs="*", default=[])
         parser.add_argument("--rating_threshold", type=float, default=4)
         parser.add_argument("--yfeat", type=str, default="rating")
 
@@ -125,7 +125,7 @@ def get_common_args(args):
         parser.set_defaults(is_binarize=True)
         parser.set_defaults(need_transform=False)
         # args.entropy_on_user = False
-        parser.add_argument("--entropy_window", type=int, nargs="*", default=[0,1,2])
+        parser.add_argument("--entropy_window", type=int, nargs="*", default=[1,2])
         parser.add_argument("--rating_threshold", type=float, default=1)
         parser.add_argument("--yfeat", type=str, default="is_click")
 
@@ -139,7 +139,7 @@ def get_common_args(args):
         parser.set_defaults(is_binarize=False)
         parser.set_defaults(need_transform=True)
         # args.entropy_on_user = False
-        parser.add_argument("--entropy_window", type=int, nargs="*", default=[0,1,2])
+        parser.add_argument("--entropy_window", type=int, nargs="*", default=[1,2])
         parser.add_argument("--yfeat", type=str, default="watch_ratio_normed")
 
         parser.add_argument('--leave_threshold', default=120, type=float)

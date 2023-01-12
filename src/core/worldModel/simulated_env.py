@@ -11,9 +11,11 @@ from torch import FloatTensor
 from tqdm import tqdm
 
 from core.util import compute_action_distance, clip0, compute_exposure
+
+
 # from virtualTB.model.UserModel import UserModel
 
-from environments.VirtualTaobao.virtualTB.utils import *
+# from environments.VirtualTaobao.virtualTB.utils import *
 
 
 class SimulatedEnv(gym.Env):
@@ -27,7 +29,10 @@ class SimulatedEnv(gym.Env):
                  predicted_mat=None, maxvar_mat=None, entropy_dict=None,
                  entropy_window=None,
                  gamma_exposure=1,
-                 step_n_actions=1):
+                 step_n_actions=1,
+                 entropy_min=None,
+                 entropy_max=None
+                 ):
 
         self.ensemble_models = ensemble_models.eval()
         # self.dataset_val = dataset_val
@@ -58,18 +63,23 @@ class SimulatedEnv(gym.Env):
         self.gamma_exposure = gamma_exposure
         self._reset_history()
 
-        entropy_min = 0
-        if 0 in self.entropy_window:
-            entropy_min = self.entropy_dict["on_user"].min()
-
+        # entropy_min = 0
+        # entropy_max = 0
+        # if 0 in self.entropy_window:
+        #     entropy_min = self.entropy_dict["on_user"].min()
+        #     entropy_max = self.entropy_dict["on_user"].max()
+        #
+        # # todo: comments
         # entropy_set = set(self.entropy_window) - set([0])
         # if len(entropy_set):
         #     for entropy_term in entropy_set:
         #         entropy_min += min([v for k, v in self.entropy_dict["map"].items() if len(k) == entropy_term])
+        #         entropy_max += max([v for k, v in self.entropy_dict["map"].items() if len(k) == entropy_term])
 
         self.lambda_variance = lambda_variance
         self.lambda_entropy = lambda_entropy
-        self.normed_term = predicted_mat.min() - lambda_variance * maxvar_mat.max() + lambda_entropy * entropy_min
+        self.MIN_R = predicted_mat.min() - lambda_variance * maxvar_mat.max() + lambda_entropy * entropy_min
+        self.MAX_R = predicted_mat.max() - lambda_variance * maxvar_mat.min() + lambda_entropy * entropy_max
 
     # def compile(self, num_env=1):
     #     self.env_list = DummyVectorEnv([lambda: gym.make(self.env_task) for _ in range(num_env)])
@@ -92,7 +102,7 @@ class SimulatedEnv(gym.Env):
         self._reset_history()
         if self.env_name == "VirtualTB-v0":
             self.cur_user = self.state[:-3]
-        else: # elif self.env_name == "KuaiEnv-v0":
+        else:  # elif self.env_name == "KuaiEnv-v0":
             self.cur_user = self.state
         return self.state
 
@@ -109,33 +119,34 @@ class SimulatedEnv(gym.Env):
                 pred_reward = 0
             if pred_reward > 10:
                 pred_reward = 10
-        else: # elif self.env_name == "KuaiEnv-v0":
+        else:  # elif self.env_name == "KuaiEnv-v0":
 
             # get prediction
-            pred_reward = self.predicted_mat[self.cur_user[0], action] # todo
+            pred_reward = self.predicted_mat[self.cur_user[0], action]  # todo
             # get variance
             max_var = self.maxvar_mat[self.cur_user[0], action]  # todo
             # get entropy
+            entropy_u = 0
             if 0 in self.entropy_window:
-                entropy_u = self.entropy_dict["on_user"][self.cur_user[0]]
+                entropy_u = self.entropy_dict["on_user"].loc[self.cur_user[0]]
 
             entropy = 0
             entropy_set = set(self.entropy_window) - {0}
             if len(entropy_set):
-                action_k = self.history_action[max(0, self.total_turn - self.step_n_actions + 1):self.total_turn+1]
+                action_k = self.history_action[max(0, self.total_turn - self.step_n_actions + 1):self.total_turn + 1]
                 if hasattr(self.env_task, "lbe_item") and self.env_task.lbe_item:
                     action_trans = self.env_task.lbe_item.inverse_transform(action_k)
                 else:
                     action_trans = action_k
                 action_reverse = action_trans[::-1]
                 for k in range(len(action_reverse)):
-                    action_set = tuple(sorted(action_reverse[:k+1]))
+                    action_set = tuple(sorted(action_reverse[:k + 1]))
                     # print(action_set)
                     if action_set in self.entropy_dict["map"]:
                         entropy += self.entropy_dict["map"][action_set]
 
             penalized_reward = pred_reward - self.lambda_variance * max_var + \
-                               self.lambda_entropy * (entropy_u + entropy) - self.normed_term
+                               self.lambda_entropy * (entropy_u + entropy) - self.MIN_R
 
         if self.version == "v1":
             # version 1
@@ -205,7 +216,7 @@ class SimulatedEnv(gym.Env):
         if self.env_name == "VirtualTB-v0":
             # self.history_action = np.empty([0, self.action_space.shape[0]])
             self.history_action = np.zeros([self.env_task.max_turn, self.env_task.action_space.shape[0]])
-        else: # elif self.env_name == "KuaiEnv-v0":
+        else:  # elif self.env_name == "KuaiEnv-v0":
             self.history_action = np.zeros(self.env_task.max_turn, dtype=int)
         self.history_exposure = {}
         self.max_history = 0
@@ -215,11 +226,10 @@ class SimulatedEnv(gym.Env):
             action2 = np.expand_dims(action, 0)
             # self.history_action = np.append(self.history_action, action2, axis=0)
             self.history_action[t] = action2
-        else: # elif self.env_name == "KuaiEnv-v0":
+        else:  # elif self.env_name == "KuaiEnv-v0":
             self.history_action[t] = action
 
         self.history_exposure[t] = exposure
-
 
         assert self.max_history == t
         self.max_history += 1

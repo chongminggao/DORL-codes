@@ -22,7 +22,6 @@ from core.inputs import get_dataset_columns
 
 from core.state_tracker2 import StateTrackerAvg2
 
-
 from tianshou.utils.net.common import ActorCritic, Net
 from tianshou.utils.net.discrete import Actor
 
@@ -35,6 +34,7 @@ try:
     import envpool
 except ImportError:
     envpool = None
+
 
 def get_args_all():
     parser = argparse.ArgumentParser()
@@ -129,6 +129,7 @@ def setup_policy_model(args, env, buffer, test_envs_dict):
         args.state_dim = action_columns[0].embedding_dim
 
     args.max_action = env.action_space.high[0]
+
 
     state_tracker = StateTrackerAvg2(user_columns, action_columns, feedback_columns, args.state_dim,
                                      saved_embedding, device=args.device, window_size=args.window_size,
