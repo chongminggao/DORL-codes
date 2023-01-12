@@ -167,6 +167,7 @@
 #python run_Policy_Main.py --env KuaiEnv-v0  --cuda 5  --lambda_variance 1 --lambda_entropy 10 --window_size 3 --read_message "pointneg"  --message "var10_ent1_win3"  &
 
 
+
 python run_Policy_Main.py --env CoatEnv-v0  --cuda 6  --lambda_variance 0 --lambda_entropy 0 --window_size 3 --read_message "pointneg"  --message "newR"  &
 python run_Policy_Main.py --env YahooEnv-v0 --cuda 6  --lambda_variance 0 --lambda_entropy 0 --window_size 3 --read_message "pointneg"  --message "newR"  &
 python run_Policy_Main.py --env KuaiRand-v0 --cuda 6  --lambda_variance 0 --lambda_entropy 0 --window_size 3 --read_message "pointneg"  --message "newR"  &
