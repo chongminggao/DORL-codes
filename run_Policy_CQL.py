@@ -84,7 +84,8 @@ def get_args_all():
     parser.add_argument('--logdir', type=str, default='log')
 
     parser.add_argument("--lr", type=float, default=3e-3)
-    parser.add_argument('--num-quantiles', type=int, default=200)
+    # parser.add_argument('--num-quantiles', type=int, default=200)
+    parser.add_argument('--num-quantiles', type=int, default=20)
     parser.add_argument("--min-q-weight", type=float, default=10.)
     parser.add_argument("--eps-test", type=float, default=0.001)
     parser.add_argument("--gamma", type=float, default=0.99)

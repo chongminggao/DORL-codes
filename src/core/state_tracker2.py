@@ -227,6 +227,8 @@ class StateTrackerAvg2(StateTracker_Base):
 
             if r_max is not None and r_min is not None:
                 normed_r = (e_r - r_min) / (r_max - r_min)
+                if not (all(normed_r<=1) and all(normed_r>=0)):
+                    a = 1
                 assert (all(normed_r<=1) and all(normed_r>=0))
             else:
                 normed_r = e_r

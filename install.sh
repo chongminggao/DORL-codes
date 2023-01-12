@@ -1,8 +1,8 @@
 #!/bin/bash
 
-pip3 install torch --extra-index-url https://download.pytorch.org/whl/cu116
+pip install --upgrade torch # --extra-index-url https://download.pytorch.org/whl/cu116
 
-pip3 install --upgrade --no-cache-dir scipy sklearn tqdm logzero pandas seaborn numba gym paramiko
+pip install --upgrade --no-cache-dir scipy sklearn tqdm logzero pandas seaborn numba gym paramiko
 
-pip3 install --upgrade --no-cache-dir tensorflow-gpu
+pip install --upgrade --no-cache-dir tensorflow-gpu
 

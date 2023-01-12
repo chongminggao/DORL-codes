@@ -126,10 +126,9 @@ class SimulatedEnv(gym.Env):
             # get variance
             max_var = self.maxvar_mat[self.cur_user[0], action]  # todo
             # get entropy
-            entropy_u = 0
-            if 0 in self.entropy_window:
-                entropy_u = self.entropy_dict["on_user"].loc[self.cur_user[0]]
-
+            # entropy_u = 0
+            # if 0 in self.entropy_window:
+            #     entropy_u = self.entropy_dict["on_user"].loc[self.cur_user[0]]
             entropy = 0
             entropy_set = set(self.entropy_window) - {0}
             if len(entropy_set):
@@ -144,9 +143,12 @@ class SimulatedEnv(gym.Env):
                     # print(action_set)
                     if action_set in self.entropy_dict["map"]:
                         entropy += self.entropy_dict["map"][action_set]
-
+                    else:
+                        entropy += 1 # todo!
+                if len(action_reverse) < self.step_n_actions:
+                    entropy += self.step_n_actions - len(action_reverse) # todo
             penalized_reward = pred_reward - self.lambda_variance * max_var + \
-                               self.lambda_entropy * (entropy_u + entropy) - self.MIN_R
+                               self.lambda_entropy * entropy - self.MIN_R
 
         if self.version == "v1":
             # version 1
