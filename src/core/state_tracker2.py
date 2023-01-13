@@ -105,7 +105,7 @@ class StateTracker_Base(nn.Module):
 
 class StateTrackerAvg2(StateTracker_Base):
     def __init__(self, user_columns, action_columns, feedback_columns, dim_model, saved_embedding,
-                 train_max=None, train_min=None, test_max=None, test_min=None,
+                 train_max=None, train_min=None, test_max=None, test_min=None, reward_handle="no",
                  device="cpu", use_userEmbedding=False, window_size=10):
         super(StateTrackerAvg2, self).__init__(user_columns=user_columns, action_columns=action_columns,
                                                feedback_columns=feedback_columns, dim_model=dim_model, device=device,
@@ -115,6 +115,7 @@ class StateTrackerAvg2(StateTracker_Base):
         self.test_max = test_max
         self.train_min = train_min
         self.train_max = train_max
+        self.reward_handle = reward_handle
 
         assert saved_embedding is not None
         self.embedding_dict = saved_embedding.to(device)
@@ -153,9 +154,17 @@ class StateTrackerAvg2(StateTracker_Base):
             else:
                 s0 = e_i
 
+            r0 = torch.ones(len(s0), 1).to(s0.device) # todo: define init reward as 1
+            if self.reward_handle == "mul":
+                state_res = s0 * 1
+            elif self.reward_handle == "cat":
+                state_res = torch.cat([s0, r0], 1)
+            elif self.reward_handle == "cat2":
+                state_res = torch.cat([s0, r0], 1)
+            else:
+                state_res = s0
 
-            # recommended_ids = None
-            return s0
+            return state_res
 
         else:
             index = indices
@@ -235,8 +244,15 @@ class StateTrackerAvg2(StateTracker_Base):
             else:
                 normed_r = e_r
 
+            if self.reward_handle == "mul":
+                state_flat = s_t * normed_r
+            elif self.reward_handle == "cat":
+                state_flat = torch.cat([s_t, normed_r], 1)
+            elif self.reward_handle == "cat2":
+                state_flat = torch.cat([s_t, e_r], 1)
+            else:
+                state_flat = s_t
 
-            state_flat = s_t * normed_r
             state_cube = state_flat.reshape((-1, len(index), state_flat.shape[-1]))
 
             mask = torch.from_numpy(np.expand_dims(live_mat, -1)).to(self.device)

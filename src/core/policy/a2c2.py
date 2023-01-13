@@ -158,6 +158,7 @@ class A2CPolicy_withEmbedding(A2CPolicy):
             dist = self.dist_fn(*logits_masked)
         else:
             dist = self.dist_fn(logits_masked)
+
         if self._deterministic_eval and not self.training:
             if self.action_type == "discrete":
                 act = logits_masked.argmax(-1)

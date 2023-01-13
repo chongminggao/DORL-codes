@@ -57,6 +57,7 @@ def removed_recommended_id_from_embedding(logits, recommended_ids):
     logits_masked = logits.masked_select(mask_valid).reshape(num_batch, -1)
     indices_masked = indices_torch.masked_select(mask_valid).reshape(num_batch, -1)
 
+    logits_masked[logits_masked.sum(1) <= 0] = 1 # todo: for avoiding all zeros
     return logits_masked, indices_masked
 
 

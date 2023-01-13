@@ -25,7 +25,7 @@ from core.configs import get_true_env, get_common_args, get_val_data, get_traini
 from core.collector2 import Collector
 from core.inputs import get_dataset_columns
 from core.policy.a2c2 import A2CPolicy_withEmbedding
-from core.state_tracker2 import StateTrackerAvg2
+from core.state_tracker2 import StateTrackerAvg2, StateTracker_Caser, StateTracker_GRU, StateTracker_SASRec
 from core.trainer.onpolicy import onpolicy_trainer
 from core.worldModel.simulated_env import SimulatedEnv
 
@@ -86,6 +86,16 @@ def get_args_all():
     parser.add_argument('--no_freeze_emb', dest='freeze_emb', action='store_false')
     parser.set_defaults(freeze_emb=False)
 
+    # state tracker
+    parser.add_argument('--reward_handle', type=str, default='no')
+    parser.add_argument("--which_tracker", type=str, default="avg")  # in {"avg", "caser", "sasrec", "gru"}
+    # State_tracker Caser
+    parser.add_argument('--filter_sizes', type=int, nargs='*', default=[2, 3, 4])
+    parser.add_argument("--num_filters", type=int, default=16)
+    parser.add_argument("--dropout_rate", type=float, default=0.1)
+    # State_tracker SASRec
+    # parser.add_argument("--dropout_rate", type=float, default=0.1)
+    parser.add_argument("--num_heads", type=int, default=1)
 
     # Env
     parser.add_argument("--version", type=str, default="v1")
@@ -267,10 +277,30 @@ def setup_policy_model(args, ensemble_models, env, train_envs, test_envs_dict):
     test_max = test_envs_dict['FB'].get_env_attr("mat")[0].max()
     test_min = test_envs_dict['FB'].get_env_attr("mat")[0].min()
 
-    state_tracker = StateTrackerAvg2(user_columns, action_columns, feedback_columns, args.state_dim, saved_embedding,
-                                     train_max, train_min, test_max, test_min,
-                                     device=args.device, window_size=args.window_size,
-                                     use_userEmbedding=args.use_userEmbedding).to(args.device)
+    if args.which_tracker.lower() == "caser":
+        state_tracker = StateTracker_Caser(user_columns, action_columns, feedback_columns, args.state_dim,
+                                           device=args.device,
+                                           window_size=args.window_size,
+                                           filter_sizes=args.filter_sizes, num_filters=args.num_filters,
+                                           dropout_rate=args.dropout_rate).to(args.device)
+        args.state_dim = state_tracker.final_dim
+    elif args.which_tracker.lower() == "gru":
+        state_tracker = StateTracker_GRU(user_columns, action_columns, feedback_columns, args.state_dim,
+                                         device=args.device,
+                                         window_size=args.window_size).to(args.device)
+        args.state_dim = state_tracker.final_dim
+    elif args.which_tracker.lower() == "sasrec":
+        state_tracker = StateTracker_SASRec(user_columns, action_columns, feedback_columns, args.state_dim,
+                                            device=args.device, window_size=args.window_size,
+                                            dropout_rate=args.dropout_rate, num_heads=args.num_heads).to(args.device)
+        args.state_dim = state_tracker.final_dim
+    elif args.which_tracker.lower() == "avg":
+        state_tracker = StateTrackerAvg2(user_columns, action_columns, feedback_columns, args.state_dim, saved_embedding,
+                                         train_max, train_min, test_max, test_min, reward_handle=args.reward_handle,
+                                         device=args.device, window_size=args.window_size,
+                                         use_userEmbedding=args.use_userEmbedding).to(args.device)
+        if args.reward_handle == "cat" or args.reward_handle == "cat2":
+            args.state_dim += 1
 
     if args.cpu:
         args.device = "cpu"
