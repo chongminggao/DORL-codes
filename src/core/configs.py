@@ -129,8 +129,8 @@ def get_common_args(args):
         parser.add_argument("--rating_threshold", type=float, default=1)
         parser.add_argument("--yfeat", type=str, default="is_click")
 
-        parser.add_argument('--leave_threshold', default=10, type=float)
-        parser.add_argument('--num_leave_compute', default=3, type=int)
+        parser.add_argument('--leave_threshold', default=0, type=float)
+        parser.add_argument('--num_leave_compute', default=8, type=int)
         parser.add_argument('--max_turn', default=30, type=int)
         parser.add_argument('--window_size', default=3, type=int)
 
@@ -143,7 +143,7 @@ def get_common_args(args):
         parser.add_argument("--yfeat", type=str, default="watch_ratio_normed")
 
         parser.add_argument('--leave_threshold', default=1, type=float)
-        parser.add_argument('--num_leave_compute', default=3, type=int)
+        parser.add_argument('--num_leave_compute', default=8, type=int)
         parser.add_argument('--max_turn', default=30, type=int)
         parser.add_argument('--window_size', default=3, type=int)
 
@@ -183,11 +183,11 @@ def get_true_env(args, read_user_num=None):
         env_task_class = YahooEnv
     elif args.env == "KuaiRand-v0":
         from environments.KuaiRand_Pure.env.KuaiRand import KuaiRandEnv
-        mat, df_item, mat_distance = KuaiRandEnv.load_mat(args.yfeat, read_user_num=read_user_num)
+        mat, list_feat, mat_distance = KuaiRandEnv.load_mat(args.yfeat, read_user_num=read_user_num)
         kwargs_um = {"yname": args.yfeat,
                      "mat": mat,
-                     "df_item": df_item,
                      "mat_distance": mat_distance,
+                     "list_feat": list_feat,
                      "num_leave_compute": args.num_leave_compute,
                      "leave_threshold": args.leave_threshold,
                      "max_turn": args.max_turn}

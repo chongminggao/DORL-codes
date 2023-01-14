@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
-
+import itertools
 import json
 import os
 import pickle
+from collections import Counter
 
 import gym
 
@@ -29,19 +30,21 @@ DATAPATH = os.path.join(ROOTPATH, "data")
 class KuaiRandEnv(gym.Env):
     metadata = {'render.modes': ['human']}
 
-    def __init__(self, yname, mat=None, df_item=None, mat_distance=None,
-                 num_leave_compute=5, leave_threshold=1, max_turn=100):
+    def __init__(self, yname, mat=None, mat_distance=None, list_feat=None, num_leave_compute=5, leave_threshold=1, max_turn=100):
 
         self.yname = yname
         self.max_turn = max_turn
 
         if mat is not None:
             self.mat = mat
-            self.df_item = df_item
+            self.list_feat = list_feat
             self.mat_distance = mat_distance
         else:
-            self.mat, self.df_item, self.mat_distance = self.load_mat(yname)
+            self.mat, self.list_feat, self.mat_distance = self.load_mat(yname)
         # self.list_feat_small = list(map(lambda x: self.list_feat[x], self.lbe_video.classes_))
+
+        # self.df_item_cat = self.df_item.filter(regex="^feat", axis=1)
+        # self.list_feat, df_feat = KuaiRandEnv.load_category()
 
         self.observation_space = spaces.Box(low=0, high=len(self.mat) - 1, shape=(1,), dtype=np.int32)
         self.action_space = spaces.Box(low=0, high=self.mat.shape[1] - 1, shape=(1,), dtype=np.int32)
@@ -99,8 +102,8 @@ class KuaiRandEnv(gym.Env):
 
         mat_distance = KuaiRandEnv.get_saved_mat(yname, mat)
         # mat_distance = get_distance_mat1(mat, distance)
-
-        df_item = KuaiRandEnv.load_item_feat()
+        list_feat, df_feat = KuaiRandEnv.load_category()
+        # df_item = KuaiRandEnv.load_item_feat()
 
         # dist_cat = np.zeros_like(mat_distance)
         # for i in range(len(dist_cat)):
@@ -125,7 +128,7 @@ class KuaiRandEnv(gym.Env):
         # from matplotlib import pyplot as plt
         # plt.show()
 
-        return mat, df_item, mat_distance
+        return mat, list_feat, mat_distance
 
     @staticmethod
     def load_user_feat():
@@ -311,48 +314,23 @@ class KuaiRandEnv(gym.Env):
         # self.list_feat[action]
         if t == 0:
             return False
+
         window_actions = self.sequence_action[t - self.num_leave_compute:t]
+        hist_categories_each = list(map(lambda x: self.list_feat[x], window_actions))
 
-        dist_list = np.array([self.mat_distance[action, x] for x in window_actions])
+        hist_categories = list(itertools.chain(*hist_categories_each))
+        hist_dict = Counter(hist_categories)
+        category_a = self.list_feat[action]
+        for c in category_a:
+            if hist_dict[c] > self.leave_threshold:
+                return True
 
-        if any(dist_list < self.leave_threshold):
-            return True
-
-        # hist_categories_each = list(map(lambda x: self.list_feat_small[x], window_actions))
-        # hist_set = set.union(*list(map(lambda x: self.list_feat[x], self.sequence_action[t - self.num_leave_compute:t-1])))
-        # hist_categories = list(itertools.chain(*hist_categories_each))
-        # hist_dict = Counter(hist_categories)
-        # category_a = self.list_feat_small[action]
-
-        # for c in category_a:
-        #     if hist_dict[c] > self.leave_threshold:
-        #         return True
-
-        # if action in window_actions:
+        # window_actions = self.sequence_action[t - self.num_leave_compute:t]
+        # dist_list = np.array([self.mat_distance[action, x] for x in window_actions])
+        # if any(dist_list < self.leave_threshold):
         #     return True
 
         return False
-
-    # def _determine_whether_to_leave(self, t, action):
-    #     # self.list_feat[action]
-    #     if t == 0:
-    #         return False
-    #     window_actions = self.sequence_action[t - self.num_leave_compute:t]
-    #     hist_categories_each = list(map(lambda x: self.list_feat_small[x], window_actions))
-    #
-    #     # hist_set = set.union(*list(map(lambda x: self.list_feat[x], self.sequence_action[t - self.num_leave_compute:t-1])))
-    #
-    #     hist_categories = list(itertools.chain(*hist_categories_each))
-    #     hist_dict = Counter(hist_categories)
-    #     category_a = self.list_feat_small[action]
-    #     for c in category_a:
-    #         if hist_dict[c] > self.leave_threshold:
-    #             return True
-    #
-    #     # if action in window_actions:
-    #     #     return True
-    #
-    #     return False
 
     def _reset_history(self):
         self.history_action = {}

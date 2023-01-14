@@ -87,7 +87,7 @@ def get_args_all():
     parser.set_defaults(freeze_emb=False)
 
     # state tracker
-    parser.add_argument('--reward_handle', type=str, default='no')
+    parser.add_argument('--reward_handle', type=str, default='cat') # in {"no", "cat", "cat2", "mul"}
     parser.add_argument("--which_tracker", type=str, default="avg")  # in {"avg", "caser", "sasrec", "gru"}
     # State_tracker Caser
     parser.add_argument('--filter_sizes', type=int, nargs='*', default=[2, 3, 4])
