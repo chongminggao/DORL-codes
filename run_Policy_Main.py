@@ -99,7 +99,7 @@ def get_args_all():
 
     # Env
     parser.add_argument("--version", type=str, default="v1")
-    parser.add_argument('--tau', default=100, type=float)
+    parser.add_argument('--tau', default=0, type=float)
     parser.add_argument('--gamma_exposure', default=10, type=float)
 
     parser.add_argument('--lambda_variance', default=1, type=float)

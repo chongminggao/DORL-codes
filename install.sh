@@ -4,5 +4,5 @@ pip install --upgrade torch # --extra-index-url https://download.pytorch.org/whl
 
 pip install --upgrade --no-cache-dir scipy sklearn tqdm logzero pandas seaborn numba gym paramiko
 
-pip install --upgrade --no-cache-dir tensorflow-gpu
+pip install --upgrade --no-cache-dir tensorflow
 

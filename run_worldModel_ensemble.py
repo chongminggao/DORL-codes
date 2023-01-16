@@ -18,7 +18,6 @@ import pandas as pd
 import torch
 from torch import nn
 
-
 from environments.KuaiRec.env.KuaiEnv import compute_exposure_effect_kuaiRec
 
 sys.path.extend(["./src", "./src/DeepCTR-Torch"])
@@ -94,6 +93,8 @@ def get_args_all():
 
     args = parser.parse_known_args()[0]
     return args
+
+
 def get_args_dataset_specific(envname):
     parser = argparse.ArgumentParser()
     if envname == 'CoatEnv-v0':
@@ -125,7 +126,8 @@ def get_args_dataset_specific(envname):
         parser.add_argument('--leave_threshold', default=10, type=float)
         parser.add_argument('--num_leave_compute', default=3, type=int)
     else:
-        raise("envname should be in the following four datasets: {'CoatEnv-v0', 'YahooEnv-v0', 'KuaiEnv-v0', 'KuaiRand-v0'}")
+        raise (
+            "envname should be in the following four datasets: {'CoatEnv-v0', 'YahooEnv-v0', 'KuaiEnv-v0', 'KuaiRand-v0'}")
 
     args = parser.parse_known_args()[0]
     return args
@@ -216,8 +218,8 @@ def construct_complete_val_x(dataset_val, df_user, df_item, user_features, item_
     df_x_complete = pd.concat([df_user_complete, df_item_complete], axis=1)
     return df_x_complete
 
-def load_dataset_val(args, user_features, item_features, reward_features, entity_dim, feature_dim):
 
+def load_dataset_val(args, user_features, item_features, reward_features, entity_dim, feature_dim):
     df_val, df_user_val, df_item_val, list_feat = get_val_data(args.env)
 
     assert user_features[0] == "user_id"
@@ -286,6 +288,7 @@ def load_dataset_val(args, user_features, item_features, reward_features, entity
 
     return dataset_val, df_user_val, df_item_val
 
+
 def prepare_dir_log(args):
     args.entity_dim = args.feature_dim
     # %% 1. Create dirs
@@ -327,7 +330,8 @@ def setup_world_model(args, x_columns, y_columns, ab_columns, task, task_logit_d
     np.random.seed(args.seed)
     random.seed(args.seed)
 
-    ensemble_models = EnsembleModel(args.n_models, args.message, MODEL_SAVE_PATH, x_columns, y_columns, task, task_logit_dim,
+    ensemble_models = EnsembleModel(args.n_models, args.message, MODEL_SAVE_PATH, x_columns, y_columns, task,
+                                    task_logit_dim,
                                     dnn_hidden_units=args.dnn, dnn_hidden_units_var=args.dnn_var,
                                     seed=args.seed, l2_reg_dnn=args.l2_reg_dnn,
                                     device=device, ab_columns=ab_columns,
@@ -369,6 +373,7 @@ def setup_world_model(args, x_columns, y_columns, ab_columns, task, task_logit_d
 
     return ensemble_models
 
+
 sigmoid = nn.Sigmoid()
 
 
@@ -384,7 +389,8 @@ def process_logit(y_deepfm_pos, score, alpha_u=None, beta_i=None, args=None):
     return y_weighted, loss_ab
 
 
-def loss_pointwise_negative(y, y_deepfm_pos, y_deepfm_neg, score, alpha_u=None, beta_i=None, args=None, log_var=None, log_var_neg=None):
+def loss_pointwise_negative(y, y_deepfm_pos, y_deepfm_neg, score, alpha_u=None, beta_i=None, args=None, log_var=None,
+                            log_var_neg=None):
     y_weighted, loss_ab = process_logit(y_deepfm_pos, score, alpha_u=alpha_u, beta_i=beta_i, args=args)
 
     if log_var is not None:
@@ -398,7 +404,6 @@ def loss_pointwise_negative(y, y_deepfm_pos, y_deepfm_neg, score, alpha_u=None, 
         loss_var_pos = 0
         loss_var_neg = 0
 
-
     loss_y = (((y_weighted - y) ** 2) * inv_var).sum()
     loss_y_neg = (((y_deepfm_neg - 0) ** 2) * inv_var_neg).sum()
 
@@ -406,7 +411,8 @@ def loss_pointwise_negative(y, y_deepfm_pos, y_deepfm_neg, score, alpha_u=None, 
     return loss
 
 
-def loss_pointwise(y, y_deepfm_pos, y_deepfm_neg, score, alpha_u=None, beta_i=None, args=None, log_var=None, log_var_neg=None):
+def loss_pointwise(y, y_deepfm_pos, y_deepfm_neg, score, alpha_u=None, beta_i=None, args=None, log_var=None,
+                   log_var_neg=None):
     y_weighted, loss_ab = process_logit(y_deepfm_pos, score, alpha_u=alpha_u, beta_i=beta_i, args=args)
 
     if log_var is not None:
@@ -423,16 +429,30 @@ def loss_pointwise(y, y_deepfm_pos, y_deepfm_neg, score, alpha_u=None, beta_i=No
     return loss
 
 
-def loss_pairwise(y, y_deepfm_pos, y_deepfm_neg, score, alpha_u=None, beta_i=None, args=None, log_var=None, log_var_neg=None):
+def loss_pairwise(y, y_deepfm_pos, y_deepfm_neg, score, alpha_u=None, beta_i=None, args=None, log_var=None,
+                  log_var_neg=None):
     y_weighted, loss_ab = process_logit(y_deepfm_pos, score, alpha_u=alpha_u, beta_i=beta_i, args=args)
     # loss_y = ((y_exposure - y) ** 2).sum()
 
-    bpr_click = - sigmoid(y_weighted - y_deepfm_neg).log().sum()
-    loss = bpr_click + loss_ab
+    if log_var is not None:
+        inv_var = torch.exp(-log_var)
+        inv_var_neg = torch.exp(-log_var_neg)
+        loss_var_pos = log_var.sum()
+        loss_var_neg = log_var_neg.sum()
+    else:
+        inv_var = 1
+        inv_var_neg = 1
+        loss_var_pos = 0
+        loss_var_neg = 0
+
+    bpr_click = - (sigmoid(y_weighted - y_deepfm_neg).log() * inv_var * inv_var_neg).sum()
+    loss = bpr_click + loss_ab + loss_var_pos + loss_var_neg
 
     return loss
 
-def loss_pairwise_pointwise(y, y_deepfm_pos, y_deepfm_neg, score, alpha_u=None, beta_i=None, args=None, log_var=None, log_var_neg=None):
+
+def loss_pairwise_pointwise(y, y_deepfm_pos, y_deepfm_neg, score, alpha_u=None, beta_i=None, args=None, log_var=None,
+                            log_var_neg=None):
     y_weighted, loss_ab = process_logit(y_deepfm_pos, score, alpha_u=alpha_u, beta_i=beta_i, args=args)
     if log_var is not None:
         inv_var = torch.exp(-log_var)
@@ -446,9 +466,9 @@ def loss_pairwise_pointwise(y, y_deepfm_pos, y_deepfm_neg, score, alpha_u=None, 
     return loss
 
 
-
-
 CODEPATH = os.path.dirname(__file__)
+
+
 def get_datapath(envname):
     DATAPATH = None
     if envname == 'CoatEnv-v0':
@@ -460,6 +480,7 @@ def get_datapath(envname):
     elif envname == 'KuaiRand-v0':
         DATAPATH = os.path.join(CODEPATH, "environments", "KuaiRand_Pure", "data")
     return DATAPATH
+
 
 def get_task(envname):
     task = None
@@ -478,7 +499,8 @@ def get_task(envname):
         is_ranking = True
     return task, task_logit_dim, is_ranking
 
-def main(args):
+
+def main(args, is_save=True):
     # %% 1. Prepare dir
     DATAPATH = get_datapath(args.env)
     args = get_common_args(args)
@@ -511,11 +533,10 @@ def main(args):
                                             callbacks=[LoggerCallback_Update(logger_path)])
 
     # %% 6. Save model
-    ensemble_models.get_save_entropy_mat(args.env, args.entropy_window)
-    ensemble_models.save_all_models(dataset_val, x_columns, y_columns, df_user, df_item, df_user_val, df_item_val,
-                                    user_features, item_features, args.deterministic)
-
-
+    if is_save:
+        ensemble_models.get_save_entropy_mat(args.env, args.entropy_window)
+        ensemble_models.save_all_models(dataset_val, x_columns, y_columns, df_user, df_item, df_user_val, df_item_val,
+                                        user_features, item_features, args.deterministic)
 
 
 if __name__ == '__main__':

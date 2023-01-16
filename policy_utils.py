@@ -2,20 +2,18 @@ import datetime
 import json
 import os
 import random
+import sys
 import time
 from collections import defaultdict
+import socket
 
 import numpy as np
-import pandas as pd
 import torch
-
-import sys
-
 from tqdm import tqdm
 
 # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 sys.path.extend(["./src", "./src/DeepCTR-Torch", "./src/tianshou"])
-from core.configs import get_features, get_training_data, get_true_env, get_val_data, get_common_args
+from core.configs import get_training_data, get_true_env
 
 from tianshou.data import VectorReplayBuffer, Batch
 from tianshou.env import DummyVectorEnv
@@ -37,7 +35,10 @@ def prepare_dir_log(args):
     nowtime = datetime.datetime.fromtimestamp(time.time()).strftime("%Y_%m_%d-%H_%M_%S")
     logger_path = os.path.join(MODEL_SAVE_PATH, "logs", "[{}]_{}.log".format(args.message, nowtime))
     logzero.logfile(logger_path)
+    hostname = socket.gethostname()
+    args.hostname = hostname
     logger.info(json.dumps(vars(args), indent=2))
+
 
     return MODEL_SAVE_PATH, logger_path
 

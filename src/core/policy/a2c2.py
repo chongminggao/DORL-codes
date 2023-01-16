@@ -1,3 +1,4 @@
+import pprint
 from typing import Any, Dict, List, Optional, Type, Union
 
 import numpy as np
@@ -157,7 +158,21 @@ class A2CPolicy_withEmbedding(A2CPolicy):
         if isinstance(logits_masked, tuple):
             dist = self.dist_fn(*logits_masked)
         else:
-            dist = self.dist_fn(logits_masked)
+            try:
+                dist = self.dist_fn(logits_masked)
+            except:
+                logits_masked_cpu = logits_masked.cpu()
+                import datetime
+                import time
+                import pprint
+                nowtime = datetime.datetime.fromtimestamp(time.time()).strftime("%Y_%m_%d-%H_%M_%S")
+                torch.save(logits_masked_cpu, f"logits_masked_cpu_{nowtime}.pt")
+                print(logits_masked)
+                print(logits_masked.sum(1))
+                print(logits_masked[logits_masked<0])
+                dist = self.dist_fn(logits_masked+1)
+                # a = torch.load("logits_masked_cpu_2023_01_15-17_08_28.pt")
+                # dist = self.dist_fn(a)
 
         if self._deterministic_eval and not self.training:
             if self.action_type == "discrete":
