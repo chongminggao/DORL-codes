@@ -33,6 +33,7 @@ def get_args_epsilonGreedy():
     parser.add_argument('--epsilon', default=0.3, type=float)
     parser.add_argument('--n_models', default=1, type=int)
     parser.add_argument('--epoch', default=200, type=int)
+    parser.add_argument("--message", type=str, default="epsilon-greedy")
     args = parser.parse_known_args()[0]
     return args
 
@@ -129,7 +130,7 @@ def main(args, is_save=False):
         prepare_dataset(args, user_features, item_features, reward_features, MODEL_SAVE_PATH, DATAPATH)
 
     # %% 3. Setup model
-    task, task_logit_dim, is_ranking = get_task(args.env)
+    task, task_logit_dim, is_ranking = get_task(args.env, args.yfeat)
     ensemble_models = setup_world_model(args, x_columns, y_columns, ab_columns,
                                         task, task_logit_dim, is_ranking, MODEL_SAVE_PATH)
 

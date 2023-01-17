@@ -104,7 +104,7 @@ def get_common_args(args):
         parser.add_argument('--leave_threshold', default=10, type=float)
         parser.add_argument('--num_leave_compute', default=3, type=int)
         parser.add_argument('--max_turn', default=30, type=int)
-        parser.add_argument('--window_size', default=3, type=int)
+        # parser.add_argument('--window_size', default=3, type=int)
 
     elif env == "YahooEnv-v0":
         parser.set_defaults(is_userinfo=True)
@@ -118,7 +118,7 @@ def get_common_args(args):
         parser.add_argument('--leave_threshold', default=120, type=float)
         parser.add_argument('--num_leave_compute', default=3, type=int)
         parser.add_argument('--max_turn', default=30, type=int)
-        parser.add_argument('--window_size', default=3, type=int)
+        # parser.add_argument('--window_size', default=3, type=int)
 
     elif env == "KuaiRand-v0":
         parser.set_defaults(is_userinfo=False)
@@ -130,9 +130,9 @@ def get_common_args(args):
         parser.add_argument("--yfeat", type=str, default="is_click")
 
         parser.add_argument('--leave_threshold', default=0, type=float)
-        parser.add_argument('--num_leave_compute', default=8, type=int)
+        parser.add_argument('--num_leave_compute', default=10, type=int)
         parser.add_argument('--max_turn', default=30, type=int)
-        parser.add_argument('--window_size', default=3, type=int)
+        # parser.add_argument('--window_size', default=3, type=int)
 
     elif env == "KuaiEnv-v0":
         parser.set_defaults(is_userinfo=False)
@@ -145,9 +145,9 @@ def get_common_args(args):
         # parser.add_argument('--leave_threshold', default=1, type=float)
         # parser.add_argument('--num_leave_compute', default=3, type=int)
         parser.add_argument('--leave_threshold', default=0, type=float)
-        parser.add_argument('--num_leave_compute', default=8, type=int)
+        parser.add_argument('--num_leave_compute', default=10, type=int)
         parser.add_argument('--max_turn', default=30, type=int)
-        parser.add_argument('--window_size', default=3, type=int)
+        # parser.add_argument('--window_size', default=3, type=int)
 
     parser.add_argument('--force_length', type=int, default=10)
     parser.add_argument("--top_rate", type=float, default=0.8)

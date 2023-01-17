@@ -23,6 +23,7 @@ def get_args_UCB():
     parser.set_defaults(is_ucb=True)
     parser.add_argument('--n_models', default=1, type=int)
     parser.add_argument('--epoch', default=200, type=int)
+    parser.add_argument("--message", type=str, default="LinUCB")
     args = parser.parse_known_args()[0]
     return args
 

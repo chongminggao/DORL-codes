@@ -482,7 +482,7 @@ def get_datapath(envname):
     return DATAPATH
 
 
-def get_task(envname):
+def get_task(envname, yfeat):
     task = None
     task_logit_dim = 1
     if envname == 'CoatEnv-v0':
@@ -495,7 +495,7 @@ def get_task(envname):
         task = "regression"
         is_ranking = False
     elif envname == 'KuaiRand-v0':
-        task = "regression" if args.yfeat == "watch_ratio_normed" else "binary"
+        task = "regression" if yfeat == "watch_ratio_normed" else "binary"
         is_ranking = True
     return task, task_logit_dim, is_ranking
 
@@ -513,7 +513,7 @@ def main(args, is_save=True):
         prepare_dataset(args, user_features, item_features, reward_features, MODEL_SAVE_PATH, DATAPATH)
 
     # %% 3. Setup model
-    task, task_logit_dim, is_ranking = get_task(args.env)
+    task, task_logit_dim, is_ranking = get_task(args.env, args.yfeat)
     ensemble_models = setup_world_model(args, x_columns, y_columns, ab_columns,
                                         task, task_logit_dim, is_ranking, MODEL_SAVE_PATH)
 

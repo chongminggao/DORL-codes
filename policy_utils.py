@@ -1,18 +1,25 @@
 import datetime
 import json
 import os
+import pickle
 import random
+import socket
 import sys
 import time
 from collections import defaultdict
-import socket
 
 import numpy as np
 import torch
 from tqdm import tqdm
 
-# os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 sys.path.extend(["./src", "./src/DeepCTR-Torch", "./src/tianshou"])
+
+from core.inputs import get_dataset_columns
+from core.state_tracker2 import StateTracker_Caser, StateTracker_GRU, StateTracker_SASRec, StateTrackerAvg2
+from core.user_model_ensemble import EnsembleModel
+
+# os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
+
 from core.configs import get_training_data, get_true_env
 
 from tianshou.data import VectorReplayBuffer, Batch
@@ -41,6 +48,8 @@ def prepare_dir_log(args):
 
 
     return MODEL_SAVE_PATH, logger_path
+
+
 
 
 def construct_buffer_from_offline_data(args, df_train, env):
@@ -180,3 +189,88 @@ def prepare_buffer_via_offline_data(args):
     random.seed(args.seed)
 
     return env, buffer, test_envs_dict
+
+
+def setup_offline_state_tracker(args, env, buffer, test_envs_dict):
+    ensemble_models = prepare_user_model_and_env(args)
+    saved_embedding = ensemble_models.load_val_user_item_embedding(freeze_emb=args.freeze_emb)
+    if args.which_tracker.lower() == "avg":
+        user_columns, action_columns, feedback_columns, have_user_embedding, have_action_embedding, have_feedback_embedding = \
+            get_dataset_columns(saved_embedding["feat_user"].weight.shape[1],
+                                saved_embedding["feat_item"].weight.shape[1],
+                                env.mat.shape[0], env.mat.shape[1], envname=args.env)
+    else:
+        user_columns, action_columns, feedback_columns, have_user_embedding, have_action_embedding, have_feedback_embedding = \
+            get_dataset_columns(args.embedding_dim, args.embedding_dim, env.mat.shape[0], env.mat.shape[1],
+                                envname=args.env)
+
+    args.action_shape = action_columns[0].vocabulary_size
+    args.state_dim = action_columns[0].embedding_dim
+
+    if args.use_userEmbedding:
+        args.state_dim = action_columns[0].embedding_dim + saved_embedding.feat_user.weight.shape[1]
+
+    train_max = buffer.rew.max()
+    train_min = buffer.rew.min()
+    test_max = test_envs_dict['FB'].get_env_attr("mat")[0].max()
+    test_min = test_envs_dict['FB'].get_env_attr("mat")[0].min()
+
+    if args.which_tracker.lower() == "caser":
+        state_tracker = StateTracker_Caser(user_columns, action_columns, feedback_columns, args.state_dim,
+                                           device=args.device,
+                                           window_size=args.window_size,
+                                           filter_sizes=args.filter_sizes, num_filters=args.num_filters,
+                                           dropout_rate=args.dropout_rate).to(args.device)
+        args.state_dim = state_tracker.final_dim
+    elif args.which_tracker.lower() == "gru":
+        state_tracker = StateTracker_GRU(user_columns, action_columns, feedback_columns, args.state_dim,
+                                         device=args.device,
+                                         window_size=args.window_size).to(args.device)
+        args.state_dim = state_tracker.final_dim
+    elif args.which_tracker.lower() == "sasrec":
+        state_tracker = StateTracker_SASRec(user_columns, action_columns, feedback_columns, args.state_dim,
+                                            device=args.device, window_size=args.window_size,
+                                            dropout_rate=args.dropout_rate, num_heads=args.num_heads).to(args.device)
+        args.state_dim = state_tracker.final_dim
+    elif args.which_tracker.lower() == "avg":
+        state_tracker = StateTrackerAvg2(user_columns, action_columns, feedback_columns, args.state_dim,
+                                         saved_embedding,
+                                         train_max, train_min, test_max, test_min, reward_handle=args.reward_handle,
+                                         device=args.device, window_size=args.window_size,
+                                         use_userEmbedding=args.use_userEmbedding).to(args.device)
+        if args.reward_handle == "cat" or args.reward_handle == "cat2":
+            args.state_dim += 1
+    else:
+        return None
+
+    return state_tracker
+
+
+def prepare_user_model_and_env(args):
+    args.device = torch.device("cuda:{}".format(args.cuda) if torch.cuda.is_available() else "cpu")
+    np.random.seed(args.seed)
+    random.seed(args.seed)
+
+    UM_SAVE_PATH = os.path.join(".", "saved_models", args.env, args.user_model_name)
+    # MODEL_MAT_PATH = os.path.join(UM_SAVE_PATH, "mats", f"[{args.read_message}]_mat.pickle")
+    MODEL_PARAMS_PATH = os.path.join(UM_SAVE_PATH, "params", f"[{args.read_message}]_params.pickle")
+
+    with open(MODEL_PARAMS_PATH, "rb") as file:
+        model_params = pickle.load(file)
+
+    n_models = model_params["n_models"]
+    model_params.pop('n_models')
+
+    ensemble_models = EnsembleModel(n_models, args.read_message, UM_SAVE_PATH, **model_params)
+    ensemble_models.load_all_models()
+
+    # user_model = ensemble_models.user_models[0]
+    # if hasattr(user_model, 'ab_embedding_dict') and args.is_ab:
+    #     alpha_u = user_model.ab_embedding_dict["alpha_u"].weight.detach().cpu().numpy()
+    #     beta_i = user_model.ab_embedding_dict["beta_i"].weight.detach().cpu().numpy()
+    # else:
+    #     print("Note there are no available alpha and beta！！")
+    # alpha_u = None
+    # beta_i = None
+    # return ensemble_models, alpha_u, beta_i
+    return ensemble_models

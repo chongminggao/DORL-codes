@@ -7,20 +7,19 @@ import random
 import traceback
 
 import numpy as np
-import pandas as pd
 # import pytest
 import torch
 
 import sys
+
 sys.path.extend(["./src", "./src/DeepCTR-Torch", "./src/tianshou"])
 
-from policy_utils import prepare_dir_log
+from policy_utils import prepare_dir_log, prepare_user_model_and_env
 
 # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
 from core.collector_set import CollectorSet
 from core.evaluation.evaluator import Callback_Coverage_Count
-from core.user_model_ensemble import EnsembleModel
 from core.configs import get_true_env, get_common_args, get_val_data, get_training_item_domination
 from core.collector2 import Collector
 from core.inputs import get_dataset_columns
@@ -54,9 +53,9 @@ def get_args_all():
     parser.add_argument('--seed', default=2022, type=int)
     parser.add_argument('--cuda', default=0, type=int)
 
-    parser.add_argument('--is_ab', dest='is_ab', action='store_true')
-    parser.add_argument('--no_ab', dest='is_ab', action='store_false')
-    parser.set_defaults(is_ab=True)
+    # parser.add_argument('--is_ab', dest='is_ab', action='store_true')
+    # parser.add_argument('--no_ab', dest='is_ab', action='store_false')
+    # parser.set_defaults(is_ab=True)
 
     parser.add_argument('--is_userinfo', dest='is_userinfo', action='store_true')
     parser.add_argument('--no_userinfo', dest='is_userinfo', action='store_false')
@@ -78,17 +77,17 @@ def get_args_all():
     parser.set_defaults(exploration_noise=False)
     parser.add_argument('--eps', default=0.1, type=float)
 
-    parser.add_argument('--is_all_item_ranking', dest='is_all_item_ranking', action='store_true')
-    parser.add_argument('--no_all_item_ranking', dest='is_all_item_ranking', action='store_false')
-    parser.set_defaults(all_item_ranking=False)
-
     parser.add_argument('--is_freeze_emb', dest='freeze_emb', action='store_true')
     parser.add_argument('--no_freeze_emb', dest='freeze_emb', action='store_false')
     parser.set_defaults(freeze_emb=False)
 
     # state tracker
-    parser.add_argument('--reward_handle', type=str, default='cat') # in {"no", "cat", "cat2", "mul"}
+    parser.add_argument('--reward_handle', type=str, default='cat')  # in {"no", "cat", "cat2", "mul"}
     parser.add_argument("--which_tracker", type=str, default="avg")  # in {"avg", "caser", "sasrec", "gru"}
+
+    parser.add_argument("--embedding_dim", type=int, default=32)
+    parser.add_argument('--window_size', default=3, type=int)
+
     # State_tracker Caser
     parser.add_argument('--filter_sizes', type=int, nargs='*', default=[2, 3, 4])
     parser.add_argument("--num_filters", type=int, default=16)
@@ -102,8 +101,8 @@ def get_args_all():
     parser.add_argument('--tau', default=0, type=float)
     parser.add_argument('--gamma_exposure', default=10, type=float)
 
-    parser.add_argument('--lambda_variance', default=1, type=float)
-    parser.add_argument('--lambda_entropy', default=1, type=float)
+    parser.add_argument('--lambda_variance', default=0.05, type=float)
+    parser.add_argument('--lambda_entropy', default=5, type=float)
 
     parser.add_argument('--is_exposure_intervention', dest='use_exposure_intervention', action='store_true')
     parser.add_argument('--no_exposure_intervention', dest='use_exposure_intervention', action='store_false')
@@ -140,39 +139,9 @@ def get_args_all():
     args = parser.parse_known_args()[0]
     return args
 
-def prepare_user_model_and_env(args):
-    args.device = torch.device("cuda:{}".format(args.cuda) if torch.cuda.is_available() else "cpu")
-    np.random.seed(args.seed)
-    random.seed(args.seed)
-
-    UM_SAVE_PATH = os.path.join(".", "saved_models", args.env, args.user_model_name)
-    # MODEL_MAT_PATH = os.path.join(UM_SAVE_PATH, "mats", f"[{args.read_message}]_mat.pickle")
-    MODEL_PARAMS_PATH = os.path.join(UM_SAVE_PATH, "params", f"[{args.read_message}]_params.pickle")
-
-    with open(MODEL_PARAMS_PATH, "rb") as file:
-        model_params = pickle.load(file)
-
-    n_models = model_params["n_models"]
-    model_params.pop('n_models')
-
-    ensemble_models = EnsembleModel(n_models, args.read_message, UM_SAVE_PATH, **model_params)
-    ensemble_models.load_all_models()
-
-    user_model = ensemble_models.user_models[0]
-    if hasattr(user_model, 'ab_embedding_dict') and args.is_ab:
-        alpha_u = user_model.ab_embedding_dict["alpha_u"].weight.detach().cpu().numpy()
-        beta_i = user_model.ab_embedding_dict["beta_i"].weight.detach().cpu().numpy()
-    else:
-        print("Note there are no available alpha and beta！！")
-        alpha_u = None
-        beta_i = None
-
-    return ensemble_models, alpha_u, beta_i
-
-    # %% 3. prepare envs
 
 
-def prepare_envs(args, ensemble_models, alpha_u, beta_i):
+def prepare_envs(args, ensemble_models, alpha_u=None, beta_i=None):
     env, env_task_class, kwargs_um = get_true_env(args)
 
     # user_features, item_features, reward_features = get_features(args.env, args.is_userinfo)
@@ -235,7 +204,6 @@ def prepare_envs(args, ensemble_models, alpha_u, beta_i):
 
     # simulatedEnv = SimulatedEnv(**kwargs)
 
-
     train_envs = DummyVectorEnv(
         [lambda: SimulatedEnv(**kwargs) for _ in range(args.training_num)])
     # test_envs = gym.make(args.task)
@@ -256,21 +224,24 @@ def prepare_envs(args, ensemble_models, alpha_u, beta_i):
 
     return env, train_envs, test_envs_dict
 
-    # %% 4. Setup model
+# %% Setup model
 
 
-def setup_policy_model(args, ensemble_models, env, train_envs, test_envs_dict):
+def setup_state_tracker(args, ensemble_models, env, train_envs, test_envs_dict):
     saved_embedding = ensemble_models.load_val_user_item_embedding(freeze_emb=args.freeze_emb)
+    if args.which_tracker.lower() == "avg":
+        user_columns, action_columns, feedback_columns, have_user_embedding, have_action_embedding, have_feedback_embedding = \
+            get_dataset_columns(saved_embedding["feat_user"].weight.shape[1], saved_embedding["feat_item"].weight.shape[1],
+                                env.mat.shape[0], env.mat.shape[1], envname=args.env)
+    else:
+        user_columns, action_columns, feedback_columns, have_user_embedding, have_action_embedding, have_feedback_embedding = \
+            get_dataset_columns(args.embedding_dim, args.embedding_dim, env.mat.shape[0], env.mat.shape[1], envname=args.env)
 
-    user_columns, action_columns, feedback_columns, have_user_embedding, have_action_embedding, have_feedback_embedding = \
-        get_dataset_columns(saved_embedding["feat_user"].weight.shape[1], saved_embedding["feat_item"].weight.shape[1],
-                            env.mat.shape[0], env.mat.shape[1], envname=args.env)
+    args.action_shape = action_columns[0].vocabulary_size
+    args.state_dim = action_columns[0].embedding_dim
 
-    args.action_shape = env.mat.shape[1]
     if args.use_userEmbedding:
         args.state_dim = action_columns[0].embedding_dim + saved_embedding.feat_user.weight.shape[1]
-    else:
-        args.state_dim = action_columns[0].embedding_dim
 
     train_max = train_envs.get_env_attr("MAX_R")[0] - train_envs.get_env_attr("MIN_R")[0]
     train_min = 0
@@ -295,13 +266,20 @@ def setup_policy_model(args, ensemble_models, env, train_envs, test_envs_dict):
                                             dropout_rate=args.dropout_rate, num_heads=args.num_heads).to(args.device)
         args.state_dim = state_tracker.final_dim
     elif args.which_tracker.lower() == "avg":
-        state_tracker = StateTrackerAvg2(user_columns, action_columns, feedback_columns, args.state_dim, saved_embedding,
+        state_tracker = StateTrackerAvg2(user_columns, action_columns, feedback_columns, args.state_dim,
+                                         saved_embedding,
                                          train_max, train_min, test_max, test_min, reward_handle=args.reward_handle,
                                          device=args.device, window_size=args.window_size,
                                          use_userEmbedding=args.use_userEmbedding).to(args.device)
         if args.reward_handle == "cat" or args.reward_handle == "cat2":
             args.state_dim += 1
+    else:
+        return None
 
+    return state_tracker
+
+
+def setup_policy_model(args, state_tracker, train_envs, test_envs_dict):
     if args.cpu:
         args.device = "cpu"
     else:
@@ -328,7 +306,7 @@ def setup_policy_model(args, ensemble_models, env, train_envs, test_envs_dict):
         ent_coef=args.ent_coef,
         max_grad_norm=args.max_grad_norm,
         reward_normalization=args.rew_norm,
-        action_space=env.action_space,
+        action_space=args.action_shape,
         action_bound_method="",  # not clip
         action_scaling=False
     )
@@ -354,10 +332,11 @@ def setup_policy_model(args, ensemble_models, env, train_envs, test_envs_dict):
                                       exploration_noise=args.exploration_noise,
                                       force_length=args.force_length)
 
-    return policy, train_collector, test_collector_set, state_tracker, optim
+    return policy, train_collector, test_collector_set, optim
 
 
-def learn_policy(args, env, policy, train_collector, test_collector_set, state_tracker, optim, MODEL_SAVE_PATH, logger_path):
+def learn_policy(args, env, policy, train_collector, test_collector_set, state_tracker, optim, MODEL_SAVE_PATH,
+                 logger_path):
     # log
     # log_path = os.path.join(args.logdir, args.env, 'a2c')
     # writer = SummaryWriter(log_path)
@@ -407,15 +386,16 @@ def main(args):
     MODEL_SAVE_PATH, logger_path = prepare_dir_log(args)
 
     # %% 2. Prepare user model and environment
-    ensemble_models, alpha_u, beta_i = prepare_user_model_and_env(args)
-    env, train_envs, test_envs_dict = prepare_envs(args, ensemble_models, alpha_u, beta_i)
+    ensemble_models = prepare_user_model_and_env(args)
+    env, train_envs, test_envs_dict = prepare_envs(args, ensemble_models)
 
     # %% 3. Setup policy
-    policy, train_collector, test_collector_set, state_tracker, optim = setup_policy_model(args, ensemble_models, env,
-                                                                                           train_envs, test_envs_dict)
+    state_tracker = setup_state_tracker(args, ensemble_models, env, train_envs, test_envs_dict)
+    policy, train_collector, test_collector_set, optim = setup_policy_model(args, state_tracker, train_envs, test_envs_dict)
 
     # %% 4. Learn policy
-    learn_policy(args, env, policy, train_collector, test_collector_set, state_tracker, optim, MODEL_SAVE_PATH, logger_path)
+    learn_policy(args, env, policy, train_collector, test_collector_set, state_tracker, optim, MODEL_SAVE_PATH,
+                 logger_path)
 
 
 if __name__ == '__main__':
