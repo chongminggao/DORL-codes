@@ -177,3 +177,48 @@ python run_Policy_IPS.py  --env KuaiRand-v0  --seed 0 --cuda 7   --num_leave_com
 python run_Policy_Main.py --env KuaiRand-v0  --seed 0 --cuda 7   --num_leave_compute 10 --leave_threshold 0 --which_tracker avg --reward_handle "cat" --lambda_variance 0    --lambda_entropy 0     --window_size 3 --read_message "pointneg"   --message "MBPO-leave10" &
 python run_Policy_Main.py --env KuaiRand-v0  --seed 0 --cuda 7   --num_leave_compute 10 --leave_threshold 0 --which_tracker avg --reward_handle "cat" --lambda_variance 0.01 --lambda_entropy 0     --window_size 3 --read_message "pointneg"   --message "MOPO-leave10" &
 python run_Policy_Main.py --env KuaiRand-v0  --seed 0 --cuda 7   --num_leave_compute 10 --leave_threshold 0 --which_tracker avg --reward_handle "cat" --lambda_variance 0.01 --lambda_entropy 0.05  --window_size 3 --read_message "pointneg"   --message "Ours-leave10" &
+
+
+python run_linUCB.py         --env KuaiRand-v0  --seed 0 --cuda 0 --epoch 3 --num_leave_compute 1  --leave_threshold 0 --loss "pointneg" --message "UCB-leave1" &
+python run_linUCB.py         --env KuaiRand-v0  --seed 0 --cuda 1 --epoch 3 --num_leave_compute 2  --leave_threshold 0 --loss "pointneg" --message "UCB-leave2" &
+python run_linUCB.py         --env KuaiRand-v0  --seed 0 --cuda 2 --epoch 3 --num_leave_compute 3  --leave_threshold 0 --loss "pointneg" --message "UCB-leave3" &
+python run_linUCB.py         --env KuaiRand-v0  --seed 0 --cuda 3 --epoch 3 --num_leave_compute 4  --leave_threshold 0 --loss "pointneg" --message "UCB-leave4" &
+python run_linUCB.py         --env KuaiRand-v0  --seed 0 --cuda 4 --epoch 3 --num_leave_compute 5  --leave_threshold 0 --loss "pointneg" --message "UCB-leave5" &
+python run_linUCB.py         --env KuaiRand-v0  --seed 0 --cuda 5 --epoch 3 --num_leave_compute 6  --leave_threshold 0 --loss "pointneg" --message "UCB-leave6" &
+python run_linUCB.py         --env KuaiRand-v0  --seed 0 --cuda 6 --epoch 3 --num_leave_compute 7  --leave_threshold 0 --loss "pointneg" --message "UCB-leave7" &
+python run_linUCB.py         --env KuaiRand-v0  --seed 0 --cuda 7 --epoch 3 --num_leave_compute 8  --leave_threshold 0 --loss "pointneg" --message "UCB-leave8" &
+python run_linUCB.py         --env KuaiRand-v0  --seed 0 --cuda 0 --epoch 3 --num_leave_compute 9  --leave_threshold 0 --loss "pointneg" --message "UCB-leave9" &
+python run_linUCB.py         --env KuaiRand-v0  --seed 0 --cuda 1 --epoch 3 --num_leave_compute 10 --leave_threshold 0 --loss "pointneg" --message "UCB-leave10" &
+python run_epsilongreedy.py  --env KuaiRand-v0  --seed 0 --cuda 2 --epoch 3 --num_leave_compute 1  --leave_threshold 0 --loss "pointneg" --message "epsilon-greedy-leave1" &
+python run_epsilongreedy.py  --env KuaiRand-v0  --seed 0 --cuda 3 --epoch 3 --num_leave_compute 2  --leave_threshold 0 --loss "pointneg" --message "epsilon-greedy-leave2" &
+python run_epsilongreedy.py  --env KuaiRand-v0  --seed 0 --cuda 7 --epoch 3 --num_leave_compute 3  --leave_threshold 0 --loss "pointneg" --message "epsilon-greedy-leave3" &
+python run_epsilongreedy.py  --env KuaiRand-v0  --seed 0 --cuda 6 --epoch 3 --num_leave_compute 4  --leave_threshold 0 --loss "pointneg" --message "epsilon-greedy-leave4" &
+python run_epsilongreedy.py  --env KuaiRand-v0  --seed 0 --cuda 5 --epoch 3 --num_leave_compute 5  --leave_threshold 0 --loss "pointneg" --message "epsilon-greedy-leave5" &
+python run_epsilongreedy.py  --env KuaiRand-v0  --seed 0 --cuda 4 --epoch 3 --num_leave_compute 6  --leave_threshold 0 --loss "pointneg" --message "epsilon-greedy-leave6" &
+python run_epsilongreedy.py  --env KuaiRand-v0  --seed 0 --cuda 3 --epoch 3 --num_leave_compute 7  --leave_threshold 0 --loss "pointneg" --message "epsilon-greedy-leave7" &
+python run_epsilongreedy.py  --env KuaiRand-v0  --seed 0 --cuda 2 --epoch 3 --num_leave_compute 8  --leave_threshold 0 --loss "pointneg" --message "epsilon-greedy-leave8" &
+python run_epsilongreedy.py  --env KuaiRand-v0  --seed 0 --cuda 1 --epoch 3 --num_leave_compute 9  --leave_threshold 0 --loss "pointneg" --message "epsilon-greedy-leave9" &
+python run_epsilongreedy.py  --env KuaiRand-v0  --seed 0 --cuda 0 --epoch 3 --num_leave_compute 10 --leave_threshold 0 --loss "pointneg" --message "epsilon-greedy-leave10" &
+
+
+
+python run_linUCB.py         --env KuaiEnv-v0  --seed 0 --cuda 0 --epoch 3 --num_leave_compute 1  --leave_threshold 0 --loss "pointneg" --message "UCB-leave1" &
+python run_linUCB.py         --env KuaiEnv-v0  --seed 0 --cuda 1 --epoch 3 --num_leave_compute 2  --leave_threshold 0 --loss "pointneg" --message "UCB-leave2" &
+python run_linUCB.py         --env KuaiEnv-v0  --seed 0 --cuda 2 --epoch 3 --num_leave_compute 3  --leave_threshold 0 --loss "pointneg" --message "UCB-leave3" &
+python run_linUCB.py         --env KuaiEnv-v0  --seed 0 --cuda 3 --epoch 3 --num_leave_compute 4  --leave_threshold 0 --loss "pointneg" --message "UCB-leave4" &
+python run_linUCB.py         --env KuaiEnv-v0  --seed 0 --cuda 4 --epoch 3 --num_leave_compute 5  --leave_threshold 0 --loss "pointneg" --message "UCB-leave5" &
+python run_linUCB.py         --env KuaiEnv-v0  --seed 0 --cuda 5 --epoch 3 --num_leave_compute 6  --leave_threshold 0 --loss "pointneg" --message "UCB-leave6" &
+python run_linUCB.py         --env KuaiEnv-v0  --seed 0 --cuda 6 --epoch 3 --num_leave_compute 7  --leave_threshold 0 --loss "pointneg" --message "UCB-leave7" &
+python run_linUCB.py         --env KuaiEnv-v0  --seed 0 --cuda 7 --epoch 3 --num_leave_compute 8  --leave_threshold 0 --loss "pointneg" --message "UCB-leave8" &
+python run_linUCB.py         --env KuaiEnv-v0  --seed 0 --cuda 4 --epoch 3 --num_leave_compute 9  --leave_threshold 0 --loss "pointneg" --message "UCB-leave9" &
+python run_linUCB.py         --env KuaiEnv-v0  --seed 0 --cuda 5 --epoch 3 --num_leave_compute 10 --leave_threshold 0 --loss "pointneg" --message "UCB-leave10" &
+python run_epsilongreedy.py  --env KuaiEnv-v0  --seed 0 --cuda 6 --epoch 3 --num_leave_compute 1  --leave_threshold 0 --loss "pointneg" --message "epsilon-greedy-leave1" &
+python run_epsilongreedy.py  --env KuaiEnv-v0  --seed 0 --cuda 7 --epoch 3 --num_leave_compute 2  --leave_threshold 0 --loss "pointneg" --message "epsilon-greedy-leave2" &
+python run_epsilongreedy.py  --env KuaiEnv-v0  --seed 0 --cuda 7 --epoch 3 --num_leave_compute 3  --leave_threshold 0 --loss "pointneg" --message "epsilon-greedy-leave3" &
+python run_epsilongreedy.py  --env KuaiEnv-v0  --seed 0 --cuda 6 --epoch 3 --num_leave_compute 4  --leave_threshold 0 --loss "pointneg" --message "epsilon-greedy-leave4" &
+python run_epsilongreedy.py  --env KuaiEnv-v0  --seed 0 --cuda 5 --epoch 3 --num_leave_compute 5  --leave_threshold 0 --loss "pointneg" --message "epsilon-greedy-leave5" &
+python run_epsilongreedy.py  --env KuaiEnv-v0  --seed 0 --cuda 4 --epoch 3 --num_leave_compute 6  --leave_threshold 0 --loss "pointneg" --message "epsilon-greedy-leave6" &
+python run_epsilongreedy.py  --env KuaiEnv-v0  --seed 0 --cuda 3 --epoch 3 --num_leave_compute 7  --leave_threshold 0 --loss "pointneg" --message "epsilon-greedy-leave7" &
+python run_epsilongreedy.py  --env KuaiEnv-v0  --seed 0 --cuda 2 --epoch 3 --num_leave_compute 8  --leave_threshold 0 --loss "pointneg" --message "epsilon-greedy-leave8" &
+python run_epsilongreedy.py  --env KuaiEnv-v0  --seed 0 --cuda 1 --epoch 3 --num_leave_compute 9  --leave_threshold 0 --loss "pointneg" --message "epsilon-greedy-leave9" &
+python run_epsilongreedy.py  --env KuaiEnv-v0  --seed 0 --cuda 0 --epoch 3 --num_leave_compute 10 --leave_threshold 0 --loss "pointneg" --message "epsilon-greedy-leave10" &

@@ -22,10 +22,15 @@ results_for_paper/*.pdf
 *.pdf
 *.pth
 *.png
-results_for_paper/
+#results_for_paper/
 !results_for_paper/visual_a_group_results.py
 
 *.egg*
 events.*
 
 .vscode/
+
+*.log
+*.xlsx
+*.tex
+*.pdf
