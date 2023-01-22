@@ -287,10 +287,10 @@ def get_data(dataset):
 
 if __name__ == '__main__':
     datasets = [
-        "CoatEnv",
+        # "CoatEnv",
         # "YahooEnv",
         "KuaiRandEnv",
-        "KuaiEnv"
+        # "KuaiEnv"
     ]
 
     # losses = ["point", "pointneg", "pp", "pair"]

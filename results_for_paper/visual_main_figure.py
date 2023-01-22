@@ -53,9 +53,7 @@ def visual4(df1, df2, save_fig_dir, savename="three"):
     # all_method = sorted(set(df1['R_tra'].columns.to_list() +
     #                         df2['R_tra'].columns.to_list()))
     # methods_list = list(all_method)
-    methods_list = ['Ours', 'MOPO', 'MBPO', 'IPS', 'BCQ', 'CQL', 'CRR', 'SQN', r'$\epsilon$-greedy', "UCB"]
-
-
+    methods_list = ['Ours', 'MOPO', 'MBPO', 'IPS', 'BCQ', 'CQL', 'CRR', 'SQN', "UCB", r'$\epsilon$-greedy']
 
     num_methods = len(methods_list)
 
@@ -64,6 +62,9 @@ def visual4(df1, df2, save_fig_dir, savename="three"):
 
     color_kv = dict(zip(methods_list, colors))
     marker_kv = dict(zip(methods_list, markers))
+
+    methods_list = methods_list[::-1]
+    methods_order = dict(zip(methods_list, list(range(len(methods_list)))))
 
     fig = plt.figure(figsize=(5, 6))
     # plt.subplots_adjust(wspace=0.3)
@@ -74,10 +75,13 @@ def visual4(df1, df2, save_fig_dir, savename="three"):
         alpha = series[index]
         cnt = 1
         df = dfs[index]
+        df.sort_index(axis=1, key=lambda col: [methods_order[x] for x in col.to_list()], level=1, inplace=True)
 
         data_r = df[visual_cols[0]]
         data_len = df[visual_cols[1]]
         data_ctr = df[visual_cols[2]]
+
+
 
         color = [color_kv[name] for name in data_r.columns]
         marker = [marker_kv[name] for name in data_r.columns]
@@ -141,9 +145,11 @@ def visual4(df1, df2, save_fig_dir, savename="three"):
     dict_label = dict(zip(labels1, lines1))
     dict_label.update(dict(zip(labels2, lines2)))
     # dict_label = OrderedDict(sorted(dict_label.items(), key=lambda x: x[0]))
+    methods_list = methods_list[::-1]
+    dict_label = {k: dict_label[k] for k in methods_list}
     ax1.legend(handles=dict_label.values(), labels=dict_label.keys(), ncol=5,
                loc='lower left', columnspacing=0.7,
-               bbox_to_anchor=(0, 1.26), fontsize=9.5)
+               bbox_to_anchor=(-0.28, 1.26), fontsize=9.5)
 
     # axo = plt.axes([0, 0, 1, 1], facecolor=(1, 1, 1, 0))
     # x, y = np.array([[0.505, 0.505], [0.06, 0.92]])
@@ -168,7 +174,7 @@ def remove_redundent(df, level=1):
 
 
 def to_latex(df, save_fig_dir, savename):
-    df_latex, df_excel = handle_table(df)
+    df_latex, df_excel, df_avg = handle_table(df)
 
     df_latex1 = df_latex[["Free", "No Overlapping"]]
 
@@ -187,8 +193,8 @@ def combile_two_tables(df1, df2, used_way, save_fig_dir, savename="main_result")
     # df_all = pd.DataFrame(columns=pd.MultiIndex.from_product(indices, names=["Datasets", "Metrics", "Methods"]))
     df_all = pd.DataFrame(columns=pd.MultiIndex.from_product(indices))
 
-    df_latex1, df_excel1 = handle_table(df1)
-    df_latex2, df_excel2 = handle_table(df2)
+    df_latex1, df_excel1, df_avg1 = handle_table(df1)
+    df_latex2, df_excel2, df_avg2 = handle_table(df2)
 
     df_all["KuaiRec"] = df_latex1[used_way]
     df_all["KuaiRand"] = df_latex2[used_way]

@@ -57,7 +57,7 @@ def get_args_all():
     parser.add_argument('--no_deterministic', dest='deterministic', action='store_false')
     parser.set_defaults(deterministic=True)
 
-    parser.add_argument("--loss", type=str, default='pointneg')
+    parser.add_argument("--loss", type=str, default='pointneg') # in {"pointneg", "point", "pair", "pp"}
     parser.add_argument('--rankingK', default=(20, 10, 5), type=int, nargs="+")
     parser.add_argument('--max_turn', default=30, type=int)
 

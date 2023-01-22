@@ -125,7 +125,7 @@ class UserModel_Variance(nn.Module):
 
         epoch_logs = {}
         if dataset_val:
-            eval_result = self.evaluate_data(dataset_val, batch_size)
+            eval_result = self.evaluate_data(dataset_val, batch_size, epoch=-1)
             # for name, result in eval_result.items():
             #     epoch_logs["val_" + name] = result
             epoch_logs.update(eval_result)
@@ -204,7 +204,7 @@ class UserModel_Variance(nn.Module):
             #     epoch_logs[name] = np.sum(result) / steps_per_epoch
 
             if dataset_val:
-                eval_result = self.evaluate_data(dataset_val, batch_size)
+                eval_result = self.evaluate_data(dataset_val, batch_size, epoch=epoch)
                 for name, result in eval_result.items():
                     # epoch_logs["val_" + name] = result
                     epoch_logs[name] = result
@@ -347,7 +347,7 @@ class UserModel_Variance(nn.Module):
 
         return recommended_id_transform, recommended_id_raw, value_rec
 
-    def evaluate_data(self, dataset_val, batch_size=256):
+    def evaluate_data(self, dataset_val, batch_size=256, epoch=None):
 
         y_predict = self.predict_data(dataset_val, batch_size*10)
         y = dataset_val.get_y()
@@ -377,7 +377,7 @@ class UserModel_Variance(nn.Module):
             xy_predict = xy_predict.astype(dtype={"user_id": "int64", "item_id": "int64", "y_pred": "float64"})
             # df_score = xy_predict.groupby("user_id").agg(list)
 
-            eval_result.update(self.metric_fun_ranking(xy_predict, ground_truth_positive))
+            eval_result.update(self.metric_fun_ranking(xy_predict, ground_truth_positive, epoch=epoch))
 
         return eval_result
 

@@ -171,18 +171,19 @@ def handle_one_col(df_metric, final_rate, is_largest):
     std = df_metric[res_start:].std()
 
     # mean.nlargest(2).index[1]
-    res_latex = pd.Series(map(lambda mean, std: f"${mean:.3f}\pm {std:.3f}$", mean, std),
+    res_latex = pd.Series(map(lambda mean, std: f"${mean:.4f}\pm {std:.4f}$", mean, std),
                           index=mean.index)
-    res_excel = pd.Series(map(lambda mean, std: f"{mean:.3f}+{std:.3f}", mean, std),
+    res_excel = pd.Series(map(lambda mean, std: f"{mean:.4f}+{std:.4f}", mean, std),
                           index=mean.index)
+    res_avg = mean
 
     name1, name2 = get_top2_methods(mean, is_largest=is_largest)
     res_latex.loc[name1] = r"$\mathbf{" + r"{}".format(res_latex.loc[name1][1:-1]) + r"}$"
     res_latex.loc[name2] = r"\underline{" + res_latex.loc[name2] + r"}"
 
-    return res_latex, res_excel
+    return res_latex, res_excel, res_avg
 
-def handle_table(df_all, final_rate=1):
+def handle_table(df_all, final_rate=1, methods=['Ours', 'MOPO', 'MBPO', 'IPS', 'BCQ', 'CQL', 'CRR', 'SQN', r'$\epsilon$-greedy', "UCB"]):
     df_all.rename(columns={"FB": "Free", "NX_0_": r"No Overlapping", "NX_10_": r"No Overlapping with 10 turns"},
                   level=0, inplace=True)
     df_all.rename(columns={"R_tra": r"$\text{R}_\text{tra}$", "ifeat_feat": "MCD",
@@ -193,26 +194,30 @@ def handle_table(df_all, final_rate=1):
 
     ways = df_all.columns.levels[0][::-1]
     metrics = df_all.columns.levels[1]
-    methods = df_all.columns.levels[2].to_list()
+    if methods is None:
+        methods = df_all.columns.levels[2].to_list()
 
-    methods = ['Ours', 'MOPO', 'MBPO', 'IPS', 'BCQ', 'CQL', 'CRR', 'SQN', r'$\epsilon$-greedy', "UCB"]
+
+
     methods_order = dict(zip(methods, list(range(len(methods)))))
 
     df_latex = pd.DataFrame(columns=pd.MultiIndex.from_product([ways, metrics], names=["ways", "metrics"]))
     df_excel = pd.DataFrame(columns=pd.MultiIndex.from_product([ways, metrics], names=["ways", "metrics"]))
+    df_avg = pd.DataFrame(columns=pd.MultiIndex.from_product([ways, metrics], names=["ways", "metrics"]))
 
     for col, way in enumerate(ways):
         df = df_all[way]
         for row, metric in enumerate(metrics):
             df_metric = df[metric]
             is_largest = False if metric == "MCD" else True
-            df_latex[way, metric], df_excel[way, metric] = handle_one_col(df_metric, final_rate, is_largest=is_largest)
+            df_latex[way, metric], df_excel[way, metric], df_avg[way, metric] = handle_one_col(df_metric, final_rate, is_largest=is_largest)
 
     df_latex.sort_index(key=lambda index: [methods_order[x] for x in index.to_list()], inplace=True)
     df_excel.sort_index(key=lambda index: [methods_order[x] for x in index.to_list()], inplace=True)
+    df_avg.sort_index(key=lambda index: [methods_order[x] for x in index.to_list()], inplace=True)
 
     # print(df_latex.to_markdown())
     # excel_path = os.path.join(save_fig_dir, savename + '.xlsx')
     # df_excel.to_excel(excel_path)
 
-    return df_latex, df_excel
+    return df_latex, df_excel, df_avg

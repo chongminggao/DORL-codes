@@ -137,7 +137,7 @@ def get_name_order(methods):
     return methods_order
 
 
-def handle_table(df_all, save_fig_dir, savename="all_results", final_rate=1):
+def handle_table(df_all, final_rate=1):
     df_all.rename(columns={r"FB": r"Standard", "NX_0_": r"No Overlapping", "NX_10_": r"No Overlapping for 10 turns"},
                   level=0, inplace=True)
     df_all.rename(columns={"CV_turn": r"$\text{CV}_\text{M}$", "len_tra": "Length"}, level=1,
@@ -262,6 +262,7 @@ def visual_one_group():
     patterns = ["\[l10_1_var", "\[l10_2_var"]; datasets = ["kuairec_10_1"]
     patterns = ["\[l15_1_var"]; datasets = ["kuairand_15_1"]
     patterns = ["\[l12_0_var"]; datasets = ["kuairand_12_0"]
+    patterns = ["\[l12_0_var"]; datasets = ["kuairec_12_0"]
 
     rename_dataset(datasets, patterns)
 
@@ -286,7 +287,7 @@ def visual_one_group():
 
         print("Producing the table...")
         savename = dataset
-        df_latex, df_excel, df_avg = handle_table(df_all, save_fig_dir, savename=savename)
+        df_latex, df_excel, df_avg = handle_table(df_all)
 
         # please install openpyxl if you want to write to an excel file.
         excel_path = os.path.join(save_fig_dir, savename + '.xlsx')

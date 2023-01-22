@@ -204,6 +204,8 @@ def visual_one_group():
     datasets = ["kuairand_l5"]
     datasets = ["kuairand_l8","kuairec_l8"]
     datasets = ["kuairec_2023"]
+    datasets = ["kuairand_test", "kuairec_test"]
+    datasets = ["kuairand_test"]
     for dataset in datasets:
 
         dirpath = os.path.join("./results", dataset)
