@@ -33,7 +33,7 @@ plt.rcParams['pdf.fonttype'] = 42
 plt.rcParams['ps.fonttype'] = 42
 
 ########################
-## For paper: run on lab5: python get_recommended_categories.py --cuda 7 -seed 1 --env KuaiRand-v0 --top_visual 0.001  --message "s1_tf0.001" &
+## For paper: run on lab5: python get_recommended_categories.py --cuda 7 -seed 1 --epoch 4 --env KuaiRand-v0 --top_visual 0.001  --message "s1_tf0.001" &
 
 def get_args_epsilonGreedy():
     parser = argparse.ArgumentParser()
@@ -49,8 +49,10 @@ def get_args_epsilonGreedy():
 
 
 def draw_cat(res_train, res_test, res_predicted, num, epoch, message):
-    df = pd.DataFrame({k + 1: [x, y, z] for k, (x, y, z) in enumerate(zip(res_train, res_test, res_predicted))})
-    df["domain"] = ["Training set", "Test set", "Recommended"]
+    df = pd.DataFrame({k + 1: [x, y, z] for k, (x, y, z) in enumerate(zip(res_test, res_train, res_predicted))})
+    df["domain"] = ["Test set", "Training set", "Recommended"]
+    ######
+    # df = pd.read_csv("results_for_paper/figures/recommended_category_kuairand/feat_KuaiRand_s1_tf0.001_e3.csv")
 
     colors = sns.color_palette("muted", n_colors=num)
     colors = sns.color_palette("Set2" ,n_colors=num)
@@ -97,7 +99,7 @@ def test_whether_dominate(xy_predict, df_true_list, res_train, res_test, df_feat
 
 
     cat_set = df_train_sorted_index
-    res_predicted = get_percentage(pos_cat_predicted, cat_set, is_test=True, sorted_idx=cat_set)
+    res_predicted = get_percentage(pos_cat_predicted, cat_set, is_test=False, sorted_idx=cat_set)
     draw_cat(res_train, res_test, res_predicted, len(cat_set), epoch, message)
     # draw_cat(res_train, res_test, res_predicted, len(cat_set), epoch)
     return dict()

@@ -29,13 +29,13 @@ def draw_bar_line(df_visual, save_fig_dir, savename="result_conservative", line_
     color_bar =  colors[3]
     red2 = [1.        , 0.75294118, 0.79607843]
 
-    fig = plt.figure(figsize=(5, 2))
+    fig = plt.figure(figsize=(5, 1.3))
     # ax_bar = ax_left.twinx()
     ax_bar = sns.barplot(data=df_visual2_filtered, x=df_visual2_filtered.index, y=bar, edgecolor=red2, color=red2)
     plt.ylim([0.475, 0.63])
-    plt.ylabel("Majority Domination", fontsize=12)
-    plt.xlabel(r"$\lambda$", fontsize=12)
-    ax_bar.xaxis.set_label_coords(0.5, -0.25)
+    plt.ylabel("Majority\nCategory\nDomination", fontsize=12)
+    plt.xlabel(r"Coefficient $\lambda$ in Eq. (1)", fontsize=12)
+    ax_bar.xaxis.set_label_coords(0.5, -0.4)
     ax_bar.yaxis.label.set_color(color_bar)
     ax_bar.tick_params(axis='y', colors=color_bar)
     plt.xticks(range(len(visual_range)), x_ticks_filtered.values(), rotation=40)
@@ -48,7 +48,8 @@ def draw_bar_line(df_visual, save_fig_dir, savename="result_conservative", line_
     # ax_left.yaxis.label_left()
     ax_left.yaxis.label.set_color(colors[0])
     ax_left.tick_params(axis='y', colors=colors[0])
-    plt.ylabel("Reward", fontsize=12)
+    plt.ylabel("Single-Round\nReward", fontsize=12)
+    ax_left.yaxis.set_label_coords(-0.12, 0.4)
 
     ax_bar.yaxis.set_label_position("right")
     ax_bar.yaxis.tick_right()

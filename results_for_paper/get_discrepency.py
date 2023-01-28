@@ -143,15 +143,15 @@ def get_pop(df_train, popbin):
 def get_percentage(cats, all_values, is_test=False, sorted_idx=None):
     res_cnt = Counter(cats)
     if is_test:
-        sorted_cnt = [res_cnt[i] for i in sorted_idx]
-    else:
         sorted_cnt = sorted(res_cnt.values(), reverse=True)
         sorted_cnt += (len(all_values) - len(sorted_cnt)) * [0]
+    else:
+        sorted_cnt = [res_cnt[i] for i in sorted_idx]
 
     cumsum = np.cumsum(sorted_cnt)
     res = cumsum / cumsum[-1]
 
-    if not is_test:
+    if is_test:
         sorted_idx = [x[0] for x in sorted(res_cnt.items(), key=lambda x: x[1], reverse=True)]
         sorted_idx += list(set(all_values) - set(sorted_idx))
         return res, sorted_idx
@@ -195,15 +195,20 @@ def get_distribution(threshold, item_features, multi_feat, envname):
         pos_cat_test = cats_test[cats_test > 0]
 
         cat_set = np.unique(np.concatenate([pos_cat_train, pos_cat_test]))
-        res_train, sorted_idx = get_percentage(pos_cat_train, cat_set)
-        res_test = get_percentage(pos_cat_test, cat_set, is_test=True, sorted_idx=sorted_idx)
+        res_test, sorted_idx = get_percentage(pos_cat_test, cat_set, is_test=True)
+        res_train = get_percentage(pos_cat_train, cat_set, sorted_idx=sorted_idx)
+
+        pd.DataFrame(sorted_idx).to_csv("majority_indices.csv", index=False)
+        pd.DataFrame(res_train).to_csv("majority_train_kuairand.csv", index=False)
+        pd.DataFrame(res_test).to_csv("majority_test_kuairand.csv", index=False)
+
         draw(res_train, res_test, len(cat_set), "feat")
         return
 
     for featname, num in feat_num.items():
         cat_set = np.unique(np.concatenate([feat_train[featname], feat_test[featname]]))
-        res_train, sorted_idx = get_percentage(feat_train[featname], cat_set)
-        res_test = get_percentage(feat_test[featname], cat_set, is_test=True, sorted_idx=sorted_idx)
+        res_test, sorted_idx = get_percentage(feat_test[featname], cat_set, is_test=True)
+        res_train = get_percentage(feat_train[featname], cat_set, sorted_idx=sorted_idx)
         draw(res_train, res_test, num, featname)
 
 

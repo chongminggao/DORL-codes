@@ -60,6 +60,13 @@ import pandas as pd
 #     print(model(x))
 #     a = 1
 
+df_train_sorted_index = pd.read_csv("results_for_paper/majority_indices.csv").to_numpy().squeeze()
+res_train = pd.read_csv("results_for_paper/majority_train_kuairand.csv").to_numpy().squeeze()
+res_test = pd.read_csv("results_for_paper/majority_test_kuairand.csv").to_numpy().squeeze()
+
+
+a = 1
+
 
 df_uit = pd.DataFrame({"user_id": [0,0,0,0,0,0,1,1,1,1], "item_id": [1,2,3,4,5,2,2,3,4,5], "time": [1,2,3,4,5,6,7,8,9,10]})
 
