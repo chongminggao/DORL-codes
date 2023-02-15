@@ -42,7 +42,13 @@ def visual_leave_threshold(df_ks_grouped, df_kr_grouped, save_fig_dir, savename)
     all_method = sorted(set(df_ks_grouped.columns.to_list() + df_kr_grouped.columns.to_list()))
     df_ks_grouped.rename(columns={"epsilon-greedy": r'$\epsilon$-greedy'}, inplace=True)
     df_kr_grouped.rename(columns={"epsilon-greedy": r'$\epsilon$-greedy'}, inplace=True)
-    all_method = ['Ours', 'MOPO', 'MBPO', 'IPS', 'BCQ', 'CQL', 'CRR', 'SQN', r'$\epsilon$-greedy', "UCB"]
+
+    df_ks_grouped.rename(columns={"Ours": 'DORL'}, inplace=True)
+    df_kr_grouped.rename(columns={"Ours": 'DORL'}, inplace=True)
+
+
+
+    all_method = ['DORL', 'MOPO', 'MBPO', 'IPS', 'BCQ', 'CQL', 'CRR', 'SQN', r'$\epsilon$-greedy', "UCB"]
     color = sns.color_palette(n_colors=len(all_method))
     markers = ["o", "s", "p", "P", "X", "*", "h", "D", "v", "^", ">", "<"]
 

@@ -125,6 +125,9 @@ class LoggerCallback_Policy():
             res[prefix + 'len_tra'] = len_tra
             res[prefix + 'R_tra'] = R_tra
 
+            if prefix + "all_feats" in results:
+                res[prefix + 'all_feats'] = results[prefix + "all_feats"].tolist()
+
             return res
 
         results_all = {}

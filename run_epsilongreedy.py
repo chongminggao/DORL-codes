@@ -141,7 +141,7 @@ def main(args, is_save=False):
         functools.partial(test_static_model_in_RL_env, env=env, dataset_val=dataset_val, is_softmax=args.is_softmax,
                           epsilon=args.epsilon, is_ucb=args.is_ucb, need_transform=args.need_transform,
                           num_trajectory=args.num_trajectory, item_feat_domination=item_feat_domination,
-                          force_length=args.force_length, top_rate=args.top_rate))
+                          force_length=args.force_length, top_rate=args.top_rate, draw_bar=args.draw_bar))
 
     # %% 5. Learn and evaluate model
 

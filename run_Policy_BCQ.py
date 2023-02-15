@@ -110,7 +110,7 @@ def learn_policy(args, env, policy, buffer, test_collector_set, state_tracker, o
     item_feat_domination = get_training_item_domination(args.env)
     policy.callbacks = [
         Callback_Coverage_Count(test_collector_set, df_item_val, args.need_transform, item_feat_domination,
-                                lbe_item=env.lbe_item if args.need_transform else None, top_rate=args.top_rate),
+                                lbe_item=env.lbe_item if args.need_transform else None, top_rate=args.top_rate, draw_bar=args.draw_bar),
         LoggerCallback_Policy(logger_path, args.force_length)]
 
     model_save_path = os.path.join(MODEL_SAVE_PATH, "{}_{}.pt".format(args.model_name, args.message))

@@ -61,8 +61,8 @@ def draw_bar_line(df_visual, save_fig_dir, visual_methods_dict, savename="result
     # ax_bar = ax_left.twinx()
     ax_bar = sns.barplot(data=df_visual_mean, x=df_visual_mean.index, y=bar, edgecolor=red2, color=red2)
     plt.ylim([0.3, 0.63])
+    plt.xlabel(r"$\lambda_2$", fontsize=12)
     plt.ylabel("Majority Domination", fontsize=12)
-    plt.xlabel(r"$\lambda$", fontsize=12)
     ax_bar.xaxis.set_label_coords(0.5, -0.25)
     ax_bar.yaxis.label.set_color(color_bar)
     ax_bar.tick_params(axis='y', colors=color_bar)
@@ -101,9 +101,9 @@ def draw_bar_line(df_visual, save_fig_dir, visual_methods_dict, savename="result
 
 
     fig.savefig(os.path.join(save_fig_dir, savename + '.pdf'), format='pdf', bbox_inches='tight')
+    plt.show()
     plt.close()
 
-    plt.show()
 
 def visual_ent(df_avg, save_fig_dir):
     way = "Free"
@@ -168,6 +168,7 @@ def draw(df_visual, line_left, bar, display_y_right=True, display_y_left=True,
     colors = sns.color_palette()
     color_bar = colors[3]
     color_line = colors[0]
+    color_line = "green"
     red2 = [1., 0.75294118, 0.79607843]
 
     # colors = sns.color_palette("Paired")
@@ -191,7 +192,7 @@ def draw(df_visual, line_left, bar, display_y_right=True, display_y_left=True,
     # plt.yticks(range(len(visual_range)), x_ticks_filtered.values())
 
 
-    plt.xlabel(r"$\lambda$", fontsize=12)
+    plt.xlabel(r"$\lambda_2$", fontsize=12)
     ax_bar.xaxis.set_label_coords(0.5, -0.3)
     ax_bar.yaxis.label.set_color(color_bar)
     ax_bar.tick_params(axis='y', colors=color_bar)
@@ -201,7 +202,7 @@ def draw(df_visual, line_left, bar, display_y_right=True, display_y_left=True,
 
     ax_left = ax_bar.twinx()
     ax_left = sns.lineplot(data=df_visual, x=range(len(visual_range)), y=line_left, ax=ax_left,
-                           marker='o', markeredgecolor=None, color=color_line)
+                           marker='o', markeredgecolor=None, color=colors[2])
     ax_left.yaxis.label.set_color(color_line)
     ax_left.tick_params(axis='y', colors=color_line)
     if display_y_left:

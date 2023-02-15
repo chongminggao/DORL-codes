@@ -367,6 +367,7 @@ class UserModel_Variance(nn.Module):
 
                 # xy_predict = pd.DataFrame([user_id, item_id, y_predict.squeeze()], columns={"user_id", "item_id", "y_pred"})
                 xy_predict = pd.DataFrame({"user_id":user_id, "item_id":item_id, "y_pred":y_complete_predict.squeeze()})
+                y = dataset_val.dataset_complete.get_y()
             else:
                 user_id = dataset_val.x_numpy[:, dataset_val.user_col]
                 item_id = dataset_val.x_numpy[:, dataset_val.item_col]

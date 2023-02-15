@@ -7,7 +7,7 @@ import torch
 from tqdm import tqdm
 
 
-def get_feat_dominate_dict(df_item_val, all_acts_origin, item_feat_domination, top_rate=0.8):
+def get_feat_dominate_dict(df_item_val, all_acts_origin, item_feat_domination, top_rate=0.8, draw_bar=False):
     if item_feat_domination is None:  # for yahoo
         return dict()
     # if need_transform:
@@ -45,6 +45,18 @@ def get_feat_dominate_dict(df_item_val, all_acts_origin, item_feat_domination, t
 
         rate = dominate_array.sum() / len(recommended_item_features)
         feat_dominate_dict["ifeat_feat"] = rate
+
+        ####################################
+        #Todo: visual bar plot
+        if draw_bar:
+            feat_predicted = feat_numpy
+            cats_predicted = feat_predicted.reshape(-1)
+            pos_cat_predicted = cats_predicted[cats_predicted > 0]
+
+            feat_dominate_dict["all_feats"] = pos_cat_predicted
+
+        ####################################
+
     else:  # for coat
         for feat_name, sorted_items in item_feat_domination.items():
             values = np.array([pair[1] for pair in sorted_items])
@@ -80,7 +92,7 @@ def get_feat_dominate_dict(df_item_val, all_acts_origin, item_feat_domination, t
 
 
 def interactive_evaluation(model, env, dataset_val, is_softmax, epsilon, is_ucb, k, need_transform,
-                           num_trajectory, item_feat_domination, remove_recommended, force_length=0, top_rate=0.8):
+                           num_trajectory, item_feat_domination, remove_recommended, force_length=0, top_rate=0.8, draw_bar=False):
     cumulative_reward = 0
     total_click_loss = 0
     total_turns = 0
@@ -155,22 +167,22 @@ def interactive_evaluation(model, env, dataset_val, is_softmax, epsilon, is_ucb,
 
 
 def test_static_model_in_RL_env(model, env, dataset_val, is_softmax=True, epsilon=0, is_ucb=False, k=1,
-                                need_transform=False, num_trajectory=100, item_feat_domination=None, force_length=10, top_rate=0.8):
+                                need_transform=False, num_trajectory=100, item_feat_domination=None, force_length=10, top_rate=0.8, draw_bar=False):
     eval_result_RL = {}
 
     eval_result_standard = interactive_evaluation(model, env, dataset_val, is_softmax, epsilon, is_ucb, k,
                                                   need_transform, num_trajectory, item_feat_domination,
-                                                  remove_recommended=False, force_length=0, top_rate=top_rate)
+                                                  remove_recommended=False, force_length=0, top_rate=top_rate, draw_bar=draw_bar)
 
     # No overlap and end with the env rule
     eval_result_NX_0 = interactive_evaluation(model, env, dataset_val, is_softmax, epsilon, is_ucb, k,
                                               need_transform, num_trajectory, item_feat_domination,
-                                              remove_recommended=True, force_length=0, top_rate=top_rate)
+                                              remove_recommended=True, force_length=0, top_rate=top_rate, draw_bar=draw_bar)
 
     # No overlap and end with explicit length
     eval_result_NX_x = interactive_evaluation(model, env, dataset_val, is_softmax, epsilon, is_ucb, k,
                                               need_transform, num_trajectory, item_feat_domination,
-                                              remove_recommended=True, force_length=force_length, top_rate=top_rate)
+                                              remove_recommended=True, force_length=force_length, top_rate=top_rate, draw_bar=draw_bar)
 
     eval_result_RL.update(eval_result_standard)
     eval_result_RL.update(eval_result_NX_0)
@@ -227,7 +239,7 @@ def test_taobao(model, env, epsilon=0):
 
 
 class Callback_Coverage_Count():
-    def __init__(self, test_collector_set, df_item_val, need_transform, item_feat_domination, lbe_item, top_rate):
+    def __init__(self, test_collector_set, df_item_val, need_transform, item_feat_domination, lbe_item, top_rate, draw_bar=False):
         self.collector_dict = test_collector_set.collector_dict
         self.num_items = test_collector_set.env.get_env_attr("mat")[0].shape[1]
 
@@ -237,6 +249,7 @@ class Callback_Coverage_Count():
         self.item_feat_domination = item_feat_domination
         self.lbe_item = lbe_item
         self.top_rate = top_rate
+        self.draw_bar=draw_bar
 
     def on_epoch_begin(self, epoch):
         pass
@@ -249,7 +262,7 @@ class Callback_Coverage_Count():
 
     def on_epoch_end(self, epoch, results=None, **kwargs):
 
-        def get_actions(buffer, indices):
+        def get_actions_feat(buffer, indices, draw_bar=False):
 
             num_tests = len(indices)
             live_mat = np.zeros([0, num_tests], dtype=bool)
@@ -274,7 +287,7 @@ class Callback_Coverage_Count():
                 all_acts_origin = self.lbe_item.inverse_transform(all_acts)
             else:
                 all_acts_origin = all_acts
-            feat_dominate_dict = get_feat_dominate_dict(self.df_item_val, all_acts_origin, self.item_feat_domination, top_rate=self.top_rate)
+            feat_dominate_dict = get_feat_dominate_dict(self.df_item_val, all_acts_origin, self.item_feat_domination, top_rate=self.top_rate, draw_bar=draw_bar)
 
             return feat_dominate_dict
 
@@ -304,7 +317,7 @@ class Callback_Coverage_Count():
             results_all.update(res_k)
 
             indices = results[name + "_idxs"] if name != "FB" else results["idxs"]
-            feat_dominate_dict = get_actions(buffer, indices)
+            feat_dominate_dict = get_actions_feat(buffer, indices, draw_bar=self.draw_bar)
             feat_dominate_dict_k = {name + "_" + k: v for k, v in
                                     feat_dominate_dict.items()} if name != "FB" else feat_dominate_dict
             results_all.update(feat_dominate_dict_k)

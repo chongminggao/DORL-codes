@@ -53,7 +53,7 @@ def visual4(df1, df2, save_fig_dir, savename="three"):
     # all_method = sorted(set(df1['R_tra'].columns.to_list() +
     #                         df2['R_tra'].columns.to_list()))
     # methods_list = list(all_method)
-    methods_list = ['Ours', 'MOPO', 'MBPO', 'IPS', 'BCQ', 'CQL', 'CRR', 'SQN', "UCB", r'$\epsilon$-greedy']
+    methods_list = ['DORL', 'MOPO', 'MBPO', 'IPS', 'BCQ', 'CQL', 'CRR', 'SQN', "UCB", r'$\epsilon$-greedy']
 
     num_methods = len(methods_list)
 
@@ -133,9 +133,9 @@ def visual4(df1, df2, save_fig_dir, savename="three"):
         axs.append((ax1, ax2, ax3))
 
     ax1, ax2, ax3 = axs[0]
-    ax1.set_ylabel("Cumulative satisfaction", fontsize=9, fontweight=400)
+    ax1.set_ylabel("Cumulative reward", fontsize=9, fontweight=400)
     ax2.set_ylabel("Interaction length", fontsize=9, fontweight=400)
-    ax3.set_ylabel("Single-round satisfaction", fontsize=9, fontweight=400)
+    ax3.set_ylabel("Single-round reward", fontsize=9, fontweight=400)
     # ax3.yaxis.set_label_coords(-0.17, 0.5)
 
     ax4 = axs[1][0]
@@ -171,7 +171,7 @@ def remove_redundent(df, level=1):
     # methods = [pattern_name.match(method).group(1) for method in methods if pattern_name.match(method)]
     df.rename(columns={method:pattern_name.match(method).group(1) for method in methods if pattern_name.match(method)},
                level=level, inplace=True)
-
+    df.rename(columns={"Ours": "DORL"}, level=level, inplace=True)
 
 def to_latex(df, save_fig_dir, savename):
     df_latex, df_excel, df_avg = handle_table(df)
@@ -188,7 +188,7 @@ def to_latex(df, save_fig_dir, savename):
 def combile_two_tables(df1, df2, used_way, save_fig_dir, savename="main_result"):
     datasets = ["KuaiRec", "KuaiRand"]
     metrics = [r"$\text{R}_\text{tra}$", r"$\text{R}_\text{each}$", "Length", "MCD"]
-    methods = ['Ours', 'MOPO', 'IPS', 'MBPO', 'BCQ', 'CQL', 'CRR', 'SQN', r'$\epsilon$-greedy', "UCB"][::-1]
+    methods = ['DORL', 'MOPO', 'IPS', 'MBPO', 'BCQ', 'CQL', 'CRR', 'SQN', r'$\epsilon$-greedy', "UCB"][::-1]
     indices = [datasets, metrics]
     # df_all = pd.DataFrame(columns=pd.MultiIndex.from_product(indices, names=["Datasets", "Metrics", "Methods"]))
     df_all = pd.DataFrame(columns=pd.MultiIndex.from_product(indices))

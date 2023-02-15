@@ -57,13 +57,13 @@ def get_args_all():
     parser.add_argument('--no_deterministic', dest='deterministic', action='store_false')
     parser.set_defaults(deterministic=True)
 
+    parser.add_argument('--is_draw_bar', dest='draw_bar', action='store_true')
+    parser.add_argument('--no_draw_bar', dest='draw_bar', action='store_false')
+    parser.set_defaults(draw_bar=False)
+
     parser.add_argument("--loss", type=str, default='pointneg') # in {"pointneg", "point", "pair", "pp"}
     parser.add_argument('--rankingK', default=(20, 10, 5), type=int, nargs="+")
     parser.add_argument('--max_turn', default=30, type=int)
-
-    parser.add_argument('--is_all_item_ranking', dest='is_all_item_ranking', action='store_true')
-    parser.add_argument('--no_all_item_ranking', dest='is_all_item_ranking', action='store_false')
-    parser.set_defaults(all_item_ranking=False)
 
     parser.add_argument('--l2_reg_dnn', default=0.1, type=float)
     parser.add_argument('--lambda_ab', default=10, type=float)
@@ -207,6 +207,10 @@ def load_dataset_train(args, user_features, item_features, reward_features, tau,
 
 def construct_complete_val_x(dataset_val, df_user, df_item, user_features, item_features):
     user_ids = np.unique(dataset_val.x_numpy[:, dataset_val.user_col].astype(int))
+
+    # user_ids = random.sample(user_ids.tolist(),100)
+    user_ids = user_ids[:10000] # todo: for speeding up
+    logzero.logger.info("#####################\nNote that we use only 10000 users for static evaluation!!\n#####################")
     item_ids = np.unique(dataset_val.x_numpy[:, dataset_val.item_col].astype(int))
 
     df_user_complete = pd.DataFrame(

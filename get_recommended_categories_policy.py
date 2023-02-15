@@ -53,17 +53,13 @@ def get_args_all():
     parser.add_argument('--seed', default=2022, type=int)
     parser.add_argument('--cuda', default=0, type=int)
 
-    parser.add_argument('--is_draw_bar', dest='draw_bar', action='store_true')
-    parser.add_argument('--no_draw_bar', dest='draw_bar', action='store_false')
-    parser.set_defaults(draw_bar=False)
+    # parser.add_argument('--is_ab', dest='is_ab', action='store_true')
+    # parser.add_argument('--no_ab', dest='is_ab', action='store_false')
+    # parser.set_defaults(is_ab=True)
 
     parser.add_argument('--is_userinfo', dest='is_userinfo', action='store_true')
     parser.add_argument('--no_userinfo', dest='is_userinfo', action='store_false')
     parser.set_defaults(is_userinfo=False)
-
-    parser.add_argument('--is_all_item_ranking', dest='is_all_item_ranking', action='store_true')
-    parser.add_argument('--no_all_item_ranking', dest='is_all_item_ranking', action='store_false')
-    parser.set_defaults(all_item_ranking=False)
 
     parser.add_argument('--cpu', dest='cpu', action='store_true')
     parser.set_defaults(cpu=False)
@@ -105,8 +101,8 @@ def get_args_all():
     parser.add_argument('--tau', default=0, type=float)
     parser.add_argument('--gamma_exposure', default=10, type=float)
 
-    parser.add_argument('--lambda_variance', default=0.05, type=float)
-    parser.add_argument('--lambda_entropy', default=5, type=float)
+    parser.add_argument('--lambda_variance', default=1, type=float)
+    parser.add_argument('--lambda_entropy', default=0, type=float)
 
     parser.add_argument('--is_exposure_intervention', dest='use_exposure_intervention', action='store_true')
     parser.add_argument('--no_exposure_intervention', dest='use_exposure_intervention', action='store_false')
@@ -137,8 +133,8 @@ def get_args_all():
     parser.add_argument('--gae-lambda', type=float, default=1.)
     parser.add_argument('--rew-norm', action="store_true", default=False)
 
-    parser.add_argument("--read_message", type=str, default="UM")
-    parser.add_argument("--message", type=str, default="A2C_with_emb")
+    parser.add_argument("--read_message", type=str, default="pointneg")
+    parser.add_argument("--message", type=str, default="forbars")
 
     args = parser.parse_known_args()[0]
     return args
@@ -156,12 +152,7 @@ def prepare_envs(args, ensemble_models, alpha_u=None, beta_i=None):
     # entropy_user, map_entropy = ensemble_models.get_save_entropy_mat(args.env, args.entropy_window)
 
     entropy_dict = dict()
-    # if 0 in args.entropy_window:
-    #     entropy_path = os.path.join(ensemble_models.Entropy_PATH, "user_entropy.csv")
-    #     entropy = pd.read_csv(entropy_path)
-    #     entropy.set_index("user_id", inplace=True)
-    #     entropy_mat_0 = entropy.to_numpy().reshape([-1])
-    #     entropy_dict.update({"on_user": entropy_mat_0})
+
     if len(set(args.entropy_window) - set([0])):
         savepath = os.path.join(ensemble_models.Entropy_PATH, "map_entropy.pickle")
         map_entropy = pickle.load(open(savepath, 'rb'))
@@ -406,6 +397,9 @@ if __name__ == '__main__':
     args_all = get_args_all()
     args = get_common_args(args_all)
     args_all.__dict__.update(args.__dict__)
+
+    args.draw_bar = True
+
 
     try:
         main(args_all)
