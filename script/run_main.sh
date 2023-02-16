@@ -38,7 +38,7 @@
 
 ## KuaiEnv
 
-#python run_worldModel_IPS.py --env KuaiEnv-v0  --seed 0 --cuda 0 --loss "pointneg" --message "DeepFM-IPS" &
+python run_worldModel_IPS.py --env KuaiEnv-v0  --seed 0 --cuda 0 --loss "pointneg" --message "DeepFM-IPS" &
 python run_linUCB.py         --env KuaiEnv-v0  --num_leave_compute 4  --leave_threshold 0 --epoch 200 --seed 0 --cuda 0 --loss "pointneg" --message "UCB" &
 python run_epsilongreedy.py  --env KuaiEnv-v0  --  4  --leave_threshold 0 --epoch 200 --seed 0 --cuda 1 --loss "pointneg" --message "epsilon-greedy" &
 
@@ -54,7 +54,7 @@ python run_Policy_Main.py --env KuaiEnv-v0  --seed 0 --cuda 7   --num_leave_comp
 
 ## KuaiRand
 
-#python run_worldModel_IPS.py --env KuaiRand-v0  --seed 0 --cuda 0 --loss "pointneg" --message "DeepFM-IPS" &
+python run_worldModel_IPS.py --env KuaiRand-v0  --seed 0 --cuda 0 --loss "pointneg" --message "DeepFM-IPS" &
 python run_linUCB.py         --env KuaiRand-v0  --num_leave_compute 4  --leave_threshold 0 --epoch 200 --seed 0 --cuda 2 --loss "pointneg" --message "UCB" &
 python run_epsilongreedy.py  --env KuaiRand-v0  --num_leave_compute 4  --leave_threshold 0 --epoch 200 --seed 0 --cuda 3 --loss "pointneg" --message "epsilon-greedy" &
 

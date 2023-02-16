@@ -19,7 +19,7 @@ visualization/results
 
 *.zip
 results_for_paper/*.pdf
-*.pdf
+*.pdf™
 *.pth
 *.png
 #results_for_paper/
@@ -34,3 +34,5 @@ events.*
 *.xlsx
 *.tex
 *.pdf
+
+*.tar.gz

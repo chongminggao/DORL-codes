@@ -61,6 +61,10 @@ def get_args_all():
     parser.add_argument('--no_draw_bar', dest='draw_bar', action='store_false')
     parser.set_defaults(draw_bar=False)
 
+    parser.add_argument('--is_all_item_ranking', dest='is_all_item_ranking', action='store_true')
+    parser.add_argument('--no_all_item_ranking', dest='is_all_item_ranking', action='store_false')
+    parser.set_defaults(all_item_ranking=False)
+
     parser.add_argument("--loss", type=str, default='pointneg') # in {"pointneg", "point", "pair", "pp"}
     parser.add_argument('--rankingK', default=(20, 10, 5), type=int, nargs="+")
     parser.add_argument('--max_turn', default=30, type=int)
@@ -80,7 +84,7 @@ def get_args_all():
     parser.add_argument('--dnn', default=(128, 128), type=int, nargs="+")
     parser.add_argument('--dnn_var', default=(), type=int, nargs="+")
     parser.add_argument('--batch_size', default=256, type=int)
-    parser.add_argument('--epoch', default=30, type=int)
+    parser.add_argument('--epoch', default=5, type=int)
     parser.add_argument('--cuda', default=0, type=int)
 
     # exposure parameters:
