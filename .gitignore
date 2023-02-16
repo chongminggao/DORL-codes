@@ -35,4 +35,7 @@ events.*
 *.tex
 *.pdf
 
+# for excluding the uncompressed dataset files.
 *.tar.gz
+*.DS_Store
+*._*
