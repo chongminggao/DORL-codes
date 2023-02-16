@@ -213,7 +213,7 @@ def construct_complete_val_x(dataset_val, df_user, df_item, user_features, item_
     user_ids = np.unique(dataset_val.x_numpy[:, dataset_val.user_col].astype(int))
 
     # user_ids = random.sample(user_ids.tolist(),100)
-    user_ids = user_ids[:10000] # todo: for speeding up
+    user_ids = user_ids[:10000] # todo: for speeding up, we only use 10000 users for visual the bars.
     logzero.logger.info("#####################\nNote that we use only 10000 users for static evaluation!!\n#####################")
     item_ids = np.unique(dataset_val.x_numpy[:, dataset_val.item_col].astype(int))
 

@@ -268,7 +268,7 @@ if __name__ == '__main__':
     args_all.__dict__.update(args.__dict__)
     args_all.__dict__.update(args_epsilon.__dict__)
 
-    args_all.all_item_ranking = True  # Todo: for visual
+    args_all.all_item_ranking = True  # Todo: for visual bars
 
     try:
         main(args_all, is_save=False)
