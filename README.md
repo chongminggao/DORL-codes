@@ -58,9 +58,14 @@ If things go well, you can run the following examples now.
 ## Examples to run the code
 
 The argument `env` of all experiments can be set to one of the four environments: `CoatEnv-v0, Yahoo-v0, KuaiEnv-v0, KuaiRand-v0`. The former two datasets (coat and yahoo) are small so the models can run very quickly.
-So we use `CoatEnv-v0` as an example.
+
+
+#### 1. Run traditional DQN-based baselines (e.g., BCQ or SQN) 
+
+The examples are illustrated on  `CoatEnv-v0` , which runs quickly.
 
 **Step 1:** You should run the static user model (DeepFM) to get the embedding of users and items. 
+
 ```shell
   python run_worldModel_ensemble.py --env CoatEnv-v0  --cuda 0 --epoch 5 --tau 0 --loss "pointneg" --message "pointneg"
 ```
@@ -70,13 +75,50 @@ Where argument `message` is a maker for naming the saved files. For example, by 
 
 Run BCQ:
    ```bash 
-    python run_Policy_BCQ.py  --env CoatEnv-v0  --seed 0 --cuda 0    --which_tracker avg --reward_handle "cat"  --unlikely-action-threshold 0.6 --window_size 3 --read_message "pointneg"  --message "BCQ"
+   python run_Policy_BCQ.py  --env CoatEnv-v0  --seed 0 --cuda 0    --which_tracker avg --reward_handle "cat"  --unlikely-action-threshold 0.6 --window_size 3 --read_message "pointneg"  --message "BCQ"
    ```
 Run SQN:
    ```bash
    python run_Policy_SQN.py  --env CoatEnv-v0   --seed 0 --cuda 0   --num_leave_compute 1 --leave_threshold 0 --which_tracker avg --reward_handle "cat"  --window_size 3 --read_message "pointneg"  --message "SQN"
    ```
 
+
+
+#### 2. Run model-based method, i.e., DORL, MBPO, and MOPO.
+
+The examples are illustrated on  `KuaiRec-v0` , which runs a little bit slowly compared to codes above.
+
+DORL can only be implemented it on the `KuaiEnv-v0` or `KuaiRand-v0` environments, since the two datasets contains recommendation logs that Coat and Yahoo datasets do not have. 
+
+The procedure still contains two steps: 
+
+**Step 1:** run the static user model (DeepFM) to get the embedding of users and items.
+
+```shell
+python run_worldModel_ensemble.py --env KuaiEnv-v0  --cuda 0 --epoch 5 --loss "pointneg" --message "pointneg"
+```
+
+Where argument `message` is a maker for naming the saved files. For example, by setting `--message "pointneg"`, you will get all saved files with names contains `"pointneg"`. Here, "pointneg" is just a loss that we use, and you can replace this message to any other words that you like.   
+
+**Step 2:** Run the RL policy. Use the argument `--read_message "pointneg"` to make sure that the embeddings and rewards are generated from the model trained in step 1.
+
+Run DORL (Our proposed method):
+
+   ```bash 
+python run_Policy_Main.py --env KuaiEnv-v0  --seed 0 --cuda 0  --num_leave_compute 1 --leave_threshold 0 --which_tracker avg --reward_handle "cat" --lambda_variance 0.01 --lambda_entropy 0.05  --window_size 3 --read_message "pointneg"  --message "DORL" &
+   ```
+
+Run MBPO (the vanilla model-based offline RL method):
+
+```shell
+python run_Policy_Main.py --env KuaiEnv-v0  --seed 0 --cuda 0   --num_leave_compute 1 --leave_threshold 0 --which_tracker avg --reward_handle "cat" --lambda_variance 0   --lambda_entropy 0    --window_size 3 --read_message "pointneg"  --message "MBPO" &
+```
+
+Run MOPO (the model-based RL method considering distributional shift):
+
+```shell
+python run_Policy_Main.py --env KuaiEnv-v0  --seed 0 --cuda 0   --num_leave_compute 1 --leave_threshold 0 --which_tracker avg --reward_handle "cat" --lambda_variance 0.05 --lambda_entropy 0    --window_size 3 --read_message "pointneg"  --message "MOPO" &
+```
 
 
 
