@@ -1,0 +1,61 @@
+[I 230118 17:13:39 run_worldModel_ensemble:312] {
+      "env": "KuaiEnv-v0",
+      "resume": false,
+      "optimizer": "adam",
+      "seed": 0,
+      "bpr_weight": 0.5,
+      "neg_K": 3,
+      "n_models": 1,
+      "is_softmax": false,
+      "num_trajectory": 200,
+      "force_length": 10,
+      "top_rate": 0.8,
+      "deterministic": true,
+      "loss": "pointneg",
+      "rankingK": [
+        20,
+        10,
+        5
+      ],
+      "max_turn": 30,
+      "is_all_item_ranking": false,
+      "l2_reg_dnn": 0.1,
+      "lambda_ab": 10,
+      "epsilon": 0.3,
+      "is_ucb": false,
+      "dnn_activation": "relu",
+      "feature_dim": 8,
+      "entity_dim": 8,
+      "user_model_name": "EpsilonGreedy",
+      "dnn": [
+        128,
+        128
+      ],
+      "dnn_var": [],
+      "batch_size": 4096,
+      "epoch": 3,
+      "cuda": 6,
+      "tau": 0,
+      "is_ab": false,
+      "message": "epsilon-greedy-leave4",
+      "all_item_ranking": false,
+      "leave_threshold": 0.0,
+      "num_leave_compute": 4,
+      "is_userinfo": false,
+      "is_binarize": false,
+      "need_transform": true,
+      "entropy_window": [
+        1,
+        2
+      ],
+      "yfeat": "watch_ratio_normed",
+      "use_userEmbedding": false
+    }
+[I 230118 17:19:32 utils:50] Epoch: [-1], Info: [{'MAE': 0.2885590566513167, 'MSE': 0.3416665787068236, 'RMSE': 0.5845225219842463, 'click_loss': 0.6110927148593711, 'CV': '0.04839', 'CV_turn': '0.32008', 'ctr': 0.6044250623901908, 'len_tra': 2.515, 'R_tra': 1.5201290319113299, 'ifeat_feat': 0.9542743538767395, 'NX_0_click_loss': 0.4951903337715847, 'NX_0_CV': '0.04178', 'NX_0_CV_turn': '0.28081', 'NX_0_ctr': 0.48852788891752363, 'NX_0_len_tra': 2.475, 'NX_0_R_tra': 1.209106525070871, 'NX_0_ifeat_feat': 0.9474747474747475, 'NX_10_click_loss': array([0.71983404]), 'NX_10_CV': '0.16622', 'NX_10_CV_turn': '0.27650', 'NX_10_ctr': array([0.71310116]), 'NX_10_len_tra': 10.0, 'NX_10_R_tra': array([7.1310116]), 'NX_10_ifeat_feat': 0.949}]
+[I 230118 17:35:04 utils:50] Epoch: [0], Info: [{'loss': 0.6064016534464736, 'MAE': 0.27946336074942774, 'MSE': 0.33485323546990664, 'RMSE': 0.5786650460066745, 'click_loss': 0.41460542390070354, 'CV': '0.05020', 'CV_turn': '0.31041', 'ctr': 0.46937707674970525, 'len_tra': 2.69, 'R_tra': 1.2626243364567071, 'ifeat_feat': 0.6691449814126395, 'NX_0_click_loss': 0.5802525440751932, 'NX_0_CV': '0.09829', 'NX_0_CV_turn': '0.35699', 'NX_0_ctr': 0.6437420936448003, 'NX_0_len_tra': 4.58, 'NX_0_R_tra': 2.9483387888931856, 'NX_0_ifeat_feat': 0.7281659388646288, 'NX_10_click_loss': array([0.53741873]), 'NX_10_CV': '0.19447', 'NX_10_CV_turn': '0.32350', 'NX_10_ctr': array([0.58611603]), 'NX_10_len_tra': 10.0, 'NX_10_R_tra': array([5.86116026]), 'NX_10_ifeat_feat': 0.736}]
+[I 230118 17:48:01 utils:50] Epoch: [1], Info: [{'loss': 0.6029325582876315, 'MAE': 0.2812106947460762, 'MSE': 0.3347717707127498, 'RMSE': 0.5785946514726436, 'click_loss': 0.6925445104800546, 'CV': '0.06162', 'CV_turn': '0.36738', 'ctr': 0.7872029280686296, 'len_tra': 2.79, 'R_tra': 2.196296169311476, 'ifeat_feat': 0.8207885304659498, 'NX_0_click_loss': 0.704998525080269, 'NX_0_CV': '0.09528', 'NX_0_CV_turn': '0.39724', 'NX_0_ctr': 0.7867840376895447, 'NX_0_len_tra': 3.99, 'NX_0_R_tra': 3.1392683103812833, 'NX_0_ifeat_feat': 0.7907268170426065, 'NX_10_click_loss': array([0.78820799]), 'NX_10_CV': '0.21310', 'NX_10_CV_turn': '0.35450', 'NX_10_ctr': array([0.8791099]), 'NX_10_len_tra': 10.0, 'NX_10_R_tra': array([8.79109897]), 'NX_10_ifeat_feat': 0.7885}]
+[I 230118 17:56:11 utils:50] Epoch: [2], Info: [{'loss': 0.6017574600911608, 'MAE': 0.281526524919557, 'MSE': 0.3346569689195595, 'RMSE': 0.578495435521802, 'click_loss': 0.8091671643633486, 'CV': '0.05591', 'CV_turn': '0.35094', 'ctr': 0.9176729699498817, 'len_tra': 2.65, 'R_tra': 2.4318333703671864, 'ifeat_feat': 0.7943396226415095, 'NX_0_click_loss': 0.8140560079014372, 'NX_0_CV': '0.10640', 'NX_0_CV_turn': '0.41259', 'NX_0_ctr': 0.9133347437835613, 'NX_0_len_tra': 4.29, 'NX_0_R_tra': 3.9182060508314778, 'NX_0_ifeat_feat': 0.7948717948717948, 'NX_10_click_loss': array([0.79469906]), 'NX_10_CV': '0.22242', 'NX_10_CV_turn': '0.37000', 'NX_10_ctr': array([0.89565643]), 'NX_10_len_tra': 10.0, 'NX_10_R_tra': array([8.95656431]), 'NX_10_ifeat_feat': 0.8155}]
+[I 230118 17:56:11 user_model_ensemble:83] 
+    
+[I 230118 17:56:11 user_model_ensemble:86] ============ Summarized results =============
+[I 230118 17:56:11 user_model_ensemble:88] {}

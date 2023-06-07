@@ -1,8 +1,8 @@
 #!/bin/bash
 
-pip install --upgrade torch # --extra-index-url https://download.pytorch.org/whl/cu116
+pip install  --upgrade --no-cache-dir torch tensorflow scipy scikit-learn tqdm logzero pandas seaborn numba gym paramiko jupyterlab
 
-pip install --upgrade --no-cache-dir scipy scikit-learn tqdm logzero pandas seaborn numba gym paramiko
+#pip install -i https://mirrors.aliyun.com/pypi/simple/ --upgrade torch
 
-pip install --upgrade --no-cache-dir tensorflow
+#pip install -i https://mirrors.aliyun.com/pypi/simple/  --upgrade --no-cache-dir tensorflow
 

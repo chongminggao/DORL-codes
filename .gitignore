@@ -12,6 +12,7 @@ __pycache__/
 environments/KuaiRec/data/*
 #!environments/KuaiRec/data/.gitkeep
 environments/VirtualTaobao
+environments/RL4Rec/*
 
 saved_models/
 visualization/figures
@@ -19,11 +20,10 @@ visualization/results
 
 *.zip
 results_for_paper/*.pdf
-*.pdf™
+*.pdf
 *.pth
 *.png
 #results_for_paper/
-!results_for_paper/visual_a_group_results.py
 
 *.egg*
 events.*

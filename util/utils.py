@@ -10,7 +10,7 @@ from logzero import logger
 import os
 # from tensorflow.python.keras.callbacks import Callback
 
-from util.upload import my_upload
+# from util.upload import my_upload
 import re
 
 

@@ -312,7 +312,7 @@ class StateTracker_Caser(StateTracker_Base):
         self.dropout = nn.Dropout(self.dropout_rate)
 
     def convert_to_k_state_embedding(self, buffer=None, indices=None, obs=None, reset=None, is_obs=None):
-        if reset:  # get user embedding
+        if reset:
             # users = np.expand_dims(obs[:, 0], -1)
             items = np.expand_dims(obs[:, 1], -1)
 
@@ -442,7 +442,7 @@ class StateTracker_GRU(StateTracker_Base):
         )
 
     def convert_to_k_state_embedding(self, buffer=None, indices=None, obs=None, reset=None, is_obs=None):
-        if reset:  # get user embedding
+        if reset:
             # users = np.expand_dims(obs[:, 0], -1)
             items = np.expand_dims(obs[:, 1], -1)
 

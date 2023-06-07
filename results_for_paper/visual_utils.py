@@ -183,7 +183,7 @@ def handle_one_col(df_metric, final_rate, is_largest):
 
     return res_latex, res_excel, res_avg
 
-def handle_table(df_all, final_rate=1, methods=['Ours', 'MOPO', 'MBPO', 'IPS', 'BCQ', 'CQL', 'CRR', 'SQN', r'$\epsilon$-greedy', "UCB"]):
+def handle_table(df_all, final_rate=1, methods=['DORL', 'MOPO', 'MBPO', 'IPS', 'BCQ', 'CQL', 'CRR', 'SQN', r'$\epsilon$-greedy', "UCB"]):
     df_all.rename(columns={"FB": "Free", "NX_0_": r"No Overlapping", "NX_10_": r"No Overlapping with 10 turns"},
                   level=0, inplace=True)
     df_all.rename(columns={"R_tra": r"$\text{R}_\text{tra}$", "ifeat_feat": "MCD",

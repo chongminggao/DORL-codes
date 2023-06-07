@@ -6,13 +6,9 @@
 import os
 import re
 
-from collections import OrderedDict
-
-import numpy as np
 import pandas as pd
 
 from matplotlib import pyplot as plt
-from matplotlib.lines import Line2D
 from matplotlib.transforms import Bbox
 import seaborn as sns
 
