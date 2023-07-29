@@ -9,7 +9,7 @@
 This repository provides the official PyTorch implementation and reproduction for the paper titled "Alleviating Matthew Effect of Offline Reinforcement Learning in Interactive Recommendation." Additionally, it includes four RL environments: `CoatEnv-v0`, `Yahoo-v0`, `KuaiEnv-v0`, and `KuaiRand-v0`. The latter two environments are specifically used in the paper, whose descriptions can be referred to as the two websites: 
 [KuaiRec](https://kuairec.com/) and [KuaiRand](https://kuairand.com/).
 
-More descriptions are available via the [paper](#) and this [slides](#).
+More descriptions are available via the [paper](https://arxiv.org/pdf/2307.04571.pdf) and the [slides](https://cdn.chongminggao.top/files/pdf/DORL-slides.pdf), and this Chinese [Zhihu Post](https://zhuanlan.zhihu.com/p/646690133).
 
 
 If this work helps you, please kindly cite our papers:
