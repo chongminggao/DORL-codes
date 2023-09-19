@@ -57,6 +57,7 @@ If this work helps you, please kindly cite our papers:
    ```bash
    cd src
    git clone https://github.com/chongminggao/tianshou.git
+   git reset --hard 0f59e38
    cd ..
    ```
 
@@ -67,7 +68,7 @@ If this work helps you, please kindly cite our papers:
     ```bash 
     wget https://chongming.myds.me:61364/DORL/environments.tar.gz
     ```
-   or you can manually download it from this website:
+   Or, you can manually download it from this website:
    https://rec.ustc.edu.cn/share/9fe264f0-ae09-11ed-b9ef-ed1045d76757
    
 
