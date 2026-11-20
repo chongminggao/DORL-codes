@@ -62,15 +62,7 @@ If this work helps you, please kindly cite our papers:
 
 
 ## Download the data
-1. Download the compressed dataset
-
-    ```bash 
-    wget https://nas.chongminggao.top:4430/DORL/environments.tar.gz
-    ```
-   Or, you can manually download it from this website:
-   https://rec.ustc.edu.cn/share/9fe264f0-ae09-11ed-b9ef-ed1045d76757
-   
-
+1. Download `environments.tar.gz` from [USTC Cloud Drive](https://pan.ustc.edu.cn/share/index/900c9ba9ca074fc9a2c9).
 
 2. Uncompress the downloaded `environments.tar.gz` and put the files to their corresponding positions.
 
